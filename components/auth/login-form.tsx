@@ -83,6 +83,24 @@ export function LoginForm() {
     }
   }
 
+  const handleForgot = async () => {
+    if (!email) {
+      alert("Enter your LNMIIT email first")
+      return
+    }
+    try {
+      await fetch("/api/auth/forgot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
+      alert("If an account exists for this email, a reset link has been sent.")
+    } catch (e) {
+      console.error(e)
+      alert("Failed to send reset link")
+    }
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md space-y-8">
@@ -189,10 +207,8 @@ export function LoginForm() {
               </Button>
 
               {/* Forgot Password Link */}
-              <div className="text-center">
-                <Button type="button" variant="link" className="text-sm text-secondary hover:text-secondary/80">
-                  Forgot your password?
-                </Button>
+                <div className="text-center">
+                  <Button type="button" variant="link" className="text-sm text-secondary hover:text-secondary/80" onClick={() => (window.location.href = "/forgot-password")}>Forgot your password?</Button>
               </div>
             </form>
           </CardContent>

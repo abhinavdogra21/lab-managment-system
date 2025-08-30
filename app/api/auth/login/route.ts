@@ -1,4 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
+import crypto from "node:crypto"
+import { dbOperations } from "@/lib/database"
 // Using a simple encoded JSON cookie for auth in this demo environment
 
 // Mock user database for testing
@@ -101,12 +103,73 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Please use your LNMIIT email address" }, { status: 400 })
     }
 
-    // Find user in mock database
-    const user = mockUsers.find((u) => u.email === email && u.password === password && u.role === userRole)
+    const normalizedRole = String(userRole).replace(/-/g, "_")
 
-    if (!user) {
-      return NextResponse.json({ error: "Invalid credentials or role" }, { status: 401 })
+    // DB-backed auth when enabled
+    if (process.env.USE_DB_AUTH === "true") {
+      const dbUser = await dbOperations.getUserByEmail(email)
+      if (!dbUser) {
+        return NextResponse.json({ error: "Invalid credentials or role" }, { status: 401 })
+      }
+      // Compare role (normalize hyphen/underscore differences)
+      if (String(dbUser.role) !== normalizedRole) {
+        return NextResponse.json({ error: "Invalid credentials or role" }, { status: 401 })
+      }
+      // Verify password (scrypt format: salt:hash) or legacy sha256
+      const stored: string | null = dbUser.password_hash || null
+      if (!stored) {
+        return NextResponse.json({ error: "Please set your password via the reset link" }, { status: 401 })
+      }
+      let ok = false
+      if (stored.includes(":")) {
+        const [saltHex, hashHex] = stored.split(":")
+        try {
+          const salt = Buffer.from(saltHex, "hex")
+          const calc = crypto.scryptSync(password, salt, 64)
+          ok = crypto.timingSafeEqual(Buffer.from(hashHex, "hex"), calc)
+        } catch {
+          ok = false
+        }
+      } else {
+        const legacy = crypto.createHash("sha256").update(password).digest("hex")
+        ok = legacy === stored
+      }
+      if (!ok) {
+        return NextResponse.json({ error: "Invalid credentials or role" }, { status: 401 })
+      }
+
+      const tokenPayload = {
+        userId: Number.parseInt(String(dbUser.id), 10),
+        email: dbUser.email,
+        role: String(dbUser.role).replace(/_/g, "-"),
+        name: dbUser.name,
+        department: dbUser.department,
+      }
+      const token = encodeURIComponent(JSON.stringify(tokenPayload))
+      const response = NextResponse.json({
+        success: true,
+        user: {
+          id: String(dbUser.id),
+          email: dbUser.email,
+          name: dbUser.name,
+          role: String(dbUser.role).replace(/_/g, "-"),
+          department: dbUser.department,
+          studentId: dbUser.student_id || null,
+        },
+      })
+      response.cookies.set("auth-token", token, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: false,
+        maxAge: 60 * 60 * 24 * 7,
+        path: "/",
+      })
+      return response
     }
+
+  // Fallback: Find user in mock database
+    const user = mockUsers.find((u) => u.email === email && u.password === password && u.role === userRole)
+    if (!user) return NextResponse.json({ error: "Invalid credentials or role" }, { status: 401 })
 
   // Create encoded session payload and set as httpOnly cookie for API auth (demo only)
   const tokenPayload = {

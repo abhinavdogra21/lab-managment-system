@@ -1,11 +1,29 @@
 # LNMIIT Lab Management System
 
-A role-based lab management platform for LNMIIT (Next.js App Router + TypeScript). This repo ships with a functional UI, working API stubs, and a mock authentication flow so you can demo every route and navigation. A Postgres schema and seeds are included; you can wire the real DB when ready.
+A role-based lab management platform for LNMIIT (Next.js App Router + TypeScript). This repo ships with a functional UI, working API stubs, and a mock authentication flow so you can demo every route and navigation. A MySQL schema and seeds are included; wire the DB when ready.
+
+## Project status (Aug 18, 2025)
+- Done
+  - All dashboard routes and buttons are wired to pages (no 404s).
+  - Demo auth with cookie-based session; role awareness in UI.
+  - Hydration issues fixed (deterministic SSR + html suppressHydrationWarning).
+  - Asset paths corrected (login logo).
+  - Forgot/Reset password flow: API + pages + email utility (SMTP optional).
+  - Digest email endpoint with secret header protection for schedulers.
+  - Database helpers implemented with safe fallbacks to keep UI working without DB.
+- Pending
+  - Connect to a real database and remove fallbacks.
+  - Strong password hashing (bcrypt/argon2) instead of demo scrypt.
+  - Deeper API-level RBAC (protect admin/HOD routes) and session hardening (JWT).
+  - Email templates for bookings/approvals/reminders; schedule digests and cleanup.
+  - Student data lifecycle: auto-delete inactive/old students every 6 months.
+  - Tests (unit/integration) and production hardening (rate limits, logging).
+
 
 ## Tech stack
 - Next.js 15 (App Router) + React 19 + TypeScript
 - UI: Tailwind CSS, Radix UI
-- DB (optional): PostgreSQL (schema in `scripts/`)
+- DB: MySQL (schema in `scripts/`)
 
 ## Roles
 - Admin, HOD, Faculty, Lab Staff, Student, T&P
@@ -33,20 +51,45 @@ pnpm build
 pnpm start
 ```
 
-## Configure PostgreSQL (optional, for persistence)
+## Configure MySQL (persistence)
 1. Create a database and set env vars (copy `.env.example` to `.env.local`)
 ```env
 DB_HOST=localhost
-DB_PORT=5432
+DB_PORT=3306
 DB_NAME=lnmiit_lab_management
-DB_USER=postgres
+DB_USER=root
 DB_PASSWORD=password
 ```
-2. Run schema and seed (manually via your SQL client):
-- `scripts/01-create-tables.sql`
-- `scripts/02-seed-data.sql`
+2. Run schema and seed (manually via your MySQL client):
+- `scripts/01-create-tables-mysql.sql`
+- (Optional) add your own seed script or import data as needed.
 
-The API layer in `lib/database.ts` has safe fallbacks. When DB is reachable, queries are used; otherwise, mocked responses are returned so the app doesn’t break.
+The API layer in `lib/database.ts` uses MySQL (`mysql2/promise`). When DB is reachable, queries are used; otherwise, mocked responses are returned so the app doesn’t break in demo mode.
+
+## Database integration plan
+Recommended: MySQL (required by LNMIIT server; supported by `lib/database.ts`).
+
+- What you can share safely:
+  - Prefer a dedicated DB user with least privileges (read/write only to this database).
+  - Share host, port, database, username, and a temporary password via a secret channel (not in git). For local dev, `.env.local`; for deployment, platform secrets.
+  - Optionally provide a connection URL: `mysql://USER:PASSWORD@HOST:PORT/DBNAME`.
+- What we’ll do after creds:
+  - Set env in `.env.local` and verify migrations (or run SQL scripts in `scripts/`).
+  - Flip endpoints to hard-fail on DB errors (remove fallbacks) once stable.
+  - Add indexes/constraints if needed based on real data and load.
+
+Alternate option: MongoDB Atlas
+- Feasible, but requires a data-access layer rewrite. If you prefer MongoDB:
+  - We’ll introduce a `lib/mongo.ts` client and mirror operations as repository methods.
+  - Replace SQL in `lib/database.ts` with MongoDB implementations or add an adapter layer (`dbOperations` → `pg` or `mongo`).
+  - Update scripts: create seeders in JavaScript for Mongo instead of SQL.
+  - Env needed: `MONGODB_URI` and optional `MONGODB_DB`.
+
+Which should you share now?
+- If proceeding with MySQL (recommended): provide the MySQL connection details as listed above.
+- If you want MongoDB Atlas instead: share `MONGODB_URI` (SRV string), and confirm preference so we add the adapter. Expect 1–2 passes to migrate queries and test.
+
+Security note: never commit secrets. Use `.env.local` locally and deployment platform secret managers in prod. Rotate any secrets shared during dev after integration.
 
 ## App structure (important paths)
 - `app/`
@@ -67,11 +110,14 @@ The API layer in `lib/database.ts` has safe fallbacks. When DB is reachable, que
 Note: In demo we don’t sign JWTs; the cookie stores a JSON-encoded payload. Replace with proper JWT when you connect the real backend.
 
 ## API endpoints (current)
-All endpoints are under `app/api/` (Next.js Route Handlers). In demo mode, they either query Postgres or return safe fallbacks.
+All endpoints are under `app/api/` (Next.js Route Handlers). In demo mode, they either query MySQL or return safe fallbacks.
 
 - Auth
   - POST `/api/auth/login` → body `{ email, password, userRole }` → returns `{ user }` and sets cookie
   - POST `/api/auth/logout` → clears cookie
+  - POST `/api/auth/forgot-password` → body `{ email }` → always returns `{ ok: true }` (no account enumeration). If SMTP is configured, sends a reset link email.
+  - POST `/api/auth/reset-password` → body `{ token, password }` → validates token and updates password.
+  - Note: Forgot password is student-only. Non-students are admin-managed.
 
 - Labs
   - GET `/api/labs` → all labs
@@ -88,6 +134,16 @@ All endpoints are under `app/api/` (Next.js Route Handlers). In demo mode, they 
 - Inventory (stub)
   - GET `/api/inventory` → `{ items: [] }`
   - POST `/api/inventory` → `{ success: true }`
+
+- Admin/Cron
+  - POST `/api/admin/send-digest` → body `{ recipients: string[], subject?: string, html?: string }`
+    - Secure with header `x-cron-secret: <CRON_SECRET>`; set `CRON_SECRET` in env. Intended for scheduled digest emails.
+
+- Admin/User management
+  - GET `/api/users?role=lab_staff|faculty|hod|student|tnp|admin` → list users (admin only)
+  - POST `/api/users` → create user (admin only). Body: `{ email, role, name, department?, phone?, studentId?, employeeId?, passwordHash? }`
+  - DELETE `/api/users/:id` → soft-delete user (admin only)
+  - GET `/api/users/:id` → user history: `{ bookings, logs }` (admin only)
 
 ## Database helpers (lib/database.ts)
 - Users: `createUser`, `getUserByEmail`, `getUserById`
@@ -116,13 +172,45 @@ The sidebar buttons are backed by real pages, so navigation always works:
 - Replace demo cookie with signed JWT (httpOnly + secure).
 - Add 2FA for Admin/HOD.
 - Enforce RBAC deeper at API level using `withAuth` helpers.
-- Connect to Postgres for persistence and remove fallbacks.
+- Connect to MySQL for persistence and remove fallbacks.
 - Implement emails for bookings/approvals/reminders.
 - Add cron for student cleanup and report archiving.
 
+## Email setup (password reset + digests)
+Email sending is optional. If not configured, the app logs and skips sending.
+
+1. Copy `.env.example` to `.env.local` and set:
+```
+APP_URL=http://localhost:3000
+SMTP_HOST=your-smtp-host
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-smtp-user
+SMTP_PASS=your-smtp-pass
+SMTP_FROM="LNMIIT Labs <no-reply@lnmiit.ac.in>"
+CRON_SECRET=choose-a-strong-secret
+```
+2. Install deps (already included): `nodemailer`.
+3. Forgot password flow:
+  - Page `/forgot-password` posts to `/api/auth/forgot-password`.
+  - User gets an email with link `/reset-password/:token`.
+  - Page `/reset-password/[token]` posts to `/api/auth/reset-password`.
+4. Scheduled digests:
+Mailtrap example (.env.local)
+```
+SMTP_HOST=sandbox.smtp.mailtrap.io
+SMTP_PORT=2525
+SMTP_SECURE=false
+SMTP_USER=1cc2fb91c2b16e
+SMTP_PASS=1bcba266d5ee05
+SMTP_FROM="LNMIIT Labs <no-reply@lnmiit.ac.in>"
+```
+  - Call `/api/admin/send-digest` with header `x-cron-secret: $CRON_SECRET` from your scheduler (e.g., Vercel Cron).
+  - Body `{ recipients: ["admin@lnmiit.ac.in"], subject: "Daily Digest", html: "<p>...</p>" }`.
+
 ## Troubleshooting
 - Port in use: stop other Next servers or change port (`pnpm dev -- -p 3001`).
-- Postgres SSL: set `ssl=false` in dev; use SSL in prod.
+- MySQL SSL: configure according to your hosting; set client certs in the MySQL server or proxy if required.
 - Type errors: ensure `next-env.d.ts` exists (it is included).
 
 ## Scripts
