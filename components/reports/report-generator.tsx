@@ -267,22 +267,71 @@ export function ReportGenerator({ user }: ReportGeneratorProps) {
 
     setIsGenerating(true)
 
-    // Simulate report generation
-    setTimeout(() => {
-      setIsGenerating(false)
-      // In a real implementation, this would trigger the actual report generation
-      console.log("Generating report:", {
-        type: selectedReportType,
-        format: selectedFormat,
-        dateRange,
-        filters,
-        user: user.role,
-      })
+    // Build a small dataset snapshot for the export
+    const payload = {
+      type: selectedReportType,
+      format: selectedFormat,
+      from: dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : undefined,
+      to: dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : undefined,
+      filters,
+      generatedAt: new Date().toISOString(),
+      requestedBy: { name: user.name, email: user.email, role: user.role, department: user.department },
+    }
 
-      // Simulate file download
-      const fileName = `${selectedReportType}_${format(new Date(), "yyyy-MM-dd")}.${selectedFormat}`
-      alert(`Report "${fileName}" has been generated and downloaded!`)
-    }, 3000)
+    try {
+      const fileBase = `${selectedReportType}_${format(new Date(), "yyyy-MM-dd")}`
+      if (selectedFormat === "excel") {
+        // Create a basic CSV for now (Excel-friendly)
+        const rows: string[] = []
+        rows.push("Key,Value")
+        rows.push(`Type,${payload.type}`)
+        rows.push(`From,${payload.from || ""}`)
+        rows.push(`To,${payload.to || ""}`)
+        rows.push(`Generated At,${payload.generatedAt}`)
+        rows.push(`Requested By,${payload.requestedBy.name} (${payload.requestedBy.email})`)
+        Object.entries(filters).forEach(([k, v]) => rows.push(`${k},${String(v)}`))
+        const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" })
+        const a = document.createElement("a")
+        a.href = URL.createObjectURL(blob)
+        a.download = `${fileBase}.csv`
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+      } else {
+        // PDF export using a tiny client-side generator
+        const { jsPDF } = await import("jspdf")
+        const doc = new jsPDF()
+        doc.setFontSize(12)
+        doc.text("LNMIIT Lab Management System", 14, 16)
+        doc.setFontSize(10)
+        doc.text(`Report: ${payload.type}`, 14, 24)
+        doc.text(`Generated: ${new Date(payload.generatedAt).toLocaleString()}`, 14, 30)
+        if (payload.from || payload.to) doc.text(`Range: ${payload.from || ""} to ${payload.to || ""}`, 14, 36)
+        doc.text(`Requested by: ${payload.requestedBy.name} (${payload.requestedBy.role})`, 14, 42)
+        doc.text("Filters:", 14, 50)
+        let y = 56
+        const entries = Object.entries(filters)
+        if (entries.length === 0) {
+          doc.text("(none)", 20, y)
+          y += 6
+        } else {
+          for (const [k, v] of entries) {
+            doc.text(`${k}: ${String(v)}`, 20, y)
+            y += 6
+            if (y > 280) {
+              doc.addPage(); y = 16
+            }
+          }
+        }
+
+        doc.save(`${fileBase}.pdf`)
+      }
+    } catch (e) {
+      console.error("Report export failed", e)
+      alert("Failed to generate the report. Please try again.")
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   const selectedReport = reportTypes.find((report) => report.id === selectedReportType)
@@ -352,7 +401,7 @@ export function ReportGenerator({ user }: ReportGeneratorProps) {
                         {dateRange.from ? format(dateRange.from, "PPP") : "Select start date"}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-[300px] p-0" align="start" side="bottom" avoidCollisions={false}>
                       <Calendar
                         mode="single"
                         selected={dateRange.from}
@@ -372,7 +421,7 @@ export function ReportGenerator({ user }: ReportGeneratorProps) {
                         {dateRange.to ? format(dateRange.to, "PPP") : "Select end date"}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-[300px] p-0" align="start" side="bottom" avoidCollisions={false}>
                       <Calendar
                         mode="single"
                         selected={dateRange.to}

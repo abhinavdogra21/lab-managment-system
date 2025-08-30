@@ -6,7 +6,8 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+  "start": "next start",
+  "db:setup": "node scripts/db-setup.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -58,6 +59,7 @@
     "react-hook-form": "^7.60.0",
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.4",
+  "jspdf": "^2.5.2",
     "sonner": "^1.7.4",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",

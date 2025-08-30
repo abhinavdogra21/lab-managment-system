@@ -121,3 +121,65 @@
     @apply bg-background text-foreground;
   }
 }
+
+  /* Force react-day-picker calendar to standard 7-column table layout (covers v8 + v9) */
+  :where(.rdp-month_grid) {
+    table-layout: fixed;
+    width: 100%;
+    border-collapse: collapse;
+  }
+  :where(.rdp-table) {
+    table-layout: fixed;
+    width: 100%;
+    border-collapse: collapse;
+  }
+  :where(thead.rdp-head) {
+    display: table-header-group !important;
+  }
+  :where(thead .rdp-weekdays) {
+    display: table-row !important;
+  }
+  :where(th.rdp-weekday) {
+    display: table-cell !important;
+    width: calc(100% / 7);
+    text-align: center;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  :where(tr.rdp-head_row) {
+    display: table-row !important;
+  }
+  :where(th.rdp-head_cell) {
+    display: table-cell !important;
+    width: calc(100% / 7);
+    text-align: center;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  :where(tbody.rdp-weeks) {
+    display: table-row-group !important;
+  }
+
+  /* Prevent calendar size jumping across months */
+  :where(.rdp) {
+    --daypicker-width: 300px;
+  }
+  :where(.rdp .rdp-month) {
+    width: var(--daypicker-width);
+  }
+  :where(.rdp .rdp-months) {
+    width: var(--daypicker-width);
+  }
+  :where(.rdp .rdp-table) {
+    table-layout: fixed;
+  }
+  :where(tbody.rdp-tbody) {
+    display: table-row-group !important;
+  }
+  :where(tr.rdp-row) {
+    display: table-row !important;
+  }
+  :where(td.rdp-cell) {
+    display: table-cell !important;
+    width: calc(100% / 7);
+  }

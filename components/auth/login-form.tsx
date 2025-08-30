@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,6 +29,18 @@ export function LoginForm() {
   const [userRole, setUserRole] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [resetSuccess, setResetSuccess] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const u = new URL(window.location.href)
+    if (u.searchParams.get("reset") === "1") {
+      setResetSuccess(true)
+      // clear flag from URL without a navigation
+      u.searchParams.delete("reset")
+      window.history.replaceState({}, "", u.toString())
+    }
+  }, [])
 
   // User roles available in the system
   const userRoles = [
@@ -89,7 +101,7 @@ export function LoginForm() {
       return
     }
     try {
-      await fetch("/api/auth/forgot", {
+  await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -119,6 +131,15 @@ export function LoginForm() {
           <h1 className="font-montserrat text-2xl font-bold text-foreground">Lab Management System</h1>
           <p className="mt-2 text-sm text-muted-foreground">Sign in to access your dashboard</p>
         </div>
+
+        {/* Reset success banner */}
+        {resetSuccess && (
+          <div className="mx-auto max-w-md">
+            <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+              Password updated. You can now sign in with your new password.
+            </div>
+          </div>
+        )}
 
         {/* Login Form Card */}
         <Card className="border-border bg-card shadow-lg">

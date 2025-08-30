@@ -12,28 +12,29 @@ INSERT INTO departments (name, code) VALUES
 ('Chemistry', 'CHEM');
 
 -- Insert sample admin user (password: admin123)
+-- password_hash uses SHA-256 so it works with current login verifier
 INSERT INTO users (email, password_hash, name, role, department, employee_id) VALUES
-('admin@lnmiit.ac.in', '$2b$10$rOzJqQqQqQqQqQqQqQqQqO', 'System Administrator', 'admin', 'IT', 'EMP001');
+('admin@lnmiit.ac.in', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'System Administrator', 'admin', 'IT', 'EMP001');
 
 -- Insert sample HOD users
 INSERT INTO users (email, password_hash, name, role, department, employee_id) VALUES
-('hod.cse@lnmiit.ac.in', '$2b$10$rOzJqQqQqQqQqQqQqQqQqO', 'Dr. Rajesh Kumar', 'hod', 'CSE', 'EMP002'),
-('hod.ece@lnmiit.ac.in', '$2b$10$rOzJqQqQqQqQqQqQqQqQqO', 'Dr. Priya Sharma', 'hod', 'ECE', 'EMP003');
+('hod.cse@lnmiit.ac.in', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'Dr. Rajesh Kumar', 'hod', 'CSE', 'EMP002'),
+('hod.ece@lnmiit.ac.in', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'Dr. Priya Sharma', 'hod', 'ECE', 'EMP003');
 
 -- Insert sample faculty users
 INSERT INTO users (email, password_hash, name, role, department, employee_id) VALUES
-('faculty1@lnmiit.ac.in', '$2b$10$rOzJqQqQqQqQqQqQqQqQqO', 'Prof. Amit Singh', 'faculty', 'CSE', 'EMP004'),
-('faculty2@lnmiit.ac.in', '$2b$10$rOzJqQqQqQqQqQqQqQqQqO', 'Dr. Neha Gupta', 'faculty', 'ECE', 'EMP005');
+('faculty1@lnmiit.ac.in', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'Prof. Amit Singh', 'faculty', 'CSE', 'EMP004'),
+('faculty2@lnmiit.ac.in', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'Dr. Neha Gupta', 'faculty', 'ECE', 'EMP005');
 
 -- Insert sample lab staff users
 INSERT INTO users (email, password_hash, name, role, department, employee_id) VALUES
-('labstaff1@lnmiit.ac.in', '$2b$10$rOzJqQqQqQqQqQqQqQqQqO', 'Mr. Suresh Patel', 'lab_staff', 'CSE', 'EMP006'),
-('labstaff2@lnmiit.ac.in', '$2b$10$rOzJqQqQqQqQqQqQqQqQqO', 'Ms. Kavita Jain', 'lab_staff', 'ECE', 'EMP007');
+('labstaff1@lnmiit.ac.in', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'Mr. Suresh Patel', 'lab_staff', 'CSE', 'EMP006'),
+('labstaff2@lnmiit.ac.in', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'Ms. Kavita Jain', 'lab_staff', 'ECE', 'EMP007');
 
 -- Insert sample student users
 INSERT INTO users (email, password_hash, name, role, department, student_id) VALUES
-('21ucs001@lnmiit.ac.in', '$2b$10$rOzJqQqQqQqQqQqQqQqQqO', 'Rahul Agarwal', 'student', 'CSE', '21UCS001'),
-('21uec001@lnmiit.ac.in', '$2b$10$rOzJqQqQqQqQqQqQqQqQqO', 'Priyanka Mehta', 'student', 'ECE', '21UEC001');
+('21ucs001@lnmiit.ac.in', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'Rahul Agarwal', 'student', 'CSE', '21UCS001'),
+('21uec001@lnmiit.ac.in', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'Priyanka Mehta', 'student', 'ECE', '21UEC001');
 
 -- Insert sample labs
 INSERT INTO labs (name, code, department_id, staff_id, capacity, location) VALUES
@@ -51,7 +52,7 @@ INSERT INTO inventory (item_name, item_code, lab_id, category, quantity_total, q
 
 -- Insert current academic year
 INSERT INTO year_config (academic_year, financial_year, start_date, end_date, is_current) VALUES
-('2024-25', '2024-25', '2024-07-01', '2025-06-30', true);
+('2024-25', '2024-25', '2024-07-01', '2025-06-30', 1);
 
 -- Update department HODs
 UPDATE departments SET hod_id = 2 WHERE code = 'CSE';

@@ -54,8 +54,8 @@ export async function sendMail(options: MailOptions) {
   return { messageId: info.messageId }
 }
 
-export async function sendPasswordResetEmail(email: string, token: string) {
-  const url = `${getAppUrl()}/reset-password/${token}`
+export async function sendPasswordResetEmail(email: string, token: string, baseUrl?: string) {
+  const url = `${(baseUrl || getAppUrl()).replace(/\/$/, "")}/reset-password/${token}`
   const html = `
     <p>You requested to reset your password.</p>
     <p>Click the link below to set a new password. This link will expire in 60 minutes.</p>

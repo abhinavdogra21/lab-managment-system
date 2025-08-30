@@ -38,8 +38,11 @@ export async function POST(req: Request) {
 
     const token = crypto.randomBytes(32).toString("hex")
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString() // 60 minutes
-    await dbOperations.upsertPasswordReset(user.id, token, expiresAt)
-    await sendPasswordResetEmail(user.email, token)
+  await dbOperations.upsertPasswordReset(user.id, token, expiresAt)
+  const hostHeader = (req.headers as any).get?.("x-forwarded-host") || (req.headers as any).get?.("host") || undefined
+  const proto = (req.headers as any).get?.("x-forwarded-proto") || "http"
+  const baseUrl = hostHeader ? `${proto}://${hostHeader}` : undefined
+  await sendPasswordResetEmail(user.email, token, baseUrl)
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error("forgot-password error", e)

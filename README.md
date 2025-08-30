@@ -8,16 +8,16 @@ A role-based lab management platform for LNMIIT (Next.js App Router + TypeScript
   - Demo auth with cookie-based session; role awareness in UI.
   - Hydration issues fixed (deterministic SSR + html suppressHydrationWarning).
   - Asset paths corrected (login logo).
-  - Forgot/Reset password flow: API + pages + email utility (SMTP optional).
   - Digest email endpoint with secret header protection for schedulers.
   - Database helpers implemented with safe fallbacks to keep UI working without DB.
 - Pending
   - Connect to a real database and remove fallbacks.
   - Strong password hashing (bcrypt/argon2) instead of demo scrypt.
-  - Deeper API-level RBAC (protect admin/HOD routes) and session hardening (JWT).
-  - Email templates for bookings/approvals/reminders; schedule digests and cleanup.
+    - Reset page branded with LNMIIT logo; login shows a success banner after reset.
+    - Labs & Departments admin: create and cascade delete (lab/department) with UI and API.
+    - Users admin: view by role (Students/Lab Staff), filter by department, sort, search, add user (student/lab staff), delete one, purge all students.
   - Student data lifecycle: auto-delete inactive/old students every 6 months.
-  - Tests (unit/integration) and production hardening (rate limits, logging).
+    - MySQL integration: idempotent setup runner, archival tables, purge endpoints.
 
 
 ## Tech stack
@@ -26,65 +26,57 @@ A role-based lab management platform for LNMIIT (Next.js App Router + TypeScript
 - DB: MySQL (schema in `scripts/`)
 
 ## Roles
+  APP_URL=http://localhost:3001
+  USE_DB_AUTH=true
+  CRON_SECRET=choose-a-strong-secret
+  SMTP_HOST=your-smtp-host
+  SMTP_PORT=587
+  SMTP_SECURE=false
+  SMTP_USER=your-smtp-user
+  SMTP_PASS=your-smtp-pass
+  SMTP_FROM="LNMIIT Labs <no-reply@lnmiit.ac.in>"
 - Admin, HOD, Faculty, Lab Staff, Student, T&P
 
 ## Test users (password for all: `admin123`)
 - Admin: `admin@lnmiit.ac.in`
 - HOD: `hod.cse@lnmiit.ac.in`, `hod.ece@lnmiit.ac.in`
 - Faculty: `faculty1@lnmiit.ac.in`, `faculty2@lnmiit.ac.in`
-- Lab Staff: `labstaff1@lnmiit.ac.in`, `labstaff2@lnmiit.ac.in`
-- Students: `21ucs001@lnmiit.ac.in`, `21uec001@lnmiit.ac.in`
-- T&P: `tnp@lnmiit.ac.in`
-
 ## Quick start (demo mode)
 This mode uses a cookie-based mock session. All pages and sidebar routes work; APIs return stub data if DB isn’t configured.
 
 ```bash
 pnpm install
-pnpm dev
 ```
 Open http://localhost:3000 and log in with any test user. Use the role dropdown to match the email’s role.
 
 ## Production build
 ```bash
 pnpm build
-pnpm start
 ```
 
 ## Configure MySQL (persistence)
 1. Create a database and set env vars (copy `.env.example` to `.env.local`)
 ```env
-DB_HOST=localhost
 DB_PORT=3306
 DB_NAME=lnmiit_lab_management
 DB_USER=root
 DB_PASSWORD=password
-```
 2. Run schema and seed (manually via your MySQL client):
 - `scripts/01-create-tables-mysql.sql`
 - (Optional) add your own seed script or import data as needed.
 
 The API layer in `lib/database.ts` uses MySQL (`mysql2/promise`). When DB is reachable, queries are used; otherwise, mocked responses are returned so the app doesn’t break in demo mode.
 
-## Database integration plan
 Recommended: MySQL (required by LNMIIT server; supported by `lib/database.ts`).
 
+    - POST `/api/admin/purge-students` (admin) → archives and deletes all student users and related records.
 - What you can share safely:
-  - Prefer a dedicated DB user with least privileges (read/write only to this database).
   - Share host, port, database, username, and a temporary password via a secret channel (not in git). For local dev, `.env.local`; for deployment, platform secrets.
   - Optionally provide a connection URL: `mysql://USER:PASSWORD@HOST:PORT/DBNAME`.
 - What we’ll do after creds:
   - Set env in `.env.local` and verify migrations (or run SQL scripts in `scripts/`).
   - Flip endpoints to hard-fail on DB errors (remove fallbacks) once stable.
   - Add indexes/constraints if needed based on real data and load.
-
-Alternate option: MongoDB Atlas
-- Feasible, but requires a data-access layer rewrite. If you prefer MongoDB:
-  - We’ll introduce a `lib/mongo.ts` client and mirror operations as repository methods.
-  - Replace SQL in `lib/database.ts` with MongoDB implementations or add an adapter layer (`dbOperations` → `pg` or `mongo`).
-  - Update scripts: create seeders in JavaScript for Mongo instead of SQL.
-  - Env needed: `MONGODB_URI` and optional `MONGODB_DB`.
-
 Which should you share now?
 - If proceeding with MySQL (recommended): provide the MySQL connection details as listed above.
 - If you want MongoDB Atlas instead: share `MONGODB_URI` (SRV string), and confirm preference so we add the adapter. Expect 1–2 passes to migrate queries and test.

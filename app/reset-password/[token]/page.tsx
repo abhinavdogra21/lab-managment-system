@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useParams, useRouter } from "next/navigation"
+import Image from "next/image"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -34,7 +35,7 @@ export default function ResetPasswordPage() {
         setError(data.error || "Reset failed")
       } else {
         setSuccess(true)
-        setTimeout(() => router.push("/"), 1200)
+        setTimeout(() => router.push("/?reset=1"), 1200)
       }
     } finally {
       setLoading(false)
@@ -45,6 +46,9 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
+          <div className="flex justify-center mb-1">
+            <Image src="/lnmiit-logo.png" alt="LNMIIT Logo" width={120} height={40} className="h-10 w-auto" />
+          </div>
           <CardTitle>Set a new password</CardTitle>
           <CardDescription>Enter a strong password you will remember.</CardDescription>
         </CardHeader>

@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter, Montserrat } from "next/font/google"
 import "./globals.css"
+import "react-day-picker/style.css"
 
 const inter = Inter({
   subsets: ["latin"],

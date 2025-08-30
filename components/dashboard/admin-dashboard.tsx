@@ -2,7 +2,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Users, Building, Shield, Database, AlertTriangle, TrendingUp, X, Plus, Edit, Trash2 } from "lucide-react"
+import { Users, Building, Database, AlertTriangle, TrendingUp, X, Plus, Edit, Trash2, Shield } from "lucide-react"
 import { useState } from "react"
 
 interface User {
@@ -28,13 +28,36 @@ interface AdminDashboardProps {
  * - Security monitoring
  */
 export function AdminDashboard({ user }: AdminDashboardProps) {
-  // Mock data - would come from API
+  const [stats, setStats] = useState<{ totalUsers: number; activeLabs: number; dbUptimeSeconds: number; dbSizeMB: number; recentLogs: any[] }>({ totalUsers: 0, activeLabs: 0, dbUptimeSeconds: 0, dbSizeMB: 0, recentLogs: [] })
+  const [labComponents, setLabComponents] = useState<Array<{ id: number; name: string; code: string; items: number; total_quantity: number }>>([])
   const systemStats = [
-    { label: "Total Users", value: "1,247", icon: Users },
-    { label: "Active Labs", value: "24", icon: Building },
-    { label: "System Uptime", value: "99.9%", icon: TrendingUp },
-    { label: "Data Storage", value: "2.4 TB", icon: Database },
+    { label: "Total Users", value: String(stats.totalUsers), icon: Users },
+    { label: "Active Labs", value: String(stats.activeLabs), icon: Building },
+    { label: "DB Uptime (hrs)", value: (stats.dbUptimeSeconds / 3600).toFixed(1), icon: TrendingUp },
+    { label: "DB Size (MB)", value: stats.dbSizeMB.toFixed(2), icon: Database },
   ]
+
+  // Load live stats
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useState(() => {
+    ;(async () => {
+      try {
+        const res = await fetch("/api/admin/stats", { cache: "no-store" })
+        if (res.ok) {
+          const data = await res.json()
+          setStats(data)
+        }
+      } catch {}
+      try {
+        const res2 = await fetch("/api/admin/labs/components", { cache: "no-store" })
+        if (res2.ok) {
+          const data2 = await res2.json()
+          setLabComponents(data2.labs || [])
+        }
+      } catch {}
+    })()
+    return undefined
+  })
 
   const systemAlerts = [
     {
@@ -144,7 +167,12 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
   }
 
   const handleManageUsers = () => {
-    setActiveView("users")
+    // Navigate to the dedicated Users page route
+    if (typeof window !== "undefined") {
+      window.location.href = "/dashboard/users"
+    } else {
+      setActiveView("users")
+    }
   }
 
   const handleSettings = () => {
@@ -438,8 +466,7 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
 
   if (activeView === "users") return renderUserManagement()
   if (activeView === "settings") return renderSettings()
-  if (activeView === "security") return renderSecurity()
-  if (activeView === "reports") return renderReports()
+  // Security and Reports views are deprecated in quick actions
   if (activeView === "database") return renderDatabase()
 
   return (
@@ -501,7 +528,7 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card className="cursor-pointer transition-colors hover:bg-muted/50">
           <CardHeader>
             <CardTitle className="text-sm">User Management</CardTitle>
@@ -518,31 +545,7 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
             <CardTitle className="text-sm">System Settings</CardTitle>
           </CardHeader>
           <CardContent>
-            <Button variant="outline" className="w-full bg-transparent" size="sm" onClick={handleSettings}>
-              Settings
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="cursor-pointer transition-colors hover:bg-muted/50">
-          <CardHeader>
-            <CardTitle className="text-sm">Security Monitor</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" className="w-full bg-transparent" size="sm" onClick={handleSecurity}>
-              Security
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="cursor-pointer transition-colors hover:bg-muted/50">
-          <CardHeader>
-            <CardTitle className="text-sm">System Reports</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" className="w-full bg-transparent" size="sm" onClick={handleReports}>
-              Reports
-            </Button>
+            <Button variant="outline" className="w-full bg-transparent" size="sm" onClick={() => (window.location.href = "/dashboard/settings")}>Settings</Button>
           </CardContent>
         </Card>
 
@@ -551,38 +554,41 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
             <CardTitle className="text-sm">Database Admin</CardTitle>
           </CardHeader>
           <CardContent>
-            <Button variant="outline" className="w-full bg-transparent" size="sm" onClick={handleDatabase}>
-              Database
-            </Button>
+            <Button variant="outline" className="w-full bg-transparent" size="sm" onClick={handleDatabase}>Database</Button>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer transition-colors hover:bg-muted/50">
+          <CardHeader>
+            <CardTitle className="text-sm">Analytics & Reports</CardTitle>
+          </CardHeader>
+          <CardContent className="flex gap-2">
+            <Button variant="outline" className="w-full bg-transparent" size="sm" onClick={() => (window.location.href = "/dashboard/analytics")}>Analytics</Button>
+            <Button variant="outline" className="w-full bg-transparent" size="sm" onClick={() => (window.location.href = "/dashboard/reports")}>Reports</Button>
           </CardContent>
         </Card>
       </div>
 
-      {/* System Alerts */}
+      {/* System Alerts (live) */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-secondary" />
-            System Alerts
+            Recent System Logs
           </CardTitle>
-          <CardDescription>Recent system notifications and alerts</CardDescription>
+          <CardDescription>Last 10 actions recorded by the system</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {systemAlerts.map((alert) => (
-              <div key={alert.id} className="flex items-center justify-between rounded-lg border p-4">
+            {stats.recentLogs.map((log) => (
+              <div key={log.id} className="flex items-center justify-between rounded-lg border p-4">
                 <div className="space-y-1">
-                  <p className="font-medium">{alert.type}</p>
-                  <p className="text-sm text-muted-foreground">{alert.message}</p>
-                  <p className="text-xs text-muted-foreground">{alert.time}</p>
+                  <p className="font-medium">{log.action}</p>
+                  <p className="text-sm text-muted-foreground">{log.entity_type} #{log.entity_id}</p>
+                  <p className="text-xs text-muted-foreground">{new Date(log.created_at).toLocaleString()}</p>
                 </div>
                 <div className="text-right">
-                  {getSeverityBadge(alert.severity)}
-                  <div className="mt-2">
-                    <Button variant="ghost" size="sm" onClick={() => handleViewAlert(alert)}>
-                      View Details
-                    </Button>
-                  </div>
+                  <Badge variant="outline">user {log.user_id}</Badge>
                 </div>
               </div>
             ))}
@@ -590,28 +596,22 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
         </CardContent>
       </Card>
 
-      {/* Department Overview */}
+      {/* Labs and components overview */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Building className="h-5 w-5 text-primary" />
-            Department Overview
+            Labs and Components
           </CardTitle>
-          <CardDescription>Summary of all departments and their lab usage</CardDescription>
+          <CardDescription>Items and quantities per lab (from inventory)</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {departmentOverview.map((dept) => (
-              <div key={dept.dept} className="flex items-center justify-between rounded-lg border p-4">
+            {labComponents.map((lab) => (
+              <div key={lab.id} className="flex items-center justify-between rounded-lg border p-4">
                 <div className="space-y-1">
-                  <p className="font-medium">{dept.dept} Department</p>
-                  <p className="text-sm text-muted-foreground">
-                    {dept.users} users • {dept.labs} labs
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-semibold">{dept.utilization}%</div>
-                  <p className="text-xs text-muted-foreground">Utilization</p>
+                  <p className="font-medium">{lab.name} ({lab.code})</p>
+                  <p className="text-sm text-muted-foreground">{lab.items} items • {lab.total_quantity} total units</p>
                 </div>
               </div>
             ))}
