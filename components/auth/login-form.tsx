@@ -101,12 +101,17 @@ export function LoginForm() {
       return
     }
     try {
-  await fetch("/api/auth/forgot-password", {
+      const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       })
-      alert("If an account exists for this email, a reset link has been sent.")
+      if (res.ok) {
+        alert("Reset link sent.")
+      } else {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error || "Failed to send reset link")
+      }
     } catch (e) {
       console.error(e)
       alert("Failed to send reset link")

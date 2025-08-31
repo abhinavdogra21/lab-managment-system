@@ -222,6 +222,24 @@ export const dbOperations = {
     return res.rows[0]
   },
 
+  async updateUser(id: number, fields: { department?: string | null; role?: string | null; name?: string | null; email?: string | null }) {
+    const allowed: Record<string, any> = {}
+    if (fields.department !== undefined) allowed.department = fields.department
+    if (fields.role !== undefined) allowed.role = fields.role
+    if (fields.name !== undefined) allowed.name = fields.name
+    if (fields.email !== undefined) allowed.email = fields.email
+    const keys = Object.keys(allowed)
+    if (keys.length === 0) {
+      const sel = await db.query(`SELECT id, email, name, role, department FROM users WHERE id = ?`, [id])
+      return sel.rows[0]
+    }
+    const sets = keys.map((k) => `${k} = ?`).join(", ")
+    const values = keys.map((k) => allowed[k])
+    await db.query(`UPDATE users SET ${sets}, updated_at = NOW() WHERE id = ?`, [...values, id])
+    const sel = await db.query(`SELECT id, email, name, role, department FROM users WHERE id = ?`, [id])
+    return sel.rows[0]
+  },
+
   // Password reset operations
   async upsertPasswordReset(userId: number, token: string, expiresAt: string) {
     // Invalidate existing tokens for user and insert new
@@ -239,7 +257,7 @@ export const dbOperations = {
       return selectRes.rows[0]
     })
   },
-
+  
   async getPasswordResetByToken(token: string) {
     const result = await db.query(
       `SELECT pr.*, u.email, u.id AS user_id
@@ -289,6 +307,43 @@ export const dbOperations = {
         { id: 2, name: "CP2", code: "CP2", department_id: 1, staff_id: null, capacity: 40, location: "Block A" },
       ]
     }
+  },
+  
+  // Update lab details (name, code, capacity, location, staff)
+  async updateLab(id: number, fields: { name?: string; code?: string; capacity?: number | null; location?: string | null; staffId?: number | null }) {
+    return db.transaction(async (client) => {
+      const allowed: Record<string, any> = {}
+      if (fields.name !== undefined) allowed.name = fields.name
+      if (fields.code !== undefined) allowed.code = fields.code
+      if (fields.capacity !== undefined) allowed.capacity = fields.capacity
+      if (fields.location !== undefined) allowed.location = fields.location
+      if (fields.staffId !== undefined) {
+        if (fields.staffId !== null) {
+          const u = await client.query(`SELECT id, role FROM users WHERE id = ? AND is_active = 1`, [fields.staffId])
+          const ur = u.rows[0]
+          if (!ur) throw new Error("User not found")
+          if (String(ur.role) !== 'lab_staff') throw new Error("User is not lab staff")
+        }
+        allowed.staff_id = fields.staffId
+      }
+      const keys = Object.keys(allowed)
+      if (keys.length === 0) {
+        const sel0 = await client.query(`SELECT * FROM labs WHERE id = ?`, [id])
+        return sel0.rows[0]
+      }
+      const sets = keys.map((k) => `${k} = ?`).join(", ")
+      const values = keys.map((k) => allowed[k])
+      await client.query(`UPDATE labs SET ${sets} WHERE id = ?`, [...values, id])
+      const sel = await client.query(
+        `SELECT l.*, d.name AS department_name, u.name AS staff_name
+         FROM labs l
+         LEFT JOIN departments d ON l.department_id = d.id
+         LEFT JOIN users u ON l.staff_id = u.id
+         WHERE l.id = ?`,
+        [id]
+      )
+      return sel.rows[0]
+    })
   },
 
   async getLabsByDepartment(departmentId: number) {
@@ -387,6 +442,90 @@ export const dbOperations = {
       console.warn("getAllBookings fallback (DB not ready):", e)
       return []
     }
+  },
+
+  // Analytics aggregations
+  async getBookingDailyCounts(startDate: string, endDate: string) {
+    const res = await db.query(
+      `SELECT booking_date AS day, COUNT(*) AS total
+       FROM lab_bookings
+       WHERE booking_date BETWEEN ? AND ?
+       GROUP BY booking_date
+       ORDER BY booking_date`,
+      [startDate, endDate]
+    )
+    return res.rows
+  },
+
+  async getBookingStatusDistribution(startDate: string, endDate: string) {
+    const res = await db.query(
+      `SELECT approval_status AS status, COUNT(*) AS count
+       FROM lab_bookings
+       WHERE booking_date BETWEEN ? AND ?
+       GROUP BY approval_status`,
+      [startDate, endDate]
+    )
+    return res.rows
+  },
+
+  async getBookingsByDepartment(startDate: string, endDate: string) {
+    const res = await db.query(
+      `SELECT COALESCE(d.name, 'Unassigned') AS department, COUNT(*) AS count
+       FROM lab_bookings b
+       JOIN labs l ON b.lab_id = l.id
+       LEFT JOIN departments d ON l.department_id = d.id
+       WHERE b.booking_date BETWEEN ? AND ?
+       GROUP BY COALESCE(d.name, 'Unassigned')
+       ORDER BY count DESC`,
+      [startDate, endDate]
+    )
+    return res.rows
+  },
+
+  async getTopLabsByBookings(startDate: string, endDate: string, limit = 5) {
+    const lim = Math.max(1, Math.min(20, limit))
+    const res = await db.query(
+      `SELECT l.name AS lab, COUNT(*) AS count
+       FROM lab_bookings b
+       JOIN labs l ON b.lab_id = l.id
+       WHERE b.booking_date BETWEEN ? AND ?
+       GROUP BY l.id, l.name
+       ORDER BY count DESC
+       LIMIT ${lim}`,
+      [startDate, endDate]
+    )
+    return res.rows
+  },
+
+  async getUniqueBookersCount(startDate: string, endDate: string) {
+    const res = await db.query(
+      `SELECT COUNT(DISTINCT booked_by) AS c
+       FROM lab_bookings
+       WHERE booking_date BETWEEN ? AND ?`,
+      [startDate, endDate]
+    )
+    return Number(res.rows[0]?.c || 0)
+  },
+
+  async getPendingApprovalsCount(startDate: string, endDate: string) {
+    const res = await db.query(
+      `SELECT COUNT(*) AS c
+       FROM lab_bookings
+       WHERE approval_status = 'pending' AND booking_date BETWEEN ? AND ?`,
+      [startDate, endDate]
+    )
+    return Number(res.rows[0]?.c || 0)
+  },
+
+  async getTotalHoursBooked(startDate: string, endDate: string) {
+    // Sum duration in hours across bookings
+    const res = await db.query(
+      `SELECT ROUND(SUM(TIME_TO_SEC(TIMEDIFF(end_time, start_time))) / 3600, 2) AS hours
+       FROM lab_bookings
+       WHERE booking_date BETWEEN ? AND ?`,
+      [startDate, endDate]
+    )
+    return Number(res.rows[0]?.hours || 0)
   },
 
   // Inventory operations
@@ -566,7 +705,14 @@ export const dbOperations = {
 
   // Departments
   async listDepartments() {
-    const res = await db.query(`SELECT id, name, code, created_at FROM departments ORDER BY name`)
+    const res = await db.query(`
+      SELECT d.id, d.name, d.code, d.hod_id,
+             u.name AS hod_name, u.email AS hod_email,
+             d.created_at
+      FROM departments d
+      LEFT JOIN users u ON u.id = d.hod_id
+      ORDER BY d.name
+    `)
     return res.rows
   },
 
@@ -576,6 +722,22 @@ export const dbOperations = {
       [dept.name, dept.code]
     )
     const sel = await db.query(`SELECT id, name, code, created_at FROM departments WHERE id = ?`, [result.insertId])
+    return sel.rows[0]
+  },
+
+  async updateDepartment(id: number, fields: { name?: string; code?: string }) {
+    const allowed: Record<string, any> = {}
+    if (fields.name !== undefined) allowed.name = fields.name
+    if (fields.code !== undefined) allowed.code = fields.code
+    const keys = Object.keys(allowed)
+    if (keys.length === 0) {
+      const sel0 = await db.query(`SELECT id, name, code, hod_id FROM departments WHERE id = ?`, [id])
+      return sel0.rows[0]
+    }
+    const sets = keys.map((k) => `${k} = ?`).join(", ")
+    const values = keys.map((k) => allowed[k])
+    await db.query(`UPDATE departments SET ${sets} WHERE id = ?`, [...values, id])
+    const sel = await db.query(`SELECT id, name, code, hod_id FROM departments WHERE id = ?`, [id])
     return sel.rows[0]
   },
 
@@ -602,6 +764,56 @@ export const dbOperations = {
       // Finally delete the department
       const delDept = await client.query(`DELETE FROM departments WHERE id = ?`, [departmentId])
       return { deletedLabs: labIds.length, deletedDepartment: delDept.affectedRows || 0 }
+    })
+  },
+
+  // Assignments
+  async setLabStaff(labId: number, staffId: number | null) {
+    return db.transaction(async (client) => {
+      // Ensure lab exists
+      const labRes = await client.query(`SELECT id FROM labs WHERE id = ?`, [labId])
+      if (!labRes.rows[0]) throw new Error("Lab not found")
+      if (staffId != null) {
+        // Ensure user exists and is lab_staff
+        const u = await client.query(`SELECT id, role FROM users WHERE id = ? AND is_active = 1`, [staffId])
+        const ur = u.rows[0]
+        if (!ur) throw new Error("User not found")
+        if (String(ur.role) !== 'lab_staff') throw new Error("User is not lab staff")
+      }
+      await client.query(`UPDATE labs SET staff_id = ? WHERE id = ?`, [staffId, labId])
+      const sel = await client.query(
+        `SELECT l.*, d.name AS department_name, u.name AS staff_name
+         FROM labs l
+         LEFT JOIN departments d ON l.department_id = d.id
+         LEFT JOIN users u ON l.staff_id = u.id
+         WHERE l.id = ?`,
+        [labId]
+      )
+      return sel.rows[0]
+    })
+  },
+
+  async setDepartmentHod(departmentId: number, hodId: number | null) {
+    return db.transaction(async (client) => {
+      // Ensure department exists
+      const d = await client.query(`SELECT id, code FROM departments WHERE id = ?`, [departmentId])
+      const dep = d.rows[0]
+      if (!dep) throw new Error("Department not found")
+      if (hodId != null) {
+        const u = await client.query(`SELECT id, role FROM users WHERE id = ? AND is_active = 1`, [hodId])
+        const ur = u.rows[0]
+        if (!ur) throw new Error("User not found")
+        if (String(ur.role) !== 'hod') throw new Error("User is not HOD")
+      }
+      await client.query(`UPDATE departments SET hod_id = ? WHERE id = ?`, [hodId, departmentId])
+      const sel = await client.query(
+        `SELECT d.id, d.name, d.code, d.hod_id, u.name AS hod_name, u.email AS hod_email
+         FROM departments d
+         LEFT JOIN users u ON u.id = d.hod_id
+         WHERE d.id = ?`,
+        [departmentId]
+      )
+      return sel.rows[0]
     })
   },
 

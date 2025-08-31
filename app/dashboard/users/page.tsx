@@ -26,7 +26,9 @@ export default function UsersPage() {
   const [departments, setDepartments] = useState<Department[]>([])
   const [addOpen, setAddOpen] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [newUser, setNewUser] = useState<{ role: "student" | "lab_staff"; name: string; email: string; department?: string; studentId?: string; employeeId?: string }>({ role: "student", name: "", email: "", department: undefined, studentId: "", employeeId: "" })
+  const [newUser, setNewUser] = useState<{ role: "student" | "lab_staff" | "faculty" | "hod" | "admin" | "tnp"; name: string; email: string; department?: string; studentId?: string; employeeId?: string }>({ role: "student", name: "", email: "", department: undefined, studentId: "", employeeId: "" })
+  const [addingDept, setAddingDept] = useState(false)
+  const [deptDraft, setDeptDraft] = useState({ name: "", code: "" })
 
   useEffect(() => {
     const u = typeof window !== "undefined" ? localStorage.getItem("user") : null
@@ -152,10 +154,17 @@ export default function UsersPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
                 <div className="md:col-span-2">
                   <Label>Role</Label>
-                  <div className="flex gap-2 mt-2">
-                    <Button type="button" variant={newUser.role === "student" ? "default" : "outline"} onClick={() => setNewUser((s) => ({ ...s, role: "student" }))}>Student</Button>
-                    <Button type="button" variant={newUser.role === "lab_staff" ? "default" : "outline"} onClick={() => setNewUser((s) => ({ ...s, role: "lab_staff" }))}>Lab Staff</Button>
-                  </div>
+                  <Select value={newUser.role} onValueChange={(v) => setNewUser((s) => ({ ...s, role: v as any }))}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Select role" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="student">Student</SelectItem>
+                      <SelectItem value="faculty">Faculty</SelectItem>
+                      <SelectItem value="lab_staff">Lab Staff</SelectItem>
+                      <SelectItem value="hod">HOD</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="tnp">TNP</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label>Name</Label>
@@ -165,18 +174,55 @@ export default function UsersPage() {
                   <Label>Email</Label>
                   <Input type="email" value={newUser.email} onChange={(e) => setNewUser((s) => ({ ...s, email: e.target.value }))} />
                 </div>
-                <div>
-                  <Label>Department</Label>
-                  <Select value={newUser.department || "none"} onValueChange={(v) => setNewUser((s) => ({ ...s, department: v === "none" ? undefined : v }))}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {departments.map((d) => (
-                        <SelectItem key={d.id} value={d.code}>{d.name} ({d.code})</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+                  <div className="md:col-span-2">
+                    <Label>Department</Label>
+                    <Select value={newUser.department || "none"} onValueChange={(v) => setNewUser((s) => ({ ...s, department: v === "none" ? undefined : v }))}>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {departments.map((d) => (
+                          <SelectItem key={d.id} value={d.code}>{d.name} ({d.code})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Button type="button" variant={addingDept ? "default" : "outline"} onClick={() => setAddingDept((s) => !s)}>
+                      {addingDept ? "Close" : "Add Department"}
+                    </Button>
+                  </div>
                 </div>
+                {addingDept && (
+                  <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <div>
+                      <Label>New Dept Name</Label>
+                      <Input value={deptDraft.name} onChange={(e) => setDeptDraft((s) => ({ ...s, name: e.target.value }))} />
+                    </div>
+                    <div>
+                      <Label>New Dept Code</Label>
+                      <Input value={deptDraft.code} onChange={(e) => setDeptDraft((s) => ({ ...s, code: e.target.value.toUpperCase() }))} />
+                    </div>
+                    <div className="pt-6">
+                      <Button type="button" disabled={!deptDraft.name || !deptDraft.code || creating} onClick={async () => {
+                        try {
+                          const res = await fetch("/api/departments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(deptDraft) })
+                          const data = await res.json()
+                          if (!res.ok) throw new Error(data?.error || "Failed to create department")
+                          // refresh departments and set selected
+                          const d = await fetch("/api/departments", { cache: "no-store" }).then((r) => r.json())
+                          setDepartments(d.departments || [])
+                          setNewUser((s) => ({ ...s, department: data.department.code }))
+                          setDeptDraft({ name: "", code: "" })
+                          setAddingDept(false)
+                          toast({ title: "Department created" })
+                        } catch (e: any) {
+                          toast({ title: "Create failed", description: e?.message || "", variant: "destructive" })
+                        }
+                      }}>Save Dept</Button>
+                    </div>
+                  </div>
+                )}
                 {newUser.role === "student" ? (
                   <div>
                     <Label>Student ID (optional)</Label>
@@ -207,7 +253,7 @@ export default function UsersPage() {
                         role: newUser.role,
                         department: newUser.department || null,
                         studentId: newUser.role === "student" ? (newUser.studentId || null) : null,
-                        employeeId: newUser.role === "lab_staff" ? (newUser.employeeId || null) : null,
+                        employeeId: newUser.role !== "student" ? (newUser.employeeId || null) : null,
                       }),
                     })
                     const data = await res.json()

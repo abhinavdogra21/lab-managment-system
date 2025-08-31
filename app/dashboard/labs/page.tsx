@@ -8,8 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/components/ui/use-toast"
 
-type Department = { id: number; name: string; code: string }
-type Lab = { id: number; name: string; code: string; department_id: number; department_name?: string; capacity?: number; location?: string }
+type Department = { id: number; name: string; code: string; hod_id?: number | null; hod_name?: string | null; hod_email?: string | null }
+type Lab = { id: number; name: string; code: string; department_id: number; department_name?: string; staff_id?: number | null; staff_name?: string | null; capacity?: number; location?: string }
 
 export default function LabsPage() {
   const { toast } = useToast()
@@ -17,6 +17,8 @@ export default function LabsPage() {
   const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null)
   const [departments, setDepartments] = useState<Department[]>([])
   const [labs, setLabs] = useState<Lab[]>([])
+  const [labStaffOptions, setLabStaffOptions] = useState<{ id: number; name: string; email: string }[]>([])
+  const [hodOptions, setHodOptions] = useState<{ id: number; name: string; email: string }[]>([])
   const [loading, setLoading] = useState(false)
 
   // Form state
@@ -40,12 +42,16 @@ export default function LabsPage() {
 
   const loadAll = async () => {
     try {
-      const [dRes, lRes] = await Promise.all([
+      const [dRes, lRes, staffRes, hodRes] = await Promise.all([
         fetch("/api/departments", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/labs", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/users?role=lab_staff", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/users?role=hod", { cache: "no-store" }).then((r) => r.json()),
       ])
       setDepartments(dRes.departments || [])
       setLabs(lRes.labs || [])
+      setLabStaffOptions((staffRes.users || []).map((u: any) => ({ id: u.id, name: u.name, email: u.email })))
+      setHodOptions((hodRes.users || []).map((u: any) => ({ id: u.id, name: u.name, email: u.email })))
     } catch (e: any) {
       toast({ title: "Failed to load", description: e?.message || "Could not fetch data", variant: "destructive" })
     }
@@ -127,6 +133,45 @@ export default function LabsPage() {
       toast({ title: "Lab deleted" })
     } catch (e: any) {
       toast({ title: "Delete failed", description: e?.message || "", variant: "destructive" })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const onAssignLabStaff = async (labId: number, staffId: number | null) => {
+    setLoading(true)
+    try {
+      const res = await fetch("/api/labs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ labId, staffId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || "Failed to set lab staff")
+      // update local list
+      setLabs((prev) => prev.map((l) => (l.id === labId ? { ...l, staff_id: data.lab.staff_id, staff_name: data.lab.staff_name } : l)))
+      toast({ title: "Lab staff updated" })
+    } catch (e: any) {
+      toast({ title: "Update failed", description: e?.message || "", variant: "destructive" })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const onAssignHod = async (departmentId: number, hodId: number | null) => {
+    setLoading(true)
+    try {
+      const res = await fetch("/api/departments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ departmentId, hodId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || "Failed to set HOD")
+      setDepartments((prev) => prev.map((d) => (d.id === departmentId ? { ...d, hod_id: data.department.hod_id, hod_name: data.department.hod_name, hod_email: data.department.hod_email } : d)))
+      toast({ title: "HOD updated" })
+    } catch (e: any) {
+      toast({ title: "Update failed", description: e?.message || "", variant: "destructive" })
     } finally {
       setLoading(false)
     }
@@ -247,6 +292,7 @@ export default function LabsPage() {
                   <TableHead>Name</TableHead>
                   <TableHead>Code</TableHead>
                   <TableHead>Department</TableHead>
+                  <TableHead>Lab Staff</TableHead>
                   <TableHead>Capacity</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Actions</TableHead>
@@ -258,6 +304,25 @@ export default function LabsPage() {
                     <TableCell>{lab.name}</TableCell>
                     <TableCell>{lab.code}</TableCell>
                     <TableCell>{lab.department_name || lab.department_id}</TableCell>
+                    <TableCell className="min-w-56">
+                      <Select
+                        value={lab.staff_id ? String(lab.staff_id) : "none"}
+                        onValueChange={(v) => onAssignLabStaff(lab.id, v === "none" ? null : Number(v))}
+                        disabled={!canManage || loading}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Assign staff" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Unassigned</SelectItem>
+                          {labStaffOptions.map((u) => (
+                            <SelectItem key={u.id} value={String(u.id)}>
+                              {u.name} ({u.email})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
                     <TableCell>{lab.capacity ?? "-"}</TableCell>
                     <TableCell>{lab.location ?? "-"}</TableCell>
                     <TableCell>
@@ -280,6 +345,7 @@ export default function LabsPage() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Code</TableHead>
+                  <TableHead>HOD</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -288,6 +354,25 @@ export default function LabsPage() {
                   <TableRow key={d.id}>
                     <TableCell>{d.name}</TableCell>
                     <TableCell>{d.code}</TableCell>
+                    <TableCell className="min-w-56">
+                      <Select
+                        value={d.hod_id ? String(d.hod_id) : "none"}
+                        onValueChange={(v) => onAssignHod(d.id, v === "none" ? null : Number(v))}
+                        disabled={!canManage || loading}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Assign HOD" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Unassigned</SelectItem>
+                          {hodOptions.map((u) => (
+                            <SelectItem key={u.id} value={String(u.id)}>
+                              {u.name} ({u.email})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
                     <TableCell>
                       <Button variant="destructive" size="sm" disabled={loading || !canManage} onClick={() => onDeleteDepartment(d.id)}>Delete</Button>
                     </TableCell>

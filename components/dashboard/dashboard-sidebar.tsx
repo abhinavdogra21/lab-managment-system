@@ -84,6 +84,7 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
         return [
           ...baseItems,
           { name: "User Management", href: "/dashboard/users", icon: Users },
+          { name: "Organization", href: "/dashboard/organization", icon: Building },
           { name: "All Labs", href: "/dashboard/labs", icon: Building },
           { name: "System Settings", href: "/dashboard/settings", icon: Settings },
           { name: "Reports", href: "/dashboard/reports", icon: BarChart3 },

@@ -49,14 +49,24 @@ async function run() {
       }
     }
 
-    // departments.code (nullable + unique)
+    // departments columns and indexes
     try {
       await ensureColumn('departments', 'code', 'VARCHAR(10) NULL')
-  await ensureColumn('departments', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
-      await conn.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_departments_code ON departments(code)`) // MySQL 8.0+ supports IF NOT EXISTS on index? if not, ignore error
-    } catch (e) {
-      // Fallback if IF NOT EXISTS not supported
+      await ensureColumn('departments', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
+      await ensureColumn('departments', 'hod_id', 'INT NULL')
+      // unique index on code
       try { await conn.query(`CREATE UNIQUE INDEX idx_departments_code ON departments(code)`) } catch (_) {}
+      // index on hod_id
+      try { await conn.query(`CREATE INDEX idx_departments_hod ON departments(hod_id)`) } catch (_) {}
+      // add foreign key if missing
+      const [fk] = await conn.query(
+        `SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'departments' AND COLUMN_NAME = 'hod_id' AND REFERENCED_TABLE_NAME = 'users' AND REFERENCED_COLUMN_NAME = 'id'`
+      )
+      if (!fk[0]) {
+        try { await conn.query(`ALTER TABLE departments ADD CONSTRAINT fk_departments_hod FOREIGN KEY (hod_id) REFERENCES users(id) ON DELETE SET NULL`) } catch (_) {}
+      }
+    } catch (e) {
+      // ignore
     }
 
     // inventory columns required by seed
