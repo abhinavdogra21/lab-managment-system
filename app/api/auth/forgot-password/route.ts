@@ -3,19 +3,14 @@ import crypto from "crypto"
 import { dbOperations } from "@/lib/database"
 import { sendPasswordResetEmail } from "@/lib/email"
 
-// New behavior:
-// - Do NOT auto-create users
-// - Allow all roles to request a reset
-// - Return 404 if email is not found (explicit "no such user")
+// Helper: basic email sanity and student detection fallback if client role missing
 function isLikelyStudentEmail(email: string) {
-  // Heuristic for LNMIIT student emails, e.g., 21ucs001@lnmiit.ac.in, 21uec123@...
-  // Assumption: two digits + three lowercase letters + three digits
   return /^\d{2}[a-z]{3}\d{3}@lnmiit\.ac\.in$/.test(email)
 }
 
 export async function POST(req: Request) {
   try {
-    const { email } = await req.json()
+    const { email, role } = await req.json()
     if (!email) return NextResponse.json({ error: "Email is required" }, { status: 400 })
     if (!email.endsWith("@lnmiit.ac.in")) {
       return NextResponse.json({ error: "Please use your LNMIIT email" }, { status: 400 })
@@ -23,8 +18,10 @@ export async function POST(req: Request) {
 
     let user = await dbOperations.getUserByEmail(email)
     if (!user) {
-      // Auto-create only for student emails
-      if (isLikelyStudentEmail(email)) {
+      const requestedRole = String(role || "").toLowerCase()
+      const treatAsStudent = requestedRole === "student" || (!requestedRole && isLikelyStudentEmail(email))
+      if (treatAsStudent) {
+        // Auto-create student record
         const local = email.split("@")[0]
         const displayName = local
           .replace(/\./g, " ")
@@ -41,8 +38,13 @@ export async function POST(req: Request) {
           employeeId: null,
         })
       } else {
+        // For non-student roles, require existing user
         return NextResponse.json({ error: "No such user exists" }, { status: 404 })
       }
+    } else if (role && String(user.role) !== String(role)) {
+      // Optional: guard mismatch between selected role and actual user role
+      // This prevents someone selecting 'student' for a faculty email, etc.
+      return NextResponse.json({ error: "User role mismatch" }, { status: 400 })
     }
 
     const token = crypto.randomBytes(32).toString("hex")

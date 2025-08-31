@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("")
+  const [role, setRole] = useState("student")
   const [sent, setSent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -21,7 +22,7 @@ export default function ForgotPasswordPage() {
       const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, role }),
       })
       if (res.ok) {
         setSent(true)
@@ -41,7 +42,7 @@ export default function ForgotPasswordPage() {
             <Image src="/lnmiit-logo.png" alt="LNMIIT Logo" width={120} height={40} className="h-10 w-auto" />
           </div>
           <CardTitle className="text-2xl">Forgot password</CardTitle>
-          <CardDescription>Enter your LNMIIT email to receive a reset link.</CardDescription>
+          <CardDescription>Enter your LNMIIT email and select your user type to receive a reset link.</CardDescription>
         </CardHeader>
         <CardContent>
           {sent ? (
@@ -62,6 +63,25 @@ export default function ForgotPasswordPage() {
                   required
                 />
                 <p className="text-xs text-muted-foreground">Use your @lnmiit.ac.in address.</p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">User type</label>
+                <select
+                  className="w-full border rounded-md p-2 bg-background"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  required
+                >
+                  <option value="student">Student</option>
+                  <option value="faculty">Faculty</option>
+                  <option value="hod">HOD</option>
+                  <option value="lab_staff">Lab Staff</option>
+                  <option value="tnp">T&P</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Students can reset even if no account exists yet; other roles require an existing account.
+                </p>
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Sending…" : "Send reset link"}
