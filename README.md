@@ -2,7 +2,7 @@
 
 A role-based lab management platform for LNMIIT (Next.js App Router + TypeScript). This repo ships with a functional UI, working API stubs, and a mock authentication flow so you can demo every route and navigation. A MySQL schema and seeds are included; wire the DB when ready.
 
-## Project status (Aug 18, 2025)
+## Project status (Sep 1, 2025)
 - Done
   - All dashboard routes and buttons are wired to pages (no 404s).
   - Demo auth with cookie-based session; role awareness in UI.
@@ -10,6 +10,7 @@ A role-based lab management platform for LNMIIT (Next.js App Router + TypeScript
   - Asset paths corrected (login logo).
   - Digest email endpoint with secret header protection for schedulers.
   - Database helpers implemented with safe fallbacks to keep UI working without DB.
+  - Forgot Password prompts for user type; students can auto-create account.
 - Pending
   - Connect to a real database and remove fallbacks.
   - Strong password hashing (bcrypt/argon2) instead of demo scrypt.
@@ -26,23 +27,17 @@ A role-based lab management platform for LNMIIT (Next.js App Router + TypeScript
 - DB: MySQL (schema in `scripts/`)
 
 ## Roles
-  APP_URL=http://localhost:3001
-  USE_DB_AUTH=true
-  CRON_SECRET=choose-a-strong-secret
-  SMTP_HOST=your-smtp-host
-  SMTP_PORT=587
-  SMTP_SECURE=false
-  SMTP_USER=your-smtp-user
-  SMTP_PASS=your-smtp-pass
-  SMTP_FROM="LNMIIT Labs <no-reply@lnmiit.ac.in>"
 - Admin, HOD, Faculty, Lab Staff, Student, T&P
 
 ## Test users (password for all: `admin123`)
 - Admin: `admin@lnmiit.ac.in`
 - HOD: `hod.cse@lnmiit.ac.in`, `hod.ece@lnmiit.ac.in`
 - Faculty: `faculty1@lnmiit.ac.in`, `faculty2@lnmiit.ac.in`
-## Quick start (demo mode)
-This mode uses a cookie-based mock session. All pages and sidebar routes work; APIs return stub data if DB isn’t configured.
+## Quick start
+Mode 1: Demo (no DB auth)
+- Uses a cookie-based mock session. All pages and sidebar routes work; APIs return stub data if DB isn’t configured.
+Mode 2: DB-auth (MySQL)
+- Set `USE_DB_AUTH=true` in `.env.local` and run `pnpm db:setup` once.
 
 ```bash
 pnpm install
@@ -61,9 +56,12 @@ DB_PORT=3306
 DB_NAME=lnmiit_lab_management
 DB_USER=root
 DB_PASSWORD=password
-2. Run schema and seed (manually via your MySQL client):
-- `scripts/01-create-tables-mysql.sql`
-- (Optional) add your own seed script or import data as needed.
+USE_DB_AUTH=true
+APP_URL=http://localhost:3000
+```
+2. Apply schema and optional seed:
+- Automated: `pnpm db:setup`
+- Manual: run `scripts/01-create-tables-mysql.sql` and optionally `scripts/02-seed-data.sql`.
 
 The API layer in `lib/database.ts` uses MySQL (`mysql2/promise`). When DB is reachable, queries are used; otherwise, mocked responses are returned so the app doesn’t break in demo mode.
 
@@ -92,13 +90,16 @@ Security note: never commit secrets. Use `.env.local` locally and deployment pla
 - `lib/` (auth + DB helpers)
 - `scripts/` (SQL schema and seed)
 
-## Authentication (demo)
+## Authentication
 - Login posts to `/api/auth/login` with `{ email, password, userRole }`.
 - On success: 
   - `localStorage.user` stores `{ id, email, name, role, department, studentId? }`.
   - An httpOnly cookie `auth-token` stores a JSON-encoded session. Server routes decode this cookie in `lib/auth.ts`.
 - Logout posts to `/api/auth/logout` and clears the cookie and localStorage.
 
+Auth modes:
+- Demo: in-memory users.
+- DB-auth: MySQL users with `password_hash` (scrypt `salt:hash` on reset; seeded users use legacy SHA-256).
 Note: In demo we don’t sign JWTs; the cookie stores a JSON-encoded payload. Replace with proper JWT when you connect the real backend.
 
 ## API endpoints (current)
@@ -107,9 +108,12 @@ All endpoints are under `app/api/` (Next.js Route Handlers). In demo mode, they 
 - Auth
   - POST `/api/auth/login` → body `{ email, password, userRole }` → returns `{ user }` and sets cookie
   - POST `/api/auth/logout` → clears cookie
-  - POST `/api/auth/forgot-password` → body `{ email }` → always returns `{ ok: true }` (no account enumeration). If SMTP is configured, sends a reset link email.
+  - POST `/api/auth/forgot-password` → body `{ email, role }`
+    - Students: if no record exists, auto-create a student user and issue token.
+    - Non-students: requires existing user; otherwise 404.
+    - If SMTP is configured, sends email; otherwise logs reset URL on server.
   - POST `/api/auth/reset-password` → body `{ token, password }` → validates token and updates password.
-  - Note: Forgot password is student-only. Non-students are admin-managed.
+  - Notes: role mismatch between selected and stored role is rejected; prefer bcrypt/argon2 in production.
 
 - Labs
   - GET `/api/labs` → all labs
@@ -159,6 +163,7 @@ The sidebar buttons are backed by real pages, so navigation always works:
 ## Reporting
 - UI in `components/reports/report-generator.tsx` supports date range, filters, and export type selection.
 - Currently simulates report generation; integrate with `lib/report-generator.ts` and a server route to produce PDF/Excel.
+ - Layout adjusted to avoid horizontal overflow in admin Reports.
 
 ## Security and next steps
 - Replace demo cookie with signed JWT (httpOnly + secure).
@@ -206,7 +211,13 @@ SMTP_FROM="LNMIIT Labs <no-reply@lnmiit.ac.in>"
 - Type errors: ensure `next-env.d.ts` exists (it is included).
 
 ## Scripts
-- SQL: `scripts/01-create-tables.sql`, `scripts/02-seed-data.sql`
+- DB setup: `pnpm db:setup`
+- Inspect a user (local): `node scripts/inspect-user.js <email>`
+- SQL files:
+  - `scripts/01-create-tables-mysql.sql`
+  - `scripts/02-add-indexes-mysql.sql`
+  - `scripts/03-archival-tables-mysql.sql`
+  - `scripts/02-seed-data.sql`
 
 ---
 Maintained for demo reliability: all buttons and routes are wired; server routes won’t crash without DB. Integrate the real DB when ready and remove fallbacks.

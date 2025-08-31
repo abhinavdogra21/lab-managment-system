@@ -11,7 +11,7 @@ interface User {
   email: string
   role: string
   department: string
-  status: string
+  status?: string
 }
 
 interface AdminDashboardProps {

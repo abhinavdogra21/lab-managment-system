@@ -337,16 +337,16 @@ export function ReportGenerator({ user }: ReportGeneratorProps) {
   const selectedReport = reportTypes.find((report) => report.id === selectedReportType)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full overflow-x-hidden">
       {/* Header */}
       <div>
         <h1 className="font-montserrat text-2xl font-bold text-foreground">Report Generator</h1>
         <p className="text-muted-foreground">Generate comprehensive reports based on your role and requirements</p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+  <div className="grid gap-6 lg:grid-cols-3 max-w-full">
         {/* Report Configuration */}
-        <div className="lg:col-span-2 space-y-6">
+  <div className="lg:col-span-2 space-y-6 min-w-0">
           {/* Report Type Selection */}
           <Card>
             <CardHeader>
@@ -562,7 +562,7 @@ export function ReportGenerator({ user }: ReportGeneratorProps) {
         </div>
 
         {/* Report Preview/Summary */}
-        <div className="space-y-6">
+  <div className="space-y-6 min-w-0">
           <Card>
             <CardHeader>
               <CardTitle>Report Summary</CardTitle>

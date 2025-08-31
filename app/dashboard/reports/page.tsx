@@ -17,7 +17,7 @@ export default function ReportsPage() {
   if (!user) return null
 
   return (
-    <div className="container mx-auto p-6">
+    <div className="mx-auto w-full max-w-7xl p-6 overflow-x-hidden">
       <ReportGenerator user={user} />
     </div>
   )

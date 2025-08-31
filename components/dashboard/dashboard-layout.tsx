@@ -61,8 +61,8 @@ export function DashboardLayout({ user }: DashboardLayoutProps) {
         {/* Header */}
         <DashboardHeader user={user} onMenuClick={() => setSidebarOpen(true)} />
 
-        {/* Dashboard Content */}
-        <main className="flex-1 overflow-y-auto p-6">{renderDashboard()}</main>
+  {/* Dashboard Content */}
+  <main className="flex-1 overflow-y-auto overflow-x-hidden p-6">{renderDashboard()}</main>
       </div>
     </div>
   )
