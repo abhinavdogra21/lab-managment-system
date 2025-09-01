@@ -108,6 +108,18 @@ async function run() {
       console.log(`[db-setup] done: ${rel}`)
     }
 
+    // Backfill: copy any existing single staff assignments into the new junction table
+    try {
+      console.log('[db-setup] backfilling lab_staff_assignments from labs.staff_id ...')
+      await conn.query(`
+        INSERT IGNORE INTO lab_staff_assignments (lab_id, staff_id)
+        SELECT id AS lab_id, staff_id FROM labs WHERE staff_id IS NOT NULL
+      `)
+      console.log('[db-setup] backfill complete')
+    } catch (e) {
+      console.log('[db-setup] backfill skipped or failed:', e && e.message ? e.message : e)
+    }
+
     console.log('[db-setup] completed successfully')
   } finally {
     await conn.end()

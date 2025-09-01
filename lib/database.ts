@@ -151,8 +151,22 @@ export const dbOperations = {
 
   async getLabsWithInventoryCounts() {
     const res = await db.query(
-      `SELECT l.id, l.name, l.code, l.department_id, COALESCE(COUNT(i.id),0) as items,
-              COALESCE(SUM(i.quantity_available),0) as total_quantity
+      `SELECT 
+         l.id, l.name, l.code, l.department_id,
+         COALESCE(COUNT(i.id),0) as items,
+         COALESCE(SUM(i.quantity_available),0) as total_quantity,
+         (
+           SELECT GROUP_CONCAT(u2.id ORDER BY u2.name SEPARATOR ',')
+           FROM lab_staff_assignments la
+           JOIN users u2 ON u2.id = la.staff_id
+           WHERE la.lab_id = l.id
+         ) AS staff_ids_csv,
+         (
+           SELECT GROUP_CONCAT(u2.name ORDER BY u2.name SEPARATOR ', ')
+           FROM lab_staff_assignments la
+           JOIN users u2 ON u2.id = la.staff_id
+           WHERE la.lab_id = l.id
+         ) AS staff_names_csv
        FROM labs l
        LEFT JOIN inventory i ON i.lab_id = l.id
        WHERE l.is_active = 1
@@ -291,7 +305,19 @@ export const dbOperations = {
   async getAllLabs() {
     try {
       const query = `
-        SELECT l.*, d.name as department_name, u.name as staff_name
+        SELECT l.*, d.name as department_name, u.name as staff_name,
+          (
+            SELECT GROUP_CONCAT(u2.id ORDER BY u2.name SEPARATOR ',')
+            FROM lab_staff_assignments la
+            JOIN users u2 ON u2.id = la.staff_id
+            WHERE la.lab_id = l.id
+          ) AS staff_ids_csv,
+          (
+            SELECT GROUP_CONCAT(u2.name ORDER BY u2.name SEPARATOR ', ')
+            FROM lab_staff_assignments la
+            JOIN users u2 ON u2.id = la.staff_id
+            WHERE la.lab_id = l.id
+          ) AS staff_names_csv
         FROM labs l
         LEFT JOIN departments d ON l.department_id = d.id
         LEFT JOIN users u ON l.staff_id = u.id
@@ -349,7 +375,19 @@ export const dbOperations = {
   async getLabsByDepartment(departmentId: number) {
     try {
       const query = `
-        SELECT l.*, u.name as staff_name
+        SELECT l.*, u.name as staff_name,
+          (
+            SELECT GROUP_CONCAT(u2.id ORDER BY u2.name SEPARATOR ',')
+            FROM lab_staff_assignments la
+            JOIN users u2 ON u2.id = la.staff_id
+            WHERE la.lab_id = l.id
+          ) AS staff_ids_csv,
+          (
+            SELECT GROUP_CONCAT(u2.name ORDER BY u2.name SEPARATOR ', ')
+            FROM lab_staff_assignments la
+            JOIN users u2 ON u2.id = la.staff_id
+            WHERE la.lab_id = l.id
+          ) AS staff_names_csv
         FROM labs l
         LEFT JOIN users u ON l.staff_id = u.id
         WHERE l.department_id = ? AND l.is_active = 1
@@ -782,7 +820,19 @@ export const dbOperations = {
       }
       await client.query(`UPDATE labs SET staff_id = ? WHERE id = ?`, [staffId, labId])
       const sel = await client.query(
-        `SELECT l.*, d.name AS department_name, u.name AS staff_name
+        `SELECT l.*, d.name AS department_name, u.name AS staff_name,
+                (
+                  SELECT GROUP_CONCAT(u2.id ORDER BY u2.name SEPARATOR ',')
+                  FROM lab_staff_assignments la
+                  JOIN users u2 ON u2.id = la.staff_id
+                  WHERE la.lab_id = l.id
+                ) AS staff_ids_csv,
+                (
+                  SELECT GROUP_CONCAT(u2.name ORDER BY u2.name SEPARATOR ', ')
+                  FROM lab_staff_assignments la
+                  JOIN users u2 ON u2.id = la.staff_id
+                  WHERE la.lab_id = l.id
+                ) AS staff_names_csv
          FROM labs l
          LEFT JOIN departments d ON l.department_id = d.id
          LEFT JOIN users u ON l.staff_id = u.id
@@ -790,6 +840,48 @@ export const dbOperations = {
         [labId]
       )
       return sel.rows[0]
+    })
+  },
+
+  // Many-to-many lab staff assignments
+  async listLabStaff(labId: number) {
+    const res = await db.query(
+      `SELECT u.id, u.name, u.email
+       FROM lab_staff_assignments la
+       JOIN users u ON u.id = la.staff_id
+       WHERE la.lab_id = ?
+       ORDER BY u.name`,
+      [labId]
+    )
+    return res.rows
+  },
+
+  async replaceLabStaff(labId: number, staffIds: number[]) {
+    return db.transaction(async (client) => {
+      // Ensure lab exists
+      const labRes = await client.query(`SELECT id FROM labs WHERE id = ?`, [labId])
+      if (!labRes.rows[0]) throw new Error("Lab not found")
+      // Validate all users
+      if (staffIds.length > 0) {
+        const placeholders = staffIds.map(() => '?').join(',')
+        const u = await client.query(
+          `SELECT id, role FROM users WHERE id IN (${placeholders}) AND is_active = 1`,
+          staffIds
+        )
+        const rolesOk = u.rows.every((r: any) => String(r.role) === 'lab_staff')
+        if (!rolesOk || u.rows.length !== staffIds.length) throw new Error('Invalid lab staff selection')
+      }
+      await client.query(`DELETE FROM lab_staff_assignments WHERE lab_id = ?`, [labId])
+      for (const sid of staffIds) {
+        await client.query(`INSERT INTO lab_staff_assignments (lab_id, staff_id) VALUES (?, ?)`, [labId, sid])
+      }
+      const list = await client.query(
+        `SELECT u.id, u.name, u.email
+         FROM lab_staff_assignments la JOIN users u ON u.id = la.staff_id
+         WHERE la.lab_id = ? ORDER BY u.name`,
+        [labId]
+      )
+      return list.rows
     })
   },
 

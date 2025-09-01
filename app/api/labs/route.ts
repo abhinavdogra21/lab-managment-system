@@ -79,21 +79,37 @@ export async function PATCH(request: NextRequest) {
 
     const body = await request.json()
     const labId = Number.parseInt(String(body?.labId || ""), 10)
-    const staffIdRaw = body?.staffId
-    const staffId = staffIdRaw === null ? null : Number.parseInt(String(staffIdRaw), 10)
     if (!labId || Number.isNaN(labId)) {
       return NextResponse.json({ error: "labId is required" }, { status: 400 })
     }
-
+    // New: support multi-assign via staffIds: number[]
+    if (Array.isArray(body?.staffIds)) {
+      const staffIds: number[] = body.staffIds.map((v: any) => Number.parseInt(String(v), 10)).filter((n: number) => Number.isFinite(n))
+      const assigned = await dbOperations.replaceLabStaff(labId, staffIds)
+      const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown"
+      await dbOperations.createLog({
+        userId: user.userId,
+        action: "SET_LAB_STAFF",
+        entityType: "lab",
+        entityId: labId,
+        details: { staffIds },
+        ipAddress: ip,
+        userAgent: request.headers.get("user-agent") || "unknown",
+      })
+      return NextResponse.json({ staff: assigned })
+    }
+    // Back-compat: single assignment with staffId (or null to clear)
+    const staffIdRaw = body?.staffId
+    const staffId = staffIdRaw === null ? null : Number.parseInt(String(staffIdRaw), 10)
     const lab = await dbOperations.setLabStaff(labId, staffId)
 
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown"
     await dbOperations.createLog({
       userId: user.userId,
-      action: "SET_LAB_STAFF",
-      entityType: "lab",
-      entityId: labId,
-      details: { staffId },
+  action: "SET_LAB_STAFF",
+  entityType: "lab",
+  entityId: labId,
+  details: Array.isArray(body?.staffIds) ? { staffIds: body.staffIds } : { staffId },
       ipAddress: ip,
       userAgent: request.headers.get("user-agent") || "unknown",
     })

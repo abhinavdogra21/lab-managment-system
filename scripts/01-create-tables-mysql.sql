@@ -45,6 +45,17 @@ CREATE TABLE IF NOT EXISTS labs (
   CONSTRAINT fk_labs_staff FOREIGN KEY (staff_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+-- Lab ↔ Lab Staff (many-to-many)
+CREATE TABLE IF NOT EXISTS lab_staff_assignments (
+  lab_id INT NOT NULL,
+  staff_id INT NOT NULL,
+  assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (lab_id, staff_id),
+  CONSTRAINT fk_lsa_lab FOREIGN KEY (lab_id) REFERENCES labs(id) ON DELETE CASCADE,
+  CONSTRAINT fk_lsa_staff FOREIGN KEY (staff_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_lsa_staff (staff_id)
+) ENGINE=InnoDB;
+
 -- Inventory
 CREATE TABLE IF NOT EXISTS inventory (
   id INT AUTO_INCREMENT PRIMARY KEY,

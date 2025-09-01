@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/components/ui/use-toast"
 
 type Department = { id: number; name: string; code: string; hod_id?: number | null; hod_name?: string | null; hod_email?: string | null }
-type Lab = { id: number; name: string; code: string; department_id: number; department_name?: string; staff_id?: number | null; staff_name?: string | null; capacity?: number; location?: string }
+type Lab = { id: number; name: string; code: string; department_id: number; department_name?: string; staff_id?: number | null; staff_name?: string | null; staff_ids_csv?: string | null; staff_names_csv?: string | null; capacity?: number; location?: string }
 
 export default function LabsPage() {
   const { toast } = useToast()
@@ -138,18 +138,21 @@ export default function LabsPage() {
     }
   }
 
-  const onAssignLabStaff = async (labId: number, staffId: number | null) => {
+  const onAssignLabStaff = async (labId: number, staffIds: number[]) => {
     setLoading(true)
     try {
       const res = await fetch("/api/labs", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ labId, staffId }),
+        body: JSON.stringify({ labId, staffIds }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || "Failed to set lab staff")
-      // update local list
-      setLabs((prev) => prev.map((l) => (l.id === labId ? { ...l, staff_id: data.lab.staff_id, staff_name: data.lab.staff_name } : l)))
+      // update local list using returned staff list
+      const staffList: Array<{ id: number; name: string; email: string }> = data.staff || []
+      const idsCsv = staffList.map((s) => s.id).join(",")
+      const namesCsv = staffList.map((s) => s.name).join(", ")
+      setLabs((prev) => prev.map((l) => (l.id === labId ? { ...l, staff_ids_csv: idsCsv, staff_names_csv: namesCsv } : l)))
       toast({ title: "Lab staff updated" })
     } catch (e: any) {
       toast({ title: "Update failed", description: e?.message || "", variant: "destructive" })
@@ -304,24 +307,36 @@ export default function LabsPage() {
                     <TableCell>{lab.name}</TableCell>
                     <TableCell>{lab.code}</TableCell>
                     <TableCell>{lab.department_name || lab.department_id}</TableCell>
-                    <TableCell className="min-w-56">
-                      <Select
-                        value={lab.staff_id ? String(lab.staff_id) : "none"}
-                        onValueChange={(v) => onAssignLabStaff(lab.id, v === "none" ? null : Number(v))}
-                        disabled={!canManage || loading}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Assign staff" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Unassigned</SelectItem>
-                          {labStaffOptions.map((u) => (
-                            <SelectItem key={u.id} value={String(u.id)}>
-                              {u.name} ({u.email})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <TableCell className="min-w-64">
+                      {/* Multi-select via checkboxes */}
+                      <div className="space-y-2">
+                        <div className="text-sm text-muted-foreground truncate" title={lab.staff_names_csv || "Unassigned"}>
+                          {lab.staff_names_csv || "Unassigned"}
+                        </div>
+                        <div className="max-h-40 overflow-y-auto border rounded p-2 bg-background">
+                          {labStaffOptions.map((u) => {
+                            const currentIds = (lab.staff_ids_csv || "").split(",").filter(Boolean).map((s) => Number(s))
+                            const checked = currentIds.includes(u.id)
+                            return (
+                              <label key={u.id} className="flex items-center gap-2 text-sm py-1">
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4"
+                                  checked={checked}
+                                  disabled={!canManage || loading}
+                                  onChange={(e) => {
+                                    const next = new Set(currentIds)
+                                    if (e.target.checked) next.add(u.id)
+                                    else next.delete(u.id)
+                                    onAssignLabStaff(lab.id, Array.from(next))
+                                  }}
+                                />
+                                <span>{u.name} ({u.email})</span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell>{lab.capacity ?? "-"}</TableCell>
                     <TableCell>{lab.location ?? "-"}</TableCell>

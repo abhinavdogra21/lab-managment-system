@@ -22,7 +22,7 @@ import {
 import { useToast } from "@/components/ui/use-toast"
 
 type Department = { id: number; name: string; code: string; hod_id?: number | null; hod_name?: string | null; hod_email?: string | null }
-type Lab = { id: number; name: string; code: string; department_id: number; department_name?: string; staff_id?: number | null; staff_name?: string | null; capacity?: number; location?: string }
+type Lab = { id: number; name: string; code: string; department_id: number; department_name?: string; staff_id?: number | null; staff_name?: string | null; staff_ids_csv?: string | null; staff_names_csv?: string | null; capacity?: number; location?: string }
 type User = { id: number; name: string; email: string; role: string; department?: string | null }
 
 export default function OrganizationPage() {
@@ -45,7 +45,7 @@ export default function OrganizationPage() {
   const [facultyForm, setFacultyForm] = useState<{ name: string; email: string; existingId?: number | "" }>({ name: "", email: "" })
   const [labDialogOpen, setLabDialogOpen] = useState(false)
   const [labDialogMode, setLabDialogMode] = useState<"create" | "edit">("create")
-  const [labForm, setLabForm] = useState<{ id?: number; name: string; code: string; departmentId: number | ""; capacity?: number | ""; location?: string; staffId?: number | "" | null }>({ name: "", code: "", departmentId: "" })
+  const [labForm, setLabForm] = useState<{ id?: number; name: string; code: string; departmentId: number | ""; capacity?: number | ""; location?: string }>({ name: "", code: "", departmentId: "" })
   const [labsDeptFilter, setLabsDeptFilter] = useState<string | "all">("all")
   const [labsQuery, setLabsQuery] = useState("")
   // Lab Staff tab
@@ -189,13 +189,17 @@ export default function OrganizationPage() {
     }
   }
 
-  const assignLabStaff = async (labId: number, staffId: number | null) => {
+  // Replace staff assignments for a lab with the given list
+  const assignLabStaff = async (labId: number, staffIds: number[]) => {
     setLoading(true)
     try {
-      const res = await fetch("/api/labs", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ labId, staffId }) })
+      const res = await fetch("/api/labs", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ labId, staffIds }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || "Failed to set lab staff")
-      setLabs((prev) => prev.map((l) => (l.id === labId ? { ...l, staff_id: data.lab.staff_id, staff_name: data.lab.staff_name } : l)))
+      const staffList: Array<{ id: number; name: string }> = data.staff || []
+      const idsCsv = staffList.map((s) => s.id).join(",")
+      const namesCsv = staffList.map((s) => s.name).join(", ")
+      setLabs((prev) => prev.map((l) => (l.id === labId ? { ...l, staff_ids_csv: idsCsv, staff_names_csv: namesCsv } : l)))
       toast({ title: "Lab staff updated" })
     } catch (e: any) {
       toast({ title: "Update failed", description: e?.message || "", variant: "destructive" })
@@ -275,7 +279,7 @@ export default function OrganizationPage() {
   }
   const openEditLab = (l: Lab) => {
     setLabDialogMode("edit")
-    setLabForm({ id: l.id, name: l.name, code: l.code, departmentId: l.department_id, capacity: l.capacity ?? "", location: l.location ?? "", staffId: l.staff_id ?? null })
+    setLabForm({ id: l.id, name: l.name, code: l.code, departmentId: l.department_id, capacity: l.capacity ?? "", location: l.location ?? "" })
     setLabDialogOpen(true)
   }
   const saveLabDialog = async () => {
@@ -292,13 +296,12 @@ export default function OrganizationPage() {
         setLabs((prev) => [...prev, data.lab])
         toast({ title: "Lab created" })
       } else {
-        const payload: any = {
+  const payload: any = {
           id: labForm.id,
           name: labForm.name,
           code: labForm.code,
           capacity: labForm.capacity === "" ? null : labForm.capacity ?? null,
           location: labForm.location ?? null,
-          staffId: labForm.staffId === "" ? null : labForm.staffId ?? null,
         }
         const res = await fetch("/api/labs", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
         const data = await res.json()
@@ -426,7 +429,36 @@ export default function OrganizationPage() {
                         <TableCell>{lab.department_name || lab.department_id}</TableCell>
                         <TableCell>{lab.name}</TableCell>
                         <TableCell>{lab.code}</TableCell>
-                        <TableCell>{lab.staff_name || "-"}</TableCell>
+                        <TableCell className="min-w-64">
+                          <div className="space-y-1">
+                            <div className="text-sm text-muted-foreground truncate" title={lab.staff_names_csv || "Unassigned"}>
+                              {lab.staff_names_csv || "Unassigned"}
+                            </div>
+                            <div className="max-h-40 overflow-y-auto border rounded p-2 bg-background">
+                              {labStaff.map((u) => {
+                                const currentIds = (lab.staff_ids_csv || "").split(",").filter(Boolean).map((s) => Number(s))
+                                const checked = currentIds.includes(u.id)
+                                return (
+                                  <label key={u.id} className="flex items-center gap-2 text-sm py-1">
+                                    <input
+                                      type="checkbox"
+                                      className="h-4 w-4"
+                                      checked={checked}
+                                      disabled={loading}
+                                      onChange={(e) => {
+                                        const next = new Set(currentIds)
+                                        if (e.target.checked) next.add(u.id)
+                                        else next.delete(u.id)
+                                        assignLabStaff(lab.id, Array.from(next))
+                                      }}
+                                    />
+                                    <span>{u.name} ({u.email})</span>
+                                  </label>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        </TableCell>
                         <TableCell>{lab.capacity ?? "-"}</TableCell>
                         <TableCell>{lab.location ?? "-"}</TableCell>
                         <TableCell className="whitespace-nowrap">
@@ -506,58 +538,68 @@ export default function OrganizationPage() {
                 </TableHeader>
                 <TableBody>
                   {labStaff.filter((s) => {
-                    const assignedLab = labs.find((l) => l.staff_id === s.id)
+                    const assignedLabs = labs.filter((l) => (l.staff_ids_csv || "").split(",").filter(Boolean).map(Number).includes(s.id))
                     if (staffDeptFilter === "all") return true
-                    if (staffDeptFilter === "unassigned") return !assignedLab
-                    return assignedLab ? String(assignedLab.department_id) === staffDeptFilter : false
+                    if (staffDeptFilter === "unassigned") return assignedLabs.length === 0
+                    return assignedLabs.some((l) => String(l.department_id) === staffDeptFilter)
                   }).filter((s) => {
                     const q = staffQuery.trim().toLowerCase()
                     if (!q) return true
-                    const assignedLab = labs.find((l) => l.staff_id === s.id)
+                    const assignedLab = labs.find((l) => (l.staff_ids_csv || "").split(",").filter(Boolean).map(Number).includes(s.id))
                     return (
                       s.name.toLowerCase().includes(q) ||
                       s.email.toLowerCase().includes(q) ||
                       (assignedLab ? assignedLab.name.toLowerCase().includes(q) : false)
                     )
                   }).map((s) => {
-                    const assignedLab = labs.find((l) => l.staff_id === s.id)
+                    const assignedLabs = labs.filter((l) => (l.staff_ids_csv || "").split(",").filter(Boolean).map(Number).includes(s.id))
                     return (
                       <TableRow key={s.id}>
                         <TableCell>{s.name}</TableCell>
                         <TableCell>{s.email}</TableCell>
                         <TableCell className="min-w-64">
-                          <Select value={assignedLab ? String(assignedLab.id) : "none"} onValueChange={async (v) => {
-                            const newLabId = v === "none" ? null : Number(v)
-                            setLoading(true)
-                            try {
-                              const currentLab = labs.find((l) => l.staff_id === s.id)
-                              if (currentLab && (newLabId === null || currentLab.id !== newLabId)) {
-                                const res1 = await fetch(`/api/labs`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ labId: currentLab.id, staffId: null }) })
-                                const data1 = await res1.json()
-                                if (!res1.ok) throw new Error(data1?.error || "Failed to unassign staff")
-                                setLabs((prev) => prev.map((x) => (x.id === currentLab.id ? { ...x, staff_id: null, staff_name: null } as any : x)))
-                              }
-                              if (newLabId !== null) {
-                                const res2 = await fetch(`/api/labs`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ labId: newLabId, staffId: s.id }) })
-                                const data2 = await res2.json()
-                                if (!res2.ok) throw new Error(data2?.error || "Failed to assign staff")
-                                setLabs((prev) => prev.map((x) => (x.id === newLabId ? { ...x, staff_id: s.id, staff_name: s.name } : x)))
-                              }
-                              toast({ title: "Assignment updated" })
-                            } catch (e: any) {
-                              toast({ title: "Update failed", description: e?.message || "", variant: "destructive" })
-                            } finally {
-                              setLoading(false)
-                            }
-                          }}>
-                            <SelectTrigger className="w-full"><SelectValue placeholder="Assign lab" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Unassigned</SelectItem>
-                              {labs.map((l) => (
-                                <SelectItem key={l.id} value={String(l.id)}>{l.name} {l.department_name ? `- ${l.department_name}` : ""}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="space-y-1">
+                            <div className="text-sm text-muted-foreground truncate" title={assignedLabs.map((l) => l.name).join(", ") || "Unassigned"}>
+                              {assignedLabs.length ? assignedLabs.map((l) => l.name).join(", ") : "Unassigned"}
+                            </div>
+                            <div className="max-h-40 overflow-y-auto border rounded p-2 bg-background">
+                              {labs.map((l) => {
+                                const currentIds = (l.staff_ids_csv || "").split(",").filter(Boolean).map(Number)
+                                const checked = currentIds.includes(s.id)
+                                return (
+                                  <label key={l.id} className="flex items-center gap-2 text-sm py-1">
+                                    <input
+                                      type="checkbox"
+                                      className="h-4 w-4"
+                                      checked={checked}
+                                      disabled={loading}
+                                      onChange={async (e) => {
+                                        setLoading(true)
+                                        try {
+                                          const next = new Set(currentIds)
+                                          if (e.target.checked) next.add(s.id)
+                                          else next.delete(s.id)
+                                          const res = await fetch(`/api/labs`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ labId: l.id, staffIds: Array.from(next) }) })
+                                          const data = await res.json()
+                                          if (!res.ok) throw new Error(data?.error || "Failed to update lab")
+                                          const staffList: Array<{ id: number; name: string }> = data.staff || []
+                                          const idsCsv = staffList.map((x) => x.id).join(",")
+                                          const namesCsv = staffList.map((x) => x.name).join(", ")
+                                          setLabs((prev) => prev.map((lab) => (lab.id === l.id ? { ...lab, staff_ids_csv: idsCsv, staff_names_csv: namesCsv } : lab)))
+                                          toast({ title: "Assignment updated" })
+                                        } catch (e: any) {
+                                          toast({ title: "Update failed", description: e?.message || "", variant: "destructive" })
+                                        } finally {
+                                          setLoading(false)
+                                        }
+                                      }}
+                                    />
+                                    <span>{l.name} {l.department_name ? `- ${l.department_name}` : ""}</span>
+                                  </label>
+                                )
+                              })}
+                            </div>
+                          </div>
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           <div className="flex gap-2">
@@ -761,18 +803,7 @@ export default function OrganizationPage() {
               <Label className="text-xs">Location</Label>
               <Input value={labForm.location ?? ""} onChange={(e) => setLabForm((s) => ({ ...s, location: e.target.value }))} />
             </div>
-            <div>
-              <Label className="text-xs">Staff</Label>
-              <Select value={labForm.staffId === undefined ? "none" : labForm.staffId === null ? "none" : String(labForm.staffId)} onValueChange={(v) => setLabForm((s) => ({ ...s, staffId: v === "none" ? null : Number(v) }))}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Assign" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Unassigned</SelectItem>
-                  {labStaff.map((u) => (
-                    <SelectItem key={u.id} value={String(u.id)}>{u.name} ({u.email})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Staff assignment is managed in the Labs table via multi-select checkboxes */}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLabDialogOpen(false)}>Cancel</Button>
