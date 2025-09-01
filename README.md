@@ -162,8 +162,11 @@ The sidebar buttons are backed by real pages, so navigation always works:
 
 ## Reporting
 - UI in `components/reports/report-generator.tsx` supports date range, filters, and export type selection.
-- Currently simulates report generation; integrate with `lib/report-generator.ts` and a server route to produce PDF/Excel.
- - Layout adjusted to avoid horizontal overflow in admin Reports.
+- Real exports:
+  - Excel (XLSX) via `xlsx` with headers, column widths, and data rows.
+  - PDF via `jspdf` + `jspdf-autotable` with table layout and pagination.
+- Server route: `POST /api/reports` returns data rows for supported report types (security_audit, activity_summary, system_overview), using `dbOperations.getSystemLogs` and cookie auth.
+- Layout adjusted to avoid horizontal overflow in admin Reports.
 
 ## Security and next steps
 - Replace demo cookie with signed JWT (httpOnly + secure).

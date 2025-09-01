@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -53,6 +53,11 @@ export function ReportGenerator({ user }: ReportGeneratorProps) {
   const [selectedFormat, setSelectedFormat] = useState("pdf")
   const [filters, setFilters] = useState<Record<string, any>>({})
   const [isGenerating, setIsGenerating] = useState(false)
+  const [previewCount, setPreviewCount] = useState<number | null>(null)
+
+  const canUseLogsApi = useMemo(() => {
+    return ["security_audit", "activity_summary", "system_overview"].includes(selectedReportType)
+  }, [selectedReportType])
 
   // Get available report types based on user role
   const getReportTypes = (role: string) => {
@@ -279,47 +284,153 @@ export function ReportGenerator({ user }: ReportGeneratorProps) {
     }
 
     try {
+      // Fetch dataset from server for supported report types
+      let dataset: any[] = []
+      if (canUseLogsApi) {
+        const res = await fetch("/api/reports", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: selectedReportType,
+            from: payload.from,
+            to: payload.to,
+            filters,
+          }),
+        })
+        if (!res.ok) throw new Error(`Failed to load data (${res.status})`)
+        const json = await res.json()
+        dataset = json?.rows || []
+        setPreviewCount(Array.isArray(dataset) ? dataset.length : 0)
+      } else {
+        setPreviewCount(null)
+      }
+
       const fileBase = `${selectedReportType}_${format(new Date(), "yyyy-MM-dd")}`
       if (selectedFormat === "excel") {
-        // Create a basic CSV for now (Excel-friendly)
-        const rows: string[] = []
-        rows.push("Key,Value")
-        rows.push(`Type,${payload.type}`)
-        rows.push(`From,${payload.from || ""}`)
-        rows.push(`To,${payload.to || ""}`)
-        rows.push(`Generated At,${payload.generatedAt}`)
-        rows.push(`Requested By,${payload.requestedBy.name} (${payload.requestedBy.email})`)
-        Object.entries(filters).forEach(([k, v]) => rows.push(`${k},${String(v)}`))
-        const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" })
-        const a = document.createElement("a")
-        a.href = URL.createObjectURL(blob)
-        a.download = `${fileBase}.csv`
-        document.body.appendChild(a)
-        a.click()
-        a.remove()
-      } else {
-        // PDF export using a tiny client-side generator
-        const { jsPDF } = await import("jspdf")
-        const doc = new jsPDF()
-        doc.setFontSize(12)
-        doc.text("LNMIIT Lab Management System", 14, 16)
-        doc.setFontSize(10)
-        doc.text(`Report: ${payload.type}`, 14, 24)
-        doc.text(`Generated: ${new Date(payload.generatedAt).toLocaleString()}`, 14, 30)
-        if (payload.from || payload.to) doc.text(`Range: ${payload.from || ""} to ${payload.to || ""}`, 14, 36)
-        doc.text(`Requested by: ${payload.requestedBy.name} (${payload.requestedBy.role})`, 14, 42)
-        doc.text("Filters:", 14, 50)
-        let y = 56
-        const entries = Object.entries(filters)
-        if (entries.length === 0) {
-          doc.text("(none)", 20, y)
-          y += 6
+        // Build Excel (XLSX) with headers and auto widths
+        const [{ utils, writeFile, version }]: any = await Promise.all([
+          import("xlsx"),
+        ])
+        let sheetData: any[] = []
+        let header: string[] = []
+        if (canUseLogsApi && dataset.length > 0) {
+          header = [
+            "Timestamp",
+            "User Name",
+            "User Email",
+            "Role",
+            "Action",
+            "Entity",
+            "Entity ID",
+            "IP Address",
+            "User Agent",
+            "Details",
+          ]
+          sheetData = dataset.map((r: any) => [
+            r.created_at,
+            r.user_name || "-",
+            r.user_email || "-",
+            r.user_role || "-",
+            r.action,
+            r.entity_type,
+            String(r.entity_id ?? ""),
+            r.ip_address || "",
+            r.user_agent || "",
+            typeof r.details === "string" ? r.details : JSON.stringify(r.details || {}),
+          ])
         } else {
-          for (const [k, v] of entries) {
-            doc.text(`${k}: ${String(v)}`, 20, y)
-            y += 6
-            if (y > 280) {
-              doc.addPage(); y = 16
+          header = ["Key", "Value"]
+          sheetData = [
+            ["Type", payload.type],
+            ["From", payload.from || ""],
+            ["To", payload.to || ""],
+            ["Generated At", payload.generatedAt],
+            ["Requested By", `${payload.requestedBy.name} (${payload.requestedBy.email})`],
+            ...Object.entries(filters).map(([k, v]) => [k, String(v)]),
+          ]
+        }
+        const ws = utils.aoa_to_sheet([header, ...sheetData])
+        // Set basic column widths
+        const colWidths = header.map((h) => ({ wch: Math.min(40, Math.max(12, String(h).length + 2)) }))
+        // Slightly wider for Details & User Agent
+        const detailIdx = header.indexOf("Details")
+        const uaIdx = header.indexOf("User Agent")
+        if (detailIdx >= 0) colWidths[detailIdx] = { wch: 60 }
+        if (uaIdx >= 0) colWidths[uaIdx] = { wch: 40 }
+        ;(ws as any)["!cols"] = colWidths
+        const wb = utils.book_new()
+        utils.book_append_sheet(wb, ws, "Report")
+        writeFile(wb, `${fileBase}.xlsx`)
+      } else {
+        // PDF export with header and table for logs
+        const { jsPDF } = await import("jspdf")
+        const autoTable = (await import("jspdf-autotable")).default
+        const doc = new jsPDF({ orientation: "landscape" })
+        const title = "LNMIIT Lab Management System"
+        doc.setFontSize(14)
+        doc.text(title, 14, 14)
+        doc.setFontSize(10)
+        doc.text(`Report: ${payload.type}`, 14, 20)
+        doc.text(`Generated: ${new Date(payload.generatedAt).toLocaleString()}`, 14, 26)
+        if (payload.from || payload.to) doc.text(`Range: ${payload.from || ""} to ${payload.to || ""}`, 14, 32)
+        doc.text(`Requested by: ${payload.requestedBy.name} (${payload.requestedBy.role})`, 14, 38)
+
+        if (canUseLogsApi && dataset.length > 0) {
+          const head = [[
+            "Timestamp",
+            "User Name",
+            "User Email",
+            "Role",
+            "Action",
+            "Entity",
+            "Entity ID",
+            "IP Address",
+            "User Agent",
+            "Details",
+          ]]
+          const body = dataset.map((r: any) => [
+            r.created_at,
+            r.user_name || "-",
+            r.user_email || "-",
+            r.user_role || "-",
+            r.action,
+            r.entity_type,
+            String(r.entity_id ?? ""),
+            r.ip_address || "",
+            (r.user_agent || "").slice(0, 80),
+            typeof r.details === "string" ? r.details.slice(0, 120) : JSON.stringify(r.details || {}).slice(0, 120),
+          ])
+          autoTable(doc, {
+            head,
+            body,
+            startY: 46,
+            styles: { fontSize: 8, cellPadding: 2 },
+            headStyles: { fillColor: [20, 112, 192] },
+            columnStyles: {
+              0: { cellWidth: 32 }, // Timestamp
+              8: { cellWidth: 50 }, // User Agent
+              9: { cellWidth: 60 }, // Details
+            },
+            didDrawPage: (data: any) => {
+              const pageCount = (doc as any).internal.getNumberOfPages()
+              const pageSize = doc.internal.pageSize
+              const pageWidth = pageSize.getWidth()
+              doc.setFontSize(8)
+              doc.text(`Page ${data.pageNumber} of ${pageCount}`, pageWidth - 30, pageSize.getHeight() - 6)
+            },
+          })
+        } else {
+          // Metadata-only fallback
+          let y = 46
+          doc.text("Filters:", 14, y)
+          y += 6
+          const entries = Object.entries(filters)
+          if (entries.length === 0) {
+            doc.text("(none)", 20, y)
+          } else {
+            for (const [k, v] of entries) {
+              doc.text(`${k}: ${String(v)}`, 20, y)
+              y += 6
             }
           }
         }
@@ -593,6 +704,16 @@ export function ReportGenerator({ user }: ReportGeneratorProps) {
                     <Label className="text-sm font-medium">Export Format</Label>
                     <p className="text-sm text-muted-foreground mt-1 capitalize">{selectedFormat}</p>
                   </div>
+
+                  {previewCount != null && (
+                    <>
+                      <Separator />
+                      <div>
+                        <Label className="text-sm font-medium">Data Rows</Label>
+                        <p className="text-sm text-muted-foreground mt-1">{previewCount} rows will be exported</p>
+                      </div>
+                    </>
+                  )}
 
                   {Object.keys(filters).length > 0 && (
                     <>

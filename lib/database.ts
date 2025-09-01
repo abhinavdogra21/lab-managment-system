@@ -149,6 +149,28 @@ export const dbOperations = {
     return res.rows
   },
 
+  async getSystemLogs(params: { from?: string; to?: string; action?: string | null; entityType?: string | null; userId?: number | null; limit?: number }) {
+    const where: string[] = ["1=1"]
+    const values: any[] = []
+    if (params.from) { where.push("s.created_at >= ?"); values.push(params.from) }
+    if (params.to) { where.push("s.created_at <= ?"); values.push(params.to) }
+    if (params.action) { where.push("s.action = ?"); values.push(params.action) }
+    if (params.entityType) { where.push("s.entity_type = ?"); values.push(params.entityType) }
+    if (params.userId) { where.push("s.user_id = ?"); values.push(params.userId) }
+    const lim = Math.max(1, Math.min(10000, params.limit ?? 5000))
+    const sql = `
+      SELECT s.id, s.user_id, u.name AS user_name, u.email AS user_email, u.role AS user_role,
+             s.action, s.entity_type, s.entity_id, s.details, s.ip_address, s.user_agent, s.created_at
+      FROM system_logs s
+      LEFT JOIN users u ON u.id = s.user_id
+      WHERE ${where.join(' AND ')}
+      ORDER BY s.created_at DESC
+      LIMIT ${lim}
+    `
+    const res = await db.query(sql, values)
+    return res.rows
+  },
+
   async getLabsWithInventoryCounts() {
     const res = await db.query(
       `SELECT 
