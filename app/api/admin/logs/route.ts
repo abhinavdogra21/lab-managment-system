@@ -13,9 +13,7 @@ export async function GET(req: NextRequest) {
   const to = searchParams.get("to") || undefined
   const userId = searchParams.get("userId") ? Number.parseInt(String(searchParams.get("userId")), 10) : undefined
   const logs = await dbOperations.getSystemLogs({ from, to, action: action || null, entityType: entityType || null, userId: userId || null, limit })
-  // Mark which are undoable heuristically
-  const undoableActions = new Set(["CREATE_LAB", "SET_LAB_STAFF", "SET_DEPARTMENT_HOD", "CREATE_DEPARTMENT", "DELETE_USER", "HARD_DELETE_USER"]) // includes hard deletes
-  const idsTop10 = (await dbOperations.getRecentLogs(10)).map((l: any) => l.id)
-  const enriched = logs.map((l: any) => ({ ...l, undoable: undoableActions.has(l.action), withinTop10: idsTop10.includes(l.id) }))
+  // Undo disabled: mark all as not undoable
+  const enriched = logs.map((l: any) => ({ ...l, undoable: false, withinTop10: false }))
   return NextResponse.json({ logs: enriched })
 }

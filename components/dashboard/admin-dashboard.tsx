@@ -214,29 +214,7 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="md:col-span-3">
-            <CardHeader>
-              <CardTitle>Recent System Activity</CardTitle>
-              <CardDescription>Last 10 entries from system logs</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2 text-sm">
-                {stats.recentLogs?.length ? (
-                  stats.recentLogs.slice(0, 10).map((l: any) => (
-                    <li key={l.id} className="flex items-center justify-between border-b pb-2 last:border-0 last:pb-0">
-                      <span className="text-muted-foreground">{l.created_at}</span>
-                      <span className="font-medium">{l.action}</span>
-                      <span className="text-muted-foreground">{l.entity_type} #{l.entity_id}</span>
-                    </li>
-                  ))
-                ) : (
-                  <li className="text-muted-foreground">No recent activity</li>
-                )}
-              </ul>
-            </CardContent>
-          </Card>
-        </div>
+  {/* Recent System Activity card removed per requirements */}
 
         {/* Recent bookings and error rate */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -1,8 +1,7 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 
@@ -11,7 +10,6 @@ export default function SystemLogsPage() {
   const [authChecked, setAuthChecked] = useState(false)
   const [role, setRole] = useState<string | null>(null)
   const [logs, setLogs] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
   const [filters, setFilters] = useState<{ action?: string; entityType?: string }>({})
 
   useEffect(() => {
@@ -39,18 +37,56 @@ export default function SystemLogsPage() {
 
   useEffect(() => { if (authChecked) load() }, [authChecked, filters.action, filters.entityType])
 
-  const undo = async (logId: number) => {
-    setLoading(true)
-    try {
-      const res = await fetch("/api/admin/logs/undo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ logId }) })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || "Undo failed")
-      toast({ title: "Undo applied" })
-      await load()
-    } catch (e: any) {
-      toast({ title: "Undo failed", description: e?.message || "", variant: "destructive" })
-    } finally { setLoading(false) }
-  }
+  const formatDescription = useMemo(() => {
+    const listUpdates = (obj: any, keys: string[]) => {
+      const parts = keys
+        .filter((k) => obj[k] !== undefined && obj[k] !== null && obj[k] !== "")
+        .map((k) => `${k}=${obj[k]}`)
+      return parts.length ? parts.join(", ") : "fields updated"
+    }
+    return (l: any) => {
+      const parse = (d: any) => { try { return typeof d === "string" ? JSON.parse(d) : d } catch { return d } }
+      const d = parse(l.details) || {}
+      const id = l.entity_id
+      const action = String(l.action || "")
+      const entity = String(l.entity_type || "")
+
+      switch (action) {
+        case "CREATE_LAB":
+          return `Created lab "${d.name || `#${id}`}" (code ${d.code || "—"}) in department ${d.departmentId ?? "—"}`
+        case "UPDATE_LAB":
+          return `Updated lab #${id}: ${listUpdates(d, ["name","code","capacity","location","staffId"])}`
+        case "DELETE_LAB":
+          return `Deleted lab #${id}${d.cascade ? " (cascade)" : ""}`
+        case "SET_LAB_STAFF": {
+          if (Array.isArray(d.staffIds)) return `Set ${d.staffIds.length} staff member(s) for lab #${id}`
+          if (d.staffId === null) return `Cleared lab staff for lab #${id}`
+          if (d.staffId) return `Assigned staff #${d.staffId} to lab #${id}`
+          return `Updated lab staff for lab #${id}`
+        }
+        case "CREATE_DEPARTMENT":
+          return `Created department "${d.name || `#${id}`}" (code ${d.code || "—"})`
+        case "UPDATE_DEPARTMENT":
+          return `Updated department #${id}: ${listUpdates(d, ["name","code","hodEmail"])}`
+        case "DELETE_DEPARTMENT":
+          return `Deleted department #${id}${d.cascade ? " (cascade)" : ""}`
+        case "SET_DEPARTMENT_HOD":
+          return d.hodId === null ? `Cleared HOD for department #${id}` : `Set HOD to user #${d.hodId} for department #${id}`
+        case "CREATE_BOOKING": {
+          const when = [d.bookingDate, d.startTime && d.endTime ? `${d.startTime}-${d.endTime}` : null].filter(Boolean).join(" ")
+          return `Created booking #${id} for lab #${d.labId ?? "—"} on ${when} (${d.purpose || "no purpose"})`
+        }
+        case "DELETE_USER":
+          return `Deleted user #${id}`
+        case "HARD_DELETE_USER":
+          return `Hard-deleted user #${id}${d.archiveId ? ` (archived snapshot #${d.archiveId})` : ""}`
+        default: {
+          const fallback = typeof l.details === "string" ? l.details : JSON.stringify(l.details)
+          return fallback || `${action} on ${entity} #${id}`
+        }
+      }
+    }
+  }, [])
 
   if (!authChecked) return null
   if (!canManage) return <div className="p-6">Only Admin can access System Logs.</div>
@@ -66,7 +102,7 @@ export default function SystemLogsPage() {
             <SelectTrigger className="w-56"><SelectValue placeholder="All" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All</SelectItem>
-              {["CREATE_LAB","UPDATE_LAB","DELETE_LAB","SET_LAB_STAFF","CREATE_DEPARTMENT","UPDATE_DEPARTMENT","DELETE_DEPARTMENT","SET_DEPARTMENT_HOD"].map((a) => (<SelectItem key={a} value={a}>{a}</SelectItem>))}
+              {["CREATE_LAB","UPDATE_LAB","DELETE_LAB","SET_LAB_STAFF","CREATE_DEPARTMENT","UPDATE_DEPARTMENT","DELETE_DEPARTMENT","SET_DEPARTMENT_HOD","CREATE_BOOKING","DELETE_USER","HARD_DELETE_USER"].map((a) => (<SelectItem key={a} value={a}>{a}</SelectItem>))}
             </SelectContent>
           </Select>
         </div>
@@ -94,8 +130,7 @@ export default function SystemLogsPage() {
                 <TableHead>User</TableHead>
                 <TableHead>Action</TableHead>
                 <TableHead>Entity</TableHead>
-                <TableHead>Details</TableHead>
-                <TableHead>Undo</TableHead>
+                <TableHead>Description</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -105,12 +140,7 @@ export default function SystemLogsPage() {
                   <TableCell>{l.user_name} ({l.user_email})</TableCell>
                   <TableCell>{l.action}</TableCell>
                   <TableCell>{l.entity_type} #{l.entity_id}</TableCell>
-                  <TableCell><pre className="whitespace-pre-wrap text-xs max-w-[36ch] overflow-hidden text-ellipsis">{typeof l.details === 'string' ? l.details : JSON.stringify(l.details)}</pre></TableCell>
-                  <TableCell>
-                    <Button size="sm" variant="outline" disabled={loading || !l.undoable || !l.withinTop10} onClick={() => undo(l.id)}>
-                      {l.withinTop10 ? (l.undoable ? "Undo" : "N/A") : "Only last 10"}
-                    </Button>
-                  </TableCell>
+                  <TableCell className="text-sm"><div className="max-w-[60ch] whitespace-pre-wrap break-words">{formatDescription(l)}</div></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -120,3 +150,4 @@ export default function SystemLogsPage() {
     </div>
   )
 }
+

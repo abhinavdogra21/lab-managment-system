@@ -984,6 +984,7 @@ export const dbOperations = {
   },
 
   async undoLogAction(log: any, actorUserId: number) {
+  // Undo has been disabled at API level; keep code for potential future use
     // Parse details if string
     let details: any = null
     try { details = typeof log.details === 'string' ? JSON.parse(log.details) : log.details } catch { details = log.details }

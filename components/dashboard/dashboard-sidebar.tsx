@@ -91,7 +91,7 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
         return [
           ...baseItems,
           { name: "User Management", href: withPrefix("/dashboard/users"), icon: Users },
-          { name: "Lab and Department Management", href: withPrefix("/dashboard/organization"), icon: Building },
+          { name: "Department and Lab Management", href: withPrefix("/dashboard/organization"), icon: Building },
           { name: "System Logs", href: withPrefix("/dashboard/logs"), icon: FileText },
           { name: "Reports", href: withPrefix("/dashboard/reports"), icon: BarChart3 },
           { name: "Analytics", href: withPrefix("/dashboard/analytics"), icon: BarChart3 },
@@ -135,14 +135,14 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
               <Button
               key={item.name}
               variant={active ? "default" : "ghost"}
-              className={`w-full justify-start gap-3 text-left ${active ? 'bg-primary text-primary-foreground' : ''}`}
+              className={`w-full justify-start gap-3 text-left overflow-hidden h-auto py-2 items-start ${active ? 'bg-primary text-primary-foreground' : ''}`}
               onClick={() => {
                 router.push(item.href)
                 onClose()
               }}
             >
-              <item.icon className={`h-4 w-4 ${active ? 'text-primary-foreground' : ''}`} />
-              {item.name}
+              <item.icon className={`h-4 w-4 mt-0.5 flex-shrink-0 ${active ? 'text-primary-foreground' : ''}`} />
+              <span className="flex-1 whitespace-normal break-words leading-snug">{item.name}</span>
             </Button>
             )
           })}
