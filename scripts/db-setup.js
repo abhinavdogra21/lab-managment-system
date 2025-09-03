@@ -51,6 +51,7 @@ async function run() {
 
     // departments columns and indexes
     try {
+  await ensureColumn('departments', 'hod_email', 'VARCHAR(255) NULL')
       await ensureColumn('departments', 'code', 'VARCHAR(10) NULL')
       await ensureColumn('departments', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
       await ensureColumn('departments', 'hod_id', 'INT NULL')

@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
   Home,
   Calendar,
@@ -40,63 +40,69 @@ interface DashboardSidebarProps {
  */
 export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProps) {
   const router = useRouter()
+  const pathname = usePathname()
+
+  // Compute optional role prefix from current URL (e.g., /admin, /student)
+  const roleMatch = pathname?.match(/^\/(admin|student|faculty|lab-staff|hod|tnp)(?:\/|$)/)
+  const prefix = roleMatch ? `/${roleMatch[1]}` : ""
+
+  const withPrefix = (p: string) => `${prefix}${p}`
 
   const getNavigationItems = (role: string) => {
-    const baseItems = [{ name: "Dashboard", href: "/dashboard", icon: Home }]
+    const baseItems = [{ name: "Dashboard", href: withPrefix("/dashboard"), icon: Home }]
 
     switch (role) {
       case "student":
         return [
           ...baseItems,
-          { name: "Request Items", href: "/dashboard/requests", icon: Package },
-          { name: "My Bookings", href: "/dashboard/bookings", icon: Calendar },
-          { name: "History", href: "/dashboard/history", icon: FileText },
+          { name: "Request Items", href: withPrefix("/dashboard/requests"), icon: Package },
+          { name: "My Bookings", href: withPrefix("/dashboard/bookings"), icon: Calendar },
+          { name: "History", href: withPrefix("/dashboard/history"), icon: FileText },
         ]
 
       case "faculty":
         return [
           ...baseItems,
-          { name: "Book Labs", href: "/dashboard/book-labs", icon: Calendar },
-          { name: "Approve Requests", href: "/dashboard/approve", icon: UserCheck },
-          { name: "My Bookings", href: "/dashboard/bookings", icon: BookOpen },
-          { name: "Reports", href: "/dashboard/reports", icon: BarChart3 },
+          { name: "Book Labs", href: withPrefix("/dashboard/book-labs"), icon: Calendar },
+          { name: "Approve Requests", href: withPrefix("/dashboard/approve"), icon: UserCheck },
+          { name: "My Bookings", href: withPrefix("/dashboard/bookings"), icon: BookOpen },
+          { name: "Reports", href: withPrefix("/dashboard/reports"), icon: BarChart3 },
         ]
 
       case "lab-staff":
         return [
           ...baseItems,
-          { name: "Inventory", href: "/dashboard/inventory", icon: Package },
-          { name: "Issue/Return", href: "/dashboard/issue-return", icon: ClipboardList },
-          { name: "Attendance", href: "/dashboard/attendance", icon: UserCheck },
-          { name: "Reports", href: "/dashboard/reports", icon: BarChart3 },
+          { name: "Inventory", href: withPrefix("/dashboard/inventory"), icon: Package },
+          { name: "Issue/Return", href: withPrefix("/dashboard/issue-return"), icon: ClipboardList },
+          { name: "Attendance", href: withPrefix("/dashboard/attendance"), icon: UserCheck },
+          { name: "Reports", href: withPrefix("/dashboard/reports"), icon: BarChart3 },
         ]
 
       case "hod":
         return [
           ...baseItems,
-          { name: "Department Labs", href: "/dashboard/labs", icon: Building },
-          { name: "Approvals", href: "/dashboard/approvals", icon: UserCheck },
-          { name: "Reports", href: "/dashboard/reports", icon: BarChart3 },
-          { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
+          { name: "Department Labs", href: withPrefix("/dashboard/labs"), icon: Building },
+          { name: "Approvals", href: withPrefix("/dashboard/approvals"), icon: UserCheck },
+          { name: "Reports", href: withPrefix("/dashboard/reports"), icon: BarChart3 },
+          { name: "Analytics", href: withPrefix("/dashboard/analytics"), icon: BarChart3 },
         ]
 
       case "admin":
         return [
           ...baseItems,
-          { name: "User Management", href: "/dashboard/users", icon: Users },
-          { name: "Organization", href: "/dashboard/organization", icon: Building },
-          { name: "All Labs", href: "/dashboard/labs", icon: Building },
-          { name: "System Settings", href: "/dashboard/settings", icon: Settings },
-          { name: "Reports", href: "/dashboard/reports", icon: BarChart3 },
-          { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
+          { name: "User Management", href: withPrefix("/dashboard/users"), icon: Users },
+          { name: "Lab and Department Management", href: withPrefix("/dashboard/organization"), icon: Building },
+          { name: "System Logs", href: withPrefix("/dashboard/logs"), icon: FileText },
+          { name: "Reports", href: withPrefix("/dashboard/reports"), icon: BarChart3 },
+          { name: "Analytics", href: withPrefix("/dashboard/analytics"), icon: BarChart3 },
         ]
 
       case "tnp":
         return [
           ...baseItems,
-          { name: "Book Labs", href: "/dashboard/book-labs", icon: Calendar },
-          { name: "Placement Events", href: "/dashboard/events", icon: Calendar },
-          { name: "Reports", href: "/dashboard/reports", icon: BarChart3 },
+          { name: "Book Labs", href: withPrefix("/dashboard/book-labs"), icon: Calendar },
+          { name: "Placement Events", href: withPrefix("/dashboard/events"), icon: Calendar },
+          { name: "Reports", href: withPrefix("/dashboard/reports"), icon: BarChart3 },
         ]
 
       default:
@@ -117,20 +123,29 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
 
       <ScrollArea className="flex-1 px-3 py-4">
         <nav className="space-y-2">
-          {navigationItems.map((item) => (
-            <Button
+          {navigationItems.map((item) => {
+            // Normalize for active match across prefixed and non-prefixed URLs
+            const normalized = pathname?.replace(/^\/(admin|student|faculty|lab-staff|hod|tnp)(?=\/)/, "") || ""
+            const itemPath = item.href.replace(prefix, "")
+            const isDashboardRoot = itemPath === "/dashboard"
+            const isExact = normalized === itemPath
+            const isPrefix = normalized.startsWith(itemPath + "/")
+            const active = isDashboardRoot ? isExact : (isExact || isPrefix)
+            return (
+              <Button
               key={item.name}
-              variant="ghost"
-              className="w-full justify-start gap-3 text-left"
+              variant={active ? "default" : "ghost"}
+              className={`w-full justify-start gap-3 text-left ${active ? 'bg-primary text-primary-foreground' : ''}`}
               onClick={() => {
                 router.push(item.href)
                 onClose()
               }}
             >
-              <item.icon className="h-4 w-4" />
+              <item.icon className={`h-4 w-4 ${active ? 'text-primary-foreground' : ''}`} />
               {item.name}
             </Button>
-          ))}
+            )
+          })}
         </nav>
       </ScrollArea>
     </div>
@@ -138,13 +153,13 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
 
   return (
     <>
-      {/* Desktop Sidebar */}
-      <div className="hidden w-64 border-r border-border bg-card md:block">
+      {/* Desktop Sidebar - fixed */}
+      <div className="hidden md:block fixed inset-y-0 left-0 w-64 border-r border-border bg-card z-30">
         <SidebarContent />
       </div>
 
       {/* Mobile Sidebar */}
-      <Sheet open={isOpen} onOpenChange={onClose}>
+  <Sheet open={isOpen} onOpenChange={onClose}>
         <SheetContent side="left" className="w-64 p-0">
           <SidebarContent />
         </SheetContent>

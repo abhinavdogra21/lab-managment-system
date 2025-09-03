@@ -5,6 +5,8 @@
 
 :root {
   /* Updated color tokens to match LNMIIT branding - blue primary, orange accent */
+  /* Global UI scale: shrink rem-based sizing to ~90% */
+  font-size: 90%;
   --background: oklch(1 0 0); /* Pure white background */
   --foreground: oklch(0.2 0 0); /* Dark grey text */
   --card: oklch(0.98 0 0); /* Light grey card background */

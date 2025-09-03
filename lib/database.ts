@@ -149,6 +149,86 @@ export const dbOperations = {
     return res.rows
   },
 
+  async getRecentBookings(limit = 10) {
+    const lim = Math.max(1, Math.min(100, limit))
+    const res = await db.query(
+      `SELECT b.id, b.booking_date, b.start_time, b.end_time, b.purpose, b.approval_status,
+              l.name AS lab_name, u.name AS user_name, u.email AS user_email, b.created_at
+       FROM lab_bookings b
+       LEFT JOIN labs l ON l.id = b.lab_id
+       LEFT JOIN users u ON u.id = b.booked_by
+       ORDER BY b.created_at DESC
+       LIMIT ${lim}`
+    )
+    return res.rows
+  },
+
+  async getMostActiveLabsThisWeek(limit = 5) {
+    const lim = Math.max(1, Math.min(10, limit))
+    const res = await db.query(
+      `SELECT l.id, l.name AS lab, COUNT(*) AS count
+       FROM lab_bookings b
+       JOIN labs l ON b.lab_id = l.id
+       WHERE YEARWEEK(b.booking_date, 1) = YEARWEEK(CURDATE(), 1)
+       GROUP BY l.id, l.name
+       ORDER BY count DESC
+       LIMIT ${lim}`
+    )
+    return res.rows
+  },
+
+  async getRecentlyAddedNonStudentUsers(limit = 8) {
+    const lim = Math.max(1, Math.min(20, limit))
+    const res = await db.query(
+      `SELECT id, name, email, role, department, created_at
+       FROM users
+       WHERE role <> 'student'
+       ORDER BY created_at DESC
+       LIMIT ${lim}`
+    )
+    return res.rows
+  },
+
+  async getPendingApprovalsCount() {
+    const res = await db.query(`SELECT COUNT(*) AS c FROM lab_bookings WHERE approval_status = 'pending'`)
+    return Number(res.rows[0]?.c || 0)
+  },
+
+  async getErrorSparkline(days = 14) {
+    const d = Math.max(7, Math.min(60, days))
+    // Count logs per day and error-like logs per day
+    const errors = await db.query(
+      `SELECT DATE(created_at) as d, COUNT(*) as c
+       FROM system_logs
+       WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+         AND (LOWER(action) LIKE '%error%' OR LOWER(entity_type) LIKE '%error%')
+       GROUP BY DATE(created_at)
+       ORDER BY d`,
+      [d]
+    )
+    const totals = await db.query(
+      `SELECT DATE(created_at) as d, COUNT(*) as c
+       FROM system_logs
+       WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+       GROUP BY DATE(created_at)
+       ORDER BY d`,
+      [d]
+    )
+    const mapErr = new Map<string, number>(errors.rows.map((r: any) => [String(r.d).slice(0, 10), Number(r.c)]))
+    const mapTot = new Map<string, number>(totals.rows.map((r: any) => [String(r.d).slice(0, 10), Number(r.c)]))
+    // produce array oldest->newest of rates 0..1 length d
+    const out: number[] = []
+    for (let i = d - 1; i >= 0; i--) {
+      const date = new Date()
+      date.setDate(date.getDate() - i)
+      const key = date.toISOString().slice(0, 10)
+      const e = mapErr.get(key) || 0
+      const t = mapTot.get(key) || 0
+      out.push(t > 0 ? e / t : 0)
+    }
+    return out
+  },
+
   async getSystemLogs(params: { from?: string; to?: string; action?: string | null; entityType?: string | null; userId?: number | null; limit?: number }) {
     const where: string[] = ["1=1"]
     const values: any[] = []
@@ -567,7 +647,7 @@ export const dbOperations = {
     return Number(res.rows[0]?.c || 0)
   },
 
-  async getPendingApprovalsCount(startDate: string, endDate: string) {
+  async getPendingApprovalsCountInRange(startDate: string, endDate: string) {
     const res = await db.query(
       `SELECT COUNT(*) AS c
        FROM lab_bookings
@@ -716,6 +796,66 @@ export const dbOperations = {
     }
   },
 
+  async getLogById(id: number) {
+    const res = await db.query(`SELECT * FROM system_logs WHERE id = ?`, [id])
+    return res.rows[0]
+  },
+
+  async undoLogAction(log: any, actorUserId: number) {
+    // Parse details if string
+    let details: any = null
+    try { details = typeof log.details === 'string' ? JSON.parse(log.details) : log.details } catch { details = log.details }
+    const action = String(log.action)
+    const type = String(log.entity_type)
+    const id = Number(log.entity_id)
+
+    if (action === 'SET_DEPARTMENT_HOD' && type === 'department') {
+      await this.setDepartmentHod(id, null)
+      await this.createLog({ userId: actorUserId, action: 'UNDO_SET_DEPARTMENT_HOD', entityType: 'department', entityId: id, details: { fromLogId: log.id }, ipAddress: 'local', userAgent: 'undo' })
+      return { undone: true }
+    }
+    if (action === 'SET_LAB_STAFF' && type === 'lab') {
+      await this.replaceLabStaff(id, [])
+      await this.createLog({ userId: actorUserId, action: 'UNDO_SET_LAB_STAFF', entityType: 'lab', entityId: id, details: { fromLogId: log.id }, ipAddress: 'local', userAgent: 'undo' })
+      return { undone: true }
+    }
+    if (action === 'CREATE_LAB' && type === 'lab') {
+      await this.deleteLabCascade(id)
+      await this.createLog({ userId: actorUserId, action: 'UNDO_CREATE_LAB', entityType: 'lab', entityId: id, details: { fromLogId: log.id }, ipAddress: 'local', userAgent: 'undo' })
+      return { undone: true }
+    }
+    if (action === 'CREATE_DEPARTMENT' && type === 'department') {
+      // Only allow if department has no labs to avoid destructive cascade unexpectedly
+      const hasLabs = await db.query(`SELECT COUNT(1) AS c FROM labs WHERE department_id = ?`, [id])
+      if (Number(hasLabs.rows?.[0]?.c || 0) > 0) throw new Error('Cannot undo: department already has labs')
+      await this.deleteDepartmentCascade(id)
+      await this.createLog({ userId: actorUserId, action: 'UNDO_CREATE_DEPARTMENT', entityType: 'department', entityId: id, details: { fromLogId: log.id }, ipAddress: 'local', userAgent: 'undo' })
+      return { undone: true }
+    }
+
+    if (action === 'DELETE_USER' && type === 'user') {
+      // Recover from snapshot
+      const snap = (details && (details.snapshot || details.user)) || null
+      if (!snap) throw new Error('No snapshot to restore user')
+      // Try to restore softly deleted user: if record exists by id, just set is_active=1 and restore fields
+      const existing = await db.query(`SELECT id, email FROM users WHERE id = ?`, [Number(snap.id)])
+      if (existing.rows[0]) {
+        await db.query(`UPDATE users SET is_active = 1, email = ?, name = ?, role = ?, department = ?, updated_at = NOW() WHERE id = ?`, [snap.email, snap.name, snap.role, snap.department || null, Number(snap.id)])
+      } else {
+        // If id is gone (rare), recreate; guard against email duplicate
+        const emailDup = await db.query(`SELECT id FROM users WHERE email = ?`, [snap.email])
+        if (emailDup.rows[0]) throw new Error('Cannot undo: email already in use')
+        await db.query(`INSERT INTO users (id, email, password_hash, name, role, department, phone, student_id, employee_id, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())`, [
+          Number(snap.id), snap.email, snap.password_hash || null, snap.name || 'User', snap.role || 'student', snap.department || null, snap.phone || null, snap.student_id || null, snap.employee_id || null,
+        ])
+      }
+      await this.createLog({ userId: actorUserId, action: 'UNDO_DELETE_USER', entityType: 'user', entityId: Number(snap.id), details: { fromLogId: log.id }, ipAddress: 'local', userAgent: 'undo' })
+      return { undone: true }
+    }
+
+  throw new Error('Undo not supported for this action')
+  },
+
   // Report operations
   async getBookingReport(filters: any) {
     let query = `
@@ -765,39 +905,97 @@ export const dbOperations = {
 
   // Departments
   async listDepartments() {
-    const res = await db.query(`
-      SELECT d.id, d.name, d.code, d.hod_id,
-             u.name AS hod_name, u.email AS hod_email,
-             d.created_at
-      FROM departments d
-      LEFT JOIN users u ON u.id = d.hod_id
-      ORDER BY d.name
-    `)
-    return res.rows
+    // Decide query based on schema introspection to avoid error logs
+    const hasColRes = await db.query(
+      `SELECT COUNT(1) AS cnt FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'departments' AND column_name = 'hod_email'`
+    )
+    const hasHodEmail = Array.isArray(hasColRes.rows) && hasColRes.rows[0] && Number(hasColRes.rows[0].cnt) > 0
+    const select = hasHodEmail
+      ? `SELECT d.id, d.name, d.code, d.hod_id, d.hod_email AS hod_email, u.name AS hod_name, u.email AS hod_user_email, d.created_at FROM departments d LEFT JOIN users u ON u.id = d.hod_id ORDER BY d.name`
+      : `SELECT d.id, d.name, d.code, d.hod_id, NULL AS hod_email, u.name AS hod_name, u.email AS hod_user_email, d.created_at FROM departments d LEFT JOIN users u ON u.id = d.hod_id ORDER BY d.name`
+    const res = await db.query(select)
+    return res.rows.map((r: any) => ({ ...r, hod_email: r.hod_email ?? r.hod_user_email }))
   },
 
-  async createDepartment(dept: { name: string; code: string }) {
-    const result = await db.query(
-      `INSERT INTO departments (name, code) VALUES (?, ?)`,
-      [dept.name, dept.code]
+  // Lightweight, idempotent migrations for critical columns
+  async runLightMigrations() {
+    // Check if departments.hod_email exists and add only if missing (avoid noisy duplicate errors)
+    const colRes = await db.query(
+      `SELECT COUNT(1) AS cnt FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'departments' AND column_name = 'hod_email'`
     )
-    const sel = await db.query(`SELECT id, name, code, created_at FROM departments WHERE id = ?`, [result.insertId])
+    const hasHodEmail = Array.isArray(colRes.rows) && colRes.rows[0] && Number(colRes.rows[0].cnt) > 0
+    if (!hasHodEmail) {
+      try {
+        await db.query(`ALTER TABLE departments ADD COLUMN hod_email VARCHAR(255) NULL`)
+      } catch (e: any) {
+        // Ignore duplicate column errors due to concurrent migration attempts
+        const code = String(e?.code || e?.message || "")
+        if (code !== 'ER_DUP_FIELDNAME' && !/duplicate column/i.test(String(e?.sqlMessage || e?.message || ''))) {
+          throw e
+        }
+      }
+      return { ok: true, updated: true }
+    }
+    return { ok: true, updated: false }
+  },
+
+  async createDepartment(dept: { name: string; code: string; hodEmail?: string | null }) {
+    // Introspect schema to handle deployments missing hod_email column
+    const colRes = await db.query(
+      `SELECT COUNT(1) AS cnt FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'departments' AND column_name = 'hod_email'`
+    )
+    const hasHodEmail = Array.isArray(colRes.rows) && colRes.rows[0] && Number(colRes.rows[0].cnt) > 0
+    let insert
+    if (hasHodEmail) {
+      insert = await db.query(
+        `INSERT INTO departments (name, code, hod_email) VALUES (?, ?, ?)`,
+        [dept.name, dept.code, dept.hodEmail || null]
+      )
+    } else {
+      insert = await db.query(
+        `INSERT INTO departments (name, code) VALUES (?, ?)`,
+        [dept.name, dept.code]
+      )
+    }
+    const sel = await db.query(
+      hasHodEmail
+        ? `SELECT id, name, code, hod_email, created_at FROM departments WHERE id = ?`
+        : `SELECT id, name, code, NULL AS hod_email, created_at FROM departments WHERE id = ?`,
+      [insert.insertId]
+    )
     return sel.rows[0]
   },
 
-  async updateDepartment(id: number, fields: { name?: string; code?: string }) {
+  async updateDepartment(id: number, fields: { name?: string; code?: string; hodEmail?: string | null }) {
+    // Introspect schema to see if hod_email is present
+    const colRes = await db.query(
+      `SELECT COUNT(1) AS cnt FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'departments' AND column_name = 'hod_email'`
+    )
+    const hasHodEmail = Array.isArray(colRes.rows) && colRes.rows[0] && Number(colRes.rows[0].cnt) > 0
+
     const allowed: Record<string, any> = {}
     if (fields.name !== undefined) allowed.name = fields.name
     if (fields.code !== undefined) allowed.code = fields.code
+    if (fields.hodEmail !== undefined && hasHodEmail) allowed.hod_email = fields.hodEmail
     const keys = Object.keys(allowed)
     if (keys.length === 0) {
-      const sel0 = await db.query(`SELECT id, name, code, hod_id FROM departments WHERE id = ?`, [id])
+      const sel0 = await db.query(
+        hasHodEmail
+          ? `SELECT id, name, code, hod_id, hod_email FROM departments WHERE id = ?`
+          : `SELECT id, name, code, hod_id, NULL AS hod_email FROM departments WHERE id = ?`,
+        [id]
+      )
       return sel0.rows[0]
     }
     const sets = keys.map((k) => `${k} = ?`).join(", ")
     const values = keys.map((k) => allowed[k])
     await db.query(`UPDATE departments SET ${sets} WHERE id = ?`, [...values, id])
-    const sel = await db.query(`SELECT id, name, code, hod_id FROM departments WHERE id = ?`, [id])
+    const sel = await db.query(
+      hasHodEmail
+        ? `SELECT id, name, code, hod_id, hod_email FROM departments WHERE id = ?`
+        : `SELECT id, name, code, hod_id, NULL AS hod_email FROM departments WHERE id = ?`,
+      [id]
+    )
     return sel.rows[0]
   },
 
@@ -918,6 +1116,9 @@ export const dbOperations = {
         const ur = u.rows[0]
         if (!ur) throw new Error("User not found")
         if (String(ur.role) !== 'hod') throw new Error("User is not HOD")
+  // Ensure this user is not already HOD of another department
+  const existing = await client.query(`SELECT id FROM departments WHERE hod_id = ? AND id <> ?`, [hodId, departmentId])
+  if (existing.rows[0]) throw new Error('This user is already assigned as HOD of another department')
       }
       await client.query(`UPDATE departments SET hod_id = ? WHERE id = ?`, [hodId, departmentId])
       const sel = await client.query(
@@ -1069,9 +1270,41 @@ export const dbOperations = {
       const studentIds: number[] = students.map((u: any) => u.id)
       const inPlaceholders = studentIds.map(() => '?').join(',')
 
+      // Introspect lab_bookings columns to handle older schemas gracefully
+      const colsRes = await client.query(
+        `SELECT LOWER(column_name) AS column_name
+         FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = 'lab_bookings'`
+      )
+      const cols = new Set<string>((colsRes.rows || []).map((r: any) => String(r.column_name)))
+      const has = (c: string) => cols.has(c.toLowerCase())
+
+      const selectFields = [
+        'id',
+        'lab_id',
+        'booked_by',
+        'booking_date',
+        'start_time',
+        'end_time',
+        'purpose',
+        has('expected_students') ? 'expected_students' : 'NULL AS expected_students',
+        has('equipment_needed') ? 'equipment_needed' : 'NULL AS equipment_needed',
+        has('approval_status') ? 'approval_status' : 'NULL AS approval_status',
+        has('approved_by') ? 'approved_by' : 'NULL AS approved_by',
+        has('approval_date') ? 'approval_date' : 'NULL AS approval_date',
+        has('approval_remarks') ? 'approval_remarks' : 'NULL AS approval_remarks',
+        has('created_at') ? 'created_at' : 'NOW() AS created_at',
+        has('updated_at') ? 'updated_at' : 'NOW() AS updated_at',
+      ]
+      const selectSql = selectFields.join(', ')
+
       await client.query(
-        `INSERT INTO archived_lab_bookings (original_id, lab_id, booked_by, booking_date, start_time, end_time, purpose, expected_students, equipment_needed, approval_status, approved_by, approval_date, approval_remarks, created_at, updated_at)
-         SELECT id, lab_id, booked_by, booking_date, start_time, end_time, purpose, expected_students, equipment_needed, approval_status, approved_by, approval_date, approval_remarks, created_at, updated_at
+        `INSERT INTO archived_lab_bookings (
+            original_id, lab_id, booked_by, booking_date, start_time, end_time, purpose,
+            expected_students, equipment_needed, approval_status, approved_by, approval_date, approval_remarks,
+            created_at, updated_at
+         )
+         SELECT ${selectSql}
          FROM lab_bookings WHERE booked_by IN (${inPlaceholders})`,
         studentIds
       )

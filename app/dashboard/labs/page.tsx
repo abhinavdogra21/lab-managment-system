@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/components/ui/use-toast"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 type Department = { id: number; name: string; code: string; hod_id?: number | null; hod_name?: string | null; hod_email?: string | null }
 type Lab = { id: number; name: string; code: string; department_id: number; department_name?: string; staff_id?: number | null; staff_name?: string | null; staff_ids_csv?: string | null; staff_names_csv?: string | null; capacity?: number; location?: string }
@@ -23,7 +24,7 @@ export default function LabsPage() {
 
   // Form state
   const [labForm, setLabForm] = useState({ name: "", code: "", departmentId: "", capacity: "", location: "" })
-  const [deptForm, setDeptForm] = useState({ name: "", code: "" })
+  const [deptForm, setDeptForm] = useState({ name: "", code: "", hodEmail: "" })
 
   useEffect(() => {
     const u = typeof window !== "undefined" ? localStorage.getItem("user") : null
@@ -72,13 +73,13 @@ export default function LabsPage() {
       const res = await fetch("/api/departments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(deptForm),
+        body: JSON.stringify({ name: deptForm.name, code: deptForm.code, hodEmail: deptForm.hodEmail || null }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || "Failed")
   // re-fetch to sync and show in list
   await loadAll()
-      setDeptForm({ name: "", code: "" })
+  setDeptForm({ name: "", code: "", hodEmail: "" })
       toast({ title: "Department created" })
     } catch (e: any) {
       toast({ title: "Create failed", description: e?.message || "", variant: "destructive" })
@@ -204,7 +205,7 @@ export default function LabsPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-xl font-semibold">Labs & Departments</h1>
+  <h1 className="text-xl font-semibold">Lab and Department Management</h1>
 
       {!canManage && (
         <div className="rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
@@ -226,7 +227,11 @@ export default function LabsPage() {
               <Label htmlFor="dept-code">Code</Label>
               <Input id="dept-code" value={deptForm.code} onChange={(e) => setDeptForm((s) => ({ ...s, code: e.target.value }))} />
             </div>
-            <Button disabled={loading || !canManage || !deptForm.name || !deptForm.code} onClick={onCreateDepartment}>
+            <div>
+              <Label htmlFor="dept-hod-email">HOD Email <span className="text-red-600">*</span></Label>
+              <Input id="dept-hod-email" required type="email" placeholder="hod.name@lnmiit.ac.in" value={deptForm.hodEmail} onChange={(e) => setDeptForm((s) => ({ ...s, hodEmail: e.target.value }))} />
+            </div>
+            <Button disabled={loading || !canManage || !deptForm.name || !deptForm.code || !deptForm.hodEmail} onClick={onCreateDepartment}>
               {loading ? "Creating..." : "Create Department"}
             </Button>
           </CardContent>
@@ -302,39 +307,43 @@ export default function LabsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {labs.map((lab) => (
+                {labs.map((lab) => {
+                  const currentIds = (lab.staff_ids_csv || "").split(",").filter(Boolean).map((s) => Number(s))
+                  return (
                   <TableRow key={lab.id}>
                     <TableCell>{lab.name}</TableCell>
                     <TableCell>{lab.code}</TableCell>
                     <TableCell>{lab.department_name || lab.department_id}</TableCell>
                     <TableCell className="min-w-64">
-                      {/* Multi-select via checkboxes */}
-                      <div className="space-y-2">
-                        <div className="text-sm text-muted-foreground truncate" title={lab.staff_names_csv || "Unassigned"}>
-                          {lab.staff_names_csv || "Unassigned"}
-                        </div>
-                        <div className="max-h-40 overflow-y-auto border rounded p-2 bg-background">
-                          {labStaffOptions.map((u) => {
-                            const currentIds = (lab.staff_ids_csv || "").split(",").filter(Boolean).map((s) => Number(s))
-                            const checked = currentIds.includes(u.id)
-                            return (
-                              <label key={u.id} className="flex items-center gap-2 text-sm py-1">
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4"
+                      <div className="flex items-center gap-2">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" disabled={!canManage || loading}>
+                              {currentIds.length ? `${currentIds.length} selected` : "Assign staff"}
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className="max-h-64 overflow-y-auto min-w-80">
+                            {labStaffOptions.map((u) => {
+                              const checked = currentIds.includes(u.id)
+                              return (
+                                <DropdownMenuCheckboxItem
+                                  key={u.id}
                                   checked={checked}
-                                  disabled={!canManage || loading}
-                                  onChange={(e) => {
+                                  onCheckedChange={(v) => {
                                     const next = new Set(currentIds)
-                                    if (e.target.checked) next.add(u.id)
+                                    if (v) next.add(u.id)
                                     else next.delete(u.id)
                                     onAssignLabStaff(lab.id, Array.from(next))
                                   }}
-                                />
-                                <span>{u.name} ({u.email})</span>
-                              </label>
-                            )
-                          })}
+                                >
+                                  {u.name} ({u.email})
+                                </DropdownMenuCheckboxItem>
+                              )
+                            })}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        <div className="text-xs text-muted-foreground truncate" title={lab.staff_names_csv || "Unassigned"}>
+                          {lab.staff_names_csv || "Unassigned"}
                         </div>
                       </div>
                     </TableCell>
@@ -344,7 +353,7 @@ export default function LabsPage() {
                       <Button variant="destructive" size="sm" disabled={loading || !canManage} onClick={() => onDeleteLab(lab.id)}>Delete</Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                )})}
               </TableBody>
             </Table>
           </CardContent>

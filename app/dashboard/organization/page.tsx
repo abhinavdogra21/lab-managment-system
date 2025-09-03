@@ -39,10 +39,10 @@ export default function OrganizationPage() {
   // Dialogs and forms
   const [deptDialogOpen, setDeptDialogOpen] = useState(false)
   const [deptDialogMode, setDeptDialogMode] = useState<"create" | "edit">("create")
-  const [deptForm, setDeptForm] = useState<{ id?: number; name: string; code: string; hodId?: number | null }>({ name: "", code: "" })
+  const [deptForm, setDeptForm] = useState<{ id?: number; name: string; code: string; hodId?: number | null; hodEmail?: string | null }>({ name: "", code: "", hodEmail: "" })
   const [facultyDialogOpen, setFacultyDialogOpen] = useState(false)
   const [facultyDept, setFacultyDept] = useState<Department | null>(null)
-  const [facultyForm, setFacultyForm] = useState<{ name: string; email: string; existingId?: number | "" }>({ name: "", email: "" })
+  const [facultyForm, setFacultyForm] = useState<{ existingId?: number | "" }>({})
   const [labDialogOpen, setLabDialogOpen] = useState(false)
   const [labDialogMode, setLabDialogMode] = useState<"create" | "edit">("create")
   const [labForm, setLabForm] = useState<{ id?: number; name: string; code: string; departmentId: number | ""; capacity?: number | ""; location?: string }>({ name: "", code: "", departmentId: "" })
@@ -50,7 +50,7 @@ export default function OrganizationPage() {
   const [labsQuery, setLabsQuery] = useState("")
   // Lab Staff tab
   const [staffDialogOpen, setStaffDialogOpen] = useState(false)
-  const [staffForm, setStaffForm] = useState<{ name: string; email: string; labId?: number | "" }>({ name: "", email: "" })
+  const [staffForm, setStaffForm] = useState<{ first: string; middle: string; last: string; email: string; labId?: number | "" }>({ first: "", middle: "", last: "", email: "" })
   const [staffDeptFilter, setStaffDeptFilter] = useState<string | "all" | "unassigned">("all")
   const [staffQuery, setStaffQuery] = useState("")
   const [facultyQuery, setFacultyQuery] = useState("")
@@ -107,30 +107,34 @@ export default function OrganizationPage() {
   }
   const openCreateDept = () => {
     setDeptDialogMode("create")
-    setDeptForm({ name: "", code: "" })
+    setDeptForm({ name: "", code: "", hodEmail: "" })
     setDeptDialogOpen(true)
   }
   const openEditDept = (d: Department) => {
     setDeptDialogMode("edit")
-    setDeptForm({ id: d.id, name: d.name, code: d.code, hodId: d.hod_id ?? null })
+    setDeptForm({ id: d.id, name: d.name, code: d.code, hodId: d.hod_id ?? null, hodEmail: d.hod_email ?? "" })
     setDeptDialogOpen(true)
   }
   const saveDeptDialog = async () => {
     // create or update
-    if (!deptForm.name.trim() || !deptForm.code.trim()) {
-      toast({ title: "Name and code required", variant: "destructive" })
+    if (!deptForm.name.trim() || !deptForm.code.trim() || !String(deptForm.hodEmail || "").trim()) {
+      toast({ title: "Name, code and HOD email are required", variant: "destructive" })
       return
     }
     setLoading(true)
     try {
+      // optional domain check for HOD email if provided
+      if (deptForm.hodEmail && !/^[^@\s]+@lnmiit\.ac\.in$/i.test(deptForm.hodEmail)) {
+        throw new Error("HOD email must be an lnmiit.ac.in address")
+      }
       if (deptDialogMode === "create") {
-        const res = await fetch("/api/departments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: deptForm.name, code: deptForm.code }) })
+  const res = await fetch("/api/departments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: deptForm.name, code: deptForm.code, hodEmail: deptForm.hodEmail || null }) })
         const data = await res.json()
         if (!res.ok) throw new Error(data?.error || "Failed to create department")
         setDepartments((prev) => [...prev, data.department])
         toast({ title: "Department created" })
       } else {
-        const res = await fetch("/api/departments", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: deptForm.id, name: deptForm.name, code: deptForm.code }) })
+  const res = await fetch("/api/departments", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: deptForm.id, name: deptForm.name, code: deptForm.code, hodEmail: deptForm.hodEmail ?? null }) })
         const data = await res.json()
         if (!res.ok) throw new Error(data?.error || "Failed to update department")
         setDepartments((prev) => prev.map((x) => (x.id === deptForm.id ? { ...x, ...data.department } : x)))
@@ -228,30 +232,11 @@ export default function OrganizationPage() {
 
   const openManageFaculty = (d: Department) => {
     setFacultyDept(d)
-    setFacultyForm({ name: "", email: "", existingId: "" })
+    setFacultyForm({ existingId: "" })
     setFacultyDialogOpen(true)
   }
 
-  const addNewFaculty = async () => {
-    if (!facultyDept) return
-    if (!facultyForm.name.trim() || !facultyForm.email.trim()) {
-      toast({ title: "Name and email required", variant: "destructive" })
-      return
-    }
-    setLoading(true)
-    try {
-      const res = await fetch("/api/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: facultyForm.name, email: facultyForm.email, role: "faculty", department: facultyDept.code }) })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || "Failed to add faculty")
-      setFaculties((prev) => [...prev, data.user])
-      setFacultyForm({ name: "", email: "", existingId: "" })
-      toast({ title: "Faculty added" })
-    } catch (e: any) {
-      toast({ title: "Add failed", description: e?.message || "", variant: "destructive" })
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Note: Adding new faculty is intentionally disabled here. Use Users panel to create, then assign existing here.
 
   const addExistingFaculty = async () => {
     if (!facultyDept) return
@@ -319,7 +304,7 @@ export default function OrganizationPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-xl font-semibold">Organization</h1>
+  <h1 className="text-xl font-semibold">Department and Labs Management</h1>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
         <TabsList>
@@ -350,15 +335,18 @@ export default function OrganizationPage() {
                       <TableCell>{d.name}</TableCell>
                       <TableCell>{d.code}</TableCell>
                       <TableCell className="min-w-56">
-                        <Select value={d.hod_id ? String(d.hod_id) : "none"} onValueChange={(v) => assignHod(d.id, v === "none" ? null : Number(v))}>
-                          <SelectTrigger className="w-full"><SelectValue placeholder="Assign HOD" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">Unassigned</SelectItem>
-                            {hods.map((u) => (
-                              <SelectItem key={u.id} value={String(u.id)}>{u.name} ({u.email})</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="space-y-1">
+                          <Select value={d.hod_id ? String(d.hod_id) : "none"} onValueChange={(v) => assignHod(d.id, v === "none" ? null : Number(v))}>
+                            <SelectTrigger className="w-full"><SelectValue placeholder="Assign HOD" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Unassigned</SelectItem>
+                              {hods.map((u) => (
+                                <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <div className="text-xs text-muted-foreground">Dept HOD Email: {d.hod_email || "—"}</div>
+                        </div>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         <div className="flex gap-2">
@@ -523,7 +511,7 @@ export default function OrganizationPage() {
                   </Select>
                 </div>
                 <Input className="w-60" placeholder="Search staff" value={staffQuery} onChange={(e) => setStaffQuery(e.target.value)} />
-                <Button onClick={() => { setStaffForm({ name: "", email: "", labId: "" }); setStaffDialogOpen(true) }}>Add Staff</Button>
+                <Button onClick={() => { setStaffForm({ first: "", middle: "", last: "", email: "", labId: "" }); setStaffDialogOpen(true) }}>Add Staff</Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -667,10 +655,15 @@ export default function OrganizationPage() {
               <Label className="text-xs">Code</Label>
               <Input value={deptForm.code} onChange={(e) => setDeptForm((s) => ({ ...s, code: e.target.value.toUpperCase() }))} placeholder="e.g. CSE" className="w-40" />
             </div>
+            <div>
+              <Label className="text-xs">Department HOD Email <span className="text-red-600">*</span></Label>
+              <Input type="email" value={deptForm.hodEmail ?? ""} onChange={(e) => setDeptForm((s) => ({ ...s, hodEmail: e.target.value }))} placeholder="hod.dept@lnmiit.ac.in" />
+              <div className="text-xs text-muted-foreground mt-1">This is the canonical HOD email for the department entity (not the personal email of the assigned HOD user).</div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeptDialogOpen(false)}>Cancel</Button>
-            <Button onClick={saveDeptDialog} disabled={loading}>{deptDialogMode === "create" ? "Create" : "Save"}</Button>
+            <Button onClick={saveDeptDialog} disabled={loading || !deptForm.name.trim() || !deptForm.code.trim() || !String(deptForm.hodEmail || "").trim()}>{deptDialogMode === "create" ? "Create" : "Save"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -722,20 +715,6 @@ export default function OrganizationPage() {
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
-            {/* Add new faculty */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-              <div>
-                <Label className="text-xs">New faculty name</Label>
-                <Input value={facultyForm.name} onChange={(e) => setFacultyForm((s) => ({ ...s, name: e.target.value }))} placeholder="Name" />
-              </div>
-              <div>
-                <Label className="text-xs">New faculty email</Label>
-                <Input value={facultyForm.email} onChange={(e) => setFacultyForm((s) => ({ ...s, email: e.target.value }))} placeholder="name@lnmiit.ac.in" />
-              </div>
-              <div>
-                <Button className="w-full" onClick={addNewFaculty} disabled={loading}>Add New Faculty</Button>
               </div>
             </div>
             {/* Add existing faculty */}
@@ -819,9 +798,19 @@ export default function OrganizationPage() {
             <DialogTitle>Add Lab Staff</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
-            <div>
-              <Label className="text-xs">Name</Label>
-              <Input value={staffForm.name} onChange={(e) => setStaffForm((s) => ({ ...s, name: e.target.value }))} placeholder="Name" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:col-span-2">
+              <div>
+                <Label className="text-xs">First Name <span className="text-red-500">*</span></Label>
+                <Input value={staffForm.first} onChange={(e) => setStaffForm((s) => ({ ...s, first: e.target.value }))} placeholder="First name" />
+              </div>
+              <div>
+                <Label className="text-xs">Middle Name</Label>
+                <Input value={staffForm.middle} onChange={(e) => setStaffForm((s) => ({ ...s, middle: e.target.value }))} placeholder="Middle name" />
+              </div>
+              <div>
+                <Label className="text-xs">Last Name</Label>
+                <Input value={staffForm.last} onChange={(e) => setStaffForm((s) => ({ ...s, last: e.target.value }))} placeholder="Last name" />
+              </div>
             </div>
             <div>
               <Label className="text-xs">Email</Label>
@@ -842,10 +831,11 @@ export default function OrganizationPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setStaffDialogOpen(false)}>Cancel</Button>
             <Button disabled={loading} onClick={async () => {
-              if (!staffForm.name.trim() || !staffForm.email.trim()) { toast({ title: "Name and email required", variant: "destructive" }); return }
+              const fullName = [staffForm.first, staffForm.middle, staffForm.last].filter(Boolean).join(" ").toUpperCase()
+              if (!staffForm.first.trim() || !staffForm.email.trim()) { toast({ title: "First name and email required", variant: "destructive" }); return }
               setLoading(true)
               try {
-                const res = await fetch("/api/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: staffForm.name, email: staffForm.email, role: "lab_staff" }) })
+                const res = await fetch("/api/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: fullName, email: staffForm.email, role: "lab_staff" }) })
                 const data = await res.json()
                 if (!res.ok) throw new Error(data?.error || "Failed to add staff")
                 setLabStaff((prev) => [...prev, data.user])
@@ -856,6 +846,7 @@ export default function OrganizationPage() {
                   setLabs((prev) => prev.map((x) => (x.id === staffForm.labId ? { ...x, staff_id: data.user.id, staff_name: data.user.name } : x)))
                 }
                 setStaffDialogOpen(false)
+                setStaffForm({ first: "", middle: "", last: "", email: "" })
                 toast({ title: "Staff added" })
               } catch (e: any) {
                 toast({ title: "Create failed", description: e?.message || "", variant: "destructive" })

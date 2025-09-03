@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     dbOperations.getBookingsByDepartment(startDate, endDate),
     dbOperations.getTopLabsByBookings(startDate, endDate, 5),
     dbOperations.getUniqueBookersCount(startDate, endDate),
-    dbOperations.getPendingApprovalsCount(startDate, endDate),
+  dbOperations.getPendingApprovalsCountInRange(startDate, endDate),
     dbOperations.getTotalHoursBooked(startDate, endDate),
   ])
 

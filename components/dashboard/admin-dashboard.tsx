@@ -33,7 +33,6 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
   const systemStats = [
     { label: "Total Users", value: String(stats.totalUsers), icon: Users },
     { label: "Active Labs", value: String(stats.activeLabs), icon: Building },
-    { label: "DB Uptime (hrs)", value: (stats.dbUptimeSeconds / 3600).toFixed(1), icon: TrendingUp },
     { label: "DB Size (MB)", value: stats.dbSizeMB.toFixed(2), icon: Database },
   ]
 
@@ -167,9 +166,10 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
   }
 
   const handleManageUsers = () => {
-    // Navigate to the dedicated Users page route
     if (typeof window !== "undefined") {
-      window.location.href = "/dashboard/users"
+      const prefix = `/${user.role}`
+      // Use role-prefixed path for consistency; rewrites will map it
+      window.location.href = `${prefix}/dashboard/users`
     } else {
       setActiveView("users")
     }
@@ -197,6 +197,153 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
 
   const handleDeleteUser = (userId: string) => {
     setUsers(users.filter((u) => u.id !== userId))
+  }
+
+  // Compact dashboard view
+  if (activeView === "dashboard") {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {systemStats.map((s) => (
+            <Card key={s.label}>
+              <CardHeader className="pb-2">
+                <CardDescription>{s.label}</CardDescription>
+                <CardTitle className="text-2xl">{s.value}</CardTitle>
+              </CardHeader>
+            </Card>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="md:col-span-3">
+            <CardHeader>
+              <CardTitle>Recent System Activity</CardTitle>
+              <CardDescription>Last 10 entries from system logs</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm">
+                {stats.recentLogs?.length ? (
+                  stats.recentLogs.slice(0, 10).map((l: any) => (
+                    <li key={l.id} className="flex items-center justify-between border-b pb-2 last:border-0 last:pb-0">
+                      <span className="text-muted-foreground">{l.created_at}</span>
+                      <span className="font-medium">{l.action}</span>
+                      <span className="text-muted-foreground">{l.entity_type} #{l.entity_id}</span>
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-muted-foreground">No recent activity</li>
+                )}
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Recent bookings and error rate */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle>Recent Bookings</CardTitle>
+              <CardDescription>Latest bookings across labs</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm">
+                {(stats as any).recentBookings?.length ? (
+                  (stats as any).recentBookings.map((b: any) => (
+                    <li key={b.id} className="flex items-center justify-between border-b pb-2 last:border-0 last:pb-0">
+                      <span className="font-medium">{b.lab_name}</span>
+                      <span className="text-muted-foreground">{b.booking_date} {b.start_time}-{b.end_time}</span>
+                      <span className="text-muted-foreground">{b.approval_status}</span>
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-muted-foreground">No recent bookings</li>
+                )}
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Health</CardTitle>
+              <CardDescription>Pending approvals and error rate</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-3 text-sm">Pending approvals: {(stats as any).pendingApprovals ?? 0}</div>
+              <div className="flex items-end gap-1 h-16">
+                {((stats as any).errorSparkline || []).map((v: number, i: number) => (
+                  <div key={i} className="w-2 bg-red-500/70" style={{ height: `${Math.round((v || 0) * 64)}px` }} />
+                ))}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">Error rate last 14 days</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Labs Overview</CardTitle>
+            <CardDescription>Top components by item count</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              {labComponents.slice(0, 6).map((l) => (
+                <div key={l.id} className="flex items-center justify-between border-b pb-2 last:border-0 last:pb-0">
+                  <span className="font-medium">{l.name} ({l.code})</span>
+                  <span className="text-muted-foreground">Items: {l.items} • Qty: {l.total_quantity}</span>
+                </div>
+              ))}
+              {!labComponents.length && (
+                <div className="text-muted-foreground">No lab data yet</div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Most Active Labs This Week</CardTitle>
+              <CardDescription>Counts by bookings</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm">
+                {(stats as any).activeLabsThisWeek?.length ? (
+                  (stats as any).activeLabsThisWeek.map((r: any) => (
+                    <li key={r.id} className="flex items-center justify-between border-b pb-2 last:border-0 last:pb-0">
+                      <span className="font-medium">{r.lab}</span>
+                      <span className="text-muted-foreground">{r.count} bookings</span>
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-muted-foreground">No bookings yet this week</li>
+                )}
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Recently Added Users</CardTitle>
+              <CardDescription>Non-students only</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm">
+                {(stats as any).recentNonStudents?.length ? (
+                  (stats as any).recentNonStudents.map((u: any) => (
+                    <li key={u.id} className="flex items-center justify-between border-b pb-2 last:border-0 last:pb-0">
+                      <span className="font-medium">{u.name}</span>
+                      <span className="text-muted-foreground">{u.role} • {u.created_at}</span>
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-muted-foreground">No recent users</li>
+                )}
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
   }
 
   const handleToggleUserStatus = (userId: string) => {

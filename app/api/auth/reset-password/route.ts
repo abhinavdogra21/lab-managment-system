@@ -14,6 +14,13 @@ export async function POST(req: Request) {
     const { token, password } = await req.json()
     if (!token || !password) return NextResponse.json({ error: "Invalid payload" }, { status: 400 })
 
+    // Enforce password policy: 8+ length, upper, lower, number, special
+    const policy = [/.{8,}/, /[A-Z]/, /[a-z]/, /\d/, /[^A-Za-z0-9]/]
+    const ok = policy.every((r) => r.test(password))
+    if (!ok) {
+      return NextResponse.json({ error: "Password must be 8+ chars and include upper, lower, number, and special character." }, { status: 400 })
+    }
+
     const pr = await dbOperations.getPasswordResetByToken(token)
     if (!pr) return NextResponse.json({ error: "Invalid or expired token" }, { status: 400 })
 

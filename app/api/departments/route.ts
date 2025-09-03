@@ -29,12 +29,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const body = await request.json()
+  const body = await request.json()
+  // Ensure critical columns exist (idempotent)
+  await dbOperations.runLightMigrations().catch(() => {})
     if (!body?.name || !body?.code) {
       return NextResponse.json({ error: "Name and code are required" }, { status: 400 })
     }
+    if (body?.hodEmail && !/^[^@\s]+@lnmiit\.ac\.in$/i.test(String(body.hodEmail))) {
+      return NextResponse.json({ error: "HOD email must be an lnmiit.ac.in address" }, { status: 400 })
+    }
 
-    const dept = await dbOperations.createDepartment({ name: body.name, code: body.code })
+  const dept = await dbOperations.createDepartment({ name: body.name, code: body.code, hodEmail: body.hodEmail || null })
 
     // Best-effort IP extraction
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown"
@@ -71,7 +76,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "departmentId is required" }, { status: 400 })
     }
 
-    const updated = await dbOperations.setDepartmentHod(departmentId, hodId)
+  const updated = await dbOperations.setDepartmentHod(departmentId, hodId)
 
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown"
     await dbOperations.createLog({
@@ -87,7 +92,8 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ department: updated })
   } catch (error: any) {
     const message = String(error?.message || "Internal server error")
-    return NextResponse.json({ error: message }, { status: 500 })
+    const isAssigned = message.toLowerCase().includes('already assigned as hod')
+    return NextResponse.json({ error: message }, { status: isAssigned ? 409 : 500 })
   }
 }
 
@@ -99,15 +105,22 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const body = await request.json()
+  const body = await request.json()
+  // Ensure critical columns exist (idempotent)
+  await dbOperations.runLightMigrations().catch(() => {})
     const departmentId = Number.parseInt(String(body?.id || ""), 10)
     if (!departmentId || Number.isNaN(departmentId)) {
       return NextResponse.json({ error: "id is required" }, { status: 400 })
     }
 
+    if (body?.hodEmail && !/^[^@\s]+@lnmiit\.ac\.in$/i.test(String(body.hodEmail))) {
+      return NextResponse.json({ error: "HOD email must be an lnmiit.ac.in address" }, { status: 400 })
+    }
+
     const updated = await dbOperations.updateDepartment(departmentId, {
       name: body?.name,
       code: body?.code,
+      hodEmail: body?.hodEmail,
     })
 
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown"

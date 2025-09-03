@@ -1,5 +1,6 @@
 "use client"
-import { useState } from "react"
+import { ReactNode, useEffect, useState } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import { StudentDashboard } from "./student-dashboard"
 import { FacultyDashboard } from "./faculty-dashboard"
 import { LabStaffDashboard } from "./lab-staff-dashboard"
@@ -19,6 +20,7 @@ interface User {
 
 interface DashboardLayoutProps {
   user: User
+  children?: ReactNode
 }
 
 /**
@@ -29,8 +31,25 @@ interface DashboardLayoutProps {
  *
  * Supported roles: student, faculty, lab-staff, hod, admin, tnp
  */
-export function DashboardLayout({ user }: DashboardLayoutProps) {
+export function DashboardLayout({ user, children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const router = useRouter()
+  const pathname = usePathname()
+
+  // Redirect bare /dashboard to role-scoped URL for clarity if a role prefix is not present
+  useEffect(() => {
+    if (!pathname) return
+    const rolePrefix = pathname.match(/^\/(admin|student|faculty|lab-staff|hod|tnp)(?:\/|$)/)?.[1]
+    if (!rolePrefix && pathname === "/dashboard") {
+      // Navigate to role-prefixed dashboard home
+      const prefix = `/${user.role}`
+      router.replace(`${prefix}/dashboard`)
+    }
+  }, [pathname, router, user.role])
+
+  // Normalize path for deciding whether to render role dashboard or page children
+  const normalizedPath = pathname?.replace(/^\/(admin|student|faculty|lab-staff|hod|tnp)(?=\/)/, "") || pathname || ""
+  const isDashboardHome = normalizedPath === "/dashboard" || normalizedPath === "/dashboard/"
 
   const renderDashboard = () => {
     switch (user.role) {
@@ -57,12 +76,12 @@ export function DashboardLayout({ user }: DashboardLayoutProps) {
       <DashboardSidebar user={user} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Main Content */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden md:ml-64">
         {/* Header */}
         <DashboardHeader user={user} onMenuClick={() => setSidebarOpen(true)} />
 
   {/* Dashboard Content */}
-  <main className="flex-1 overflow-y-auto overflow-x-hidden p-6">{renderDashboard()}</main>
+  <main className="flex-1 overflow-y-auto overflow-x-hidden p-6">{isDashboardHome ? renderDashboard() : children}</main>
       </div>
     </div>
   )

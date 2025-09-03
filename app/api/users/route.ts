@@ -34,15 +34,23 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const required = ["email", "role", "name"]
   for (const k of required) if (!body[k]) return NextResponse.json({ error: `${k} is required` }, { status: 400 })
-  const created = await dbOperations.createUser({
-    email: body.email,
-    passwordHash: body.passwordHash || null,
-    name: body.name,
-    role: body.role,
-    department: body.department || null,
-    phone: body.phone || null,
-    studentId: body.studentId || null,
-    employeeId: body.employeeId || null,
-  })
-  return NextResponse.json({ user: created }, { status: 201 })
+  try {
+    const created = await dbOperations.createUser({
+      email: body.email,
+      passwordHash: body.passwordHash || null,
+      name: body.name,
+      role: body.role,
+      department: body.department || null,
+      phone: body.phone || null,
+      studentId: body.studentId || null,
+      employeeId: body.employeeId || null,
+    })
+    return NextResponse.json({ user: created }, { status: 201 })
+  } catch (e: any) {
+    // MySQL duplicate email error code
+    if (e?.code === "ER_DUP_ENTRY") {
+      return NextResponse.json({ error: "Email already exists" }, { status: 409 })
+    }
+    throw e
+  }
 }

@@ -41,8 +41,8 @@ export default function ForgotPasswordPage() {
           <div className="flex justify-center">
             <Image src="/lnmiit-logo.png" alt="LNMIIT Logo" width={120} height={40} className="h-10 w-auto" />
           </div>
-          <CardTitle className="text-2xl">Forgot password</CardTitle>
-          <CardDescription>Enter your LNMIIT email and select your user type to receive a reset link.</CardDescription>
+          <CardTitle className="text-3xl">Forgot password</CardTitle>
+          <CardDescription className="text-base">Enter your LNMIIT email and select your user type to receive a reset link.</CardDescription>
         </CardHeader>
         <CardContent>
           {sent ? (
@@ -62,10 +62,10 @@ export default function ForgotPasswordPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                 />
-                <p className="text-xs text-muted-foreground">Use your @lnmiit.ac.in address.</p>
+                <p className="text-sm text-muted-foreground">Use your @lnmiit.ac.in address.</p>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">User type</label>
+                <label className="text-base font-medium">User type</label>
                 <select
                   className="w-full border rounded-md p-2 bg-background"
                   value={role}
@@ -79,9 +79,6 @@ export default function ForgotPasswordPage() {
                   <option value="tnp">T&P</option>
                   <option value="admin">Admin</option>
                 </select>
-                <p className="text-xs text-muted-foreground">
-                  Students can reset even if no account exists yet; other roles require an existing account.
-                </p>
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Sending…" : "Send reset link"}

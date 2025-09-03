@@ -133,8 +133,8 @@ export function LoginForm() {
               priority
             />
           </div>
-          <h1 className="font-montserrat text-2xl font-bold text-foreground">Lab Management System</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Sign in to access your dashboard</p>
+          <h1 className="font-montserrat text-3xl font-bold text-foreground">Lab Management System</h1>
+          <p className="mt-2 text-base text-muted-foreground">Sign in to access your dashboard</p>
         </div>
 
         {/* Reset success banner */}
@@ -148,10 +148,7 @@ export function LoginForm() {
 
         {/* Login Form Card */}
         <Card className="border-border bg-card shadow-lg">
-          <CardHeader className="space-y-1">
-            <CardTitle className="font-montserrat text-xl font-semibold">Welcome Back</CardTitle>
-            <CardDescription>Enter your LNMIIT credentials to continue</CardDescription>
-          </CardHeader>
+          {/* Header removed per requirement (no "Welcome Back")} */}
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* User Role Selection */}
