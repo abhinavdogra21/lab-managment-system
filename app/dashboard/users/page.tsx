@@ -33,7 +33,7 @@ export default function UsersPage() {
   
   const [importOpen, setImportOpen] = useState(false)
   const [importing, setImporting] = useState(false)
-  const [importSummary, setImportSummary] = useState<{ ok: number; fail: number } | null>(null)
+  const [importSummary, setImportSummary] = useState<{ created: number; reactivated: number; skipped: number } | null>(null)
   const [importFileName, setImportFileName] = useState<string>("")
   const [editOpen, setEditOpen] = useState(false)
   const [editUser, setEditUser] = useState<{ id?: number; first: string; middle: string; last: string; email: string; role: User["role"]; department?: string | undefined } | null>(null)
@@ -137,27 +137,31 @@ export default function UsersPage() {
       const wb = XLSX.read(buf, { type: "array" })
       const ws = wb.Sheets[wb.SheetNames[0]]
       const rows: any[] = XLSX.utils.sheet_to_json(ws, { header: 1 })
-      const [h1, h2] = rows[0] || []
-      const nameCol = String(h1 || "").toLowerCase().includes("name") ? 0 : String(h2 || "").toLowerCase().includes("name") ? 1 : 0
-      const rollCol = nameCol === 0 ? 1 : 0
-      const toCreate = rows.slice(1).filter((r) => (r[nameCol] || "").toString().trim()).map((r) => ({ name: String(r[nameCol] || "").toUpperCase(), studentId: String(r[rollCol] || "").trim() }))
-      let ok = 0, fail = 0
-      for (const row of toCreate) {
-        try {
-          const res = await fetch("/api/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: `${row.studentId}@lnmiit.ac.in`, name: row.name, role: "student", department: department || null, studentId: row.studentId }) })
-          if (res.ok) {
-            const data = await res.json()
-            ok++
-            setStudents((prev) => [data.user, ...prev])
-          } else {
-            fail++
-          }
-        } catch {
-          fail++
+      const header: any[] = rows[0] || []
+      // Robustly detect columns
+      const findCol = (pred: (v: string) => boolean, fallback: number) => {
+        for (let i = 0; i < header.length; i++) {
+          const v = String(header[i] ?? "").toLowerCase()
+          if (pred(v)) return i
         }
+        return fallback
       }
-  setImportSummary({ ok, fail })
-  toast({ title: "Import finished", description: `${ok} created, ${fail} failed` })
+      const nameCol = findCol((v) => v.includes("name"), 0)
+      const rollCol = findCol((v) => v.includes("roll"), nameCol === 0 ? 1 : 0)
+      const toCreate = rows
+        .slice(1)
+        .filter((r) => (r[nameCol] || "").toString().trim())
+        .map((r) => ({ name: String(r[nameCol] || "").toUpperCase(), studentId: String(r[rollCol] || "").trim() }))
+      const res = await fetch("/api/users/bulk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ department: department || null, rows: toCreate }) })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || "Bulk import failed")
+      const { created, reactivated = 0, skipped, users: createdUsers } = data
+      if (Array.isArray(createdUsers) && createdUsers.length) {
+        setStudents((prev) => [...createdUsers, ...prev])
+      }
+      setImportSummary({ created: Number(created || 0), reactivated: Number(reactivated || 0), skipped: Number(skipped || 0) })
+      const totalOk = Number(created || 0) + Number(reactivated || 0)
+      toast({ title: "Import finished", description: `${totalOk} added (created: ${created}, reactivated: ${reactivated}), ${skipped} skipped` })
   // Keep dialog open to show summary
     } catch (e: any) {
       toast({ title: "Import failed", description: e?.message || "", variant: "destructive" })
@@ -348,8 +352,10 @@ export default function UsersPage() {
                   <span className="text-xs text-muted-foreground truncate max-w-[220px]" title={importFileName}>{importFileName}</span>
                 </div>
                 {importSummary && (
-                  <div className="text-sm bg-muted/40 border rounded p-2">
-                    Imported: <span className="font-medium">{importSummary.ok}</span> created, <span className="font-medium">{importSummary.fail}</span> failed.
+                  <div className="text-sm bg-muted/40 border rounded p-2 space-y-0.5">
+                    <div>Created: <span className="font-medium">{importSummary.created}</span></div>
+                    <div>Reactivated: <span className="font-medium">{importSummary.reactivated}</span></div>
+                    <div>Skipped (duplicates): <span className="font-medium">{importSummary.skipped}</span></div>
                   </div>
                 )}
               </div>
@@ -451,7 +457,19 @@ export default function UsersPage() {
                   <TableCell className="space-x-2">
                     <Button variant="outline" size="sm" onClick={() => viewDetails(u)}>Details</Button>
                     <Button variant="secondary" size="sm" onClick={() => openEdit(u)}>Edit</Button>
-                    <Button variant="destructive" size="sm" disabled={loading} onClick={() => deleteOne(u)}>Delete</Button>
+                    <Button variant="destructive" size="sm" disabled={loading} onClick={async () => {
+                      if (!confirm(`Delete ${u.name}? This permanently removes the user; an archive snapshot will be kept for undo.`)) return
+                      setLoading(true)
+                      try {
+                        const res = await fetch(`/api/users/${u.id}/hard-delete`, { method: 'DELETE' })
+                        const data = await res.json()
+                        if (!res.ok) throw new Error(data?.error || 'Failed to delete')
+                        setStudents((prev) => prev.filter((x) => x.id !== u.id))
+                        toast({ title: 'User deleted', description: `Archived as #${data.archiveId}` })
+                      } catch (e: any) {
+                        toast({ title: 'Delete failed', description: e?.message || '', variant: 'destructive' })
+                      } finally { setLoading(false) }
+                    }}>Delete</Button>
                   </TableCell>
                 </TableRow>
               ))}

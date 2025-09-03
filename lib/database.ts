@@ -105,6 +105,103 @@ if (!globalForDb.__dbInstance) {
 
 // Common database operations
 export const dbOperations = {
+  // Internal helper: get user regardless of is_active
+  async getUserByIdAny(id: number) {
+    const res = await db.query(`SELECT * FROM users WHERE id = ?`, [id])
+    return res.rows[0]
+  },
+
+  // Hard delete user with archival snapshot and retention trimming
+  async hardDeleteUserWithArchive(userId: number) {
+    return db.transaction(async (client) => {
+      const sel = await client.query(`SELECT * FROM users WHERE id = ?`, [userId])
+      const u = sel.rows[0]
+      if (!u) throw new Error('User not found')
+      // Block hard delete if user has active or pending obligations
+      const activeBookings = await client.query(
+        `SELECT COUNT(*) AS c FROM lab_bookings 
+         WHERE booked_by = ? AND approval_status IN ('pending','approved') AND booking_date >= CURDATE()`,
+        [userId]
+      )
+      if (Number(activeBookings.rows?.[0]?.c || 0) > 0) {
+        throw new Error('Cannot delete: user has active or pending bookings')
+      }
+      const activeIssues = await client.query(
+        `SELECT COUNT(*) AS c FROM item_issues 
+         WHERE issued_to = ? AND status IN ('issued','overdue','lost')`,
+        [userId]
+      )
+      if (Number(activeIssues.rows?.[0]?.c || 0) > 0) {
+        throw new Error('Cannot delete: user has active or overdue item issues')
+      }
+      // Archive snapshot
+      const ins = await client.query(
+        `INSERT INTO archived_users (original_user_id, email, password_hash, name, role, department, phone, student_id, employee_id, was_active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [u.id, u.email, u.password_hash || null, u.name, u.role, u.department || null, u.phone || null, u.student_id || null, u.employee_id || null, Number(u.is_active ?? 0) === 1, u.created_at || null, u.updated_at || null]
+      )
+      const archiveId = ins.insertId
+      // Archive dependent records which will be deleted via cascade
+      // Build column-safe copy for lab_bookings based on existing columns
+      const lbColsRes = await client.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'lab_bookings'`
+      )
+      const lbCols = new Set((lbColsRes.rows || []).map((r: any) => String(r.column_name || r.COLUMN_NAME)))
+      const hasLbApprovalDate = lbCols.has('approval_date')
+      const hasLbApprovalRemarks = lbCols.has('approval_remarks')
+      const hasLbCreatedAt = lbCols.has('created_at')
+      const hasLbUpdatedAt = lbCols.has('updated_at')
+      const lbSelectParts = [
+        'id',
+        'lab_id',
+        'booked_by',
+        'booking_date',
+        'start_time',
+        'end_time',
+        'purpose',
+        'expected_students',
+        'equipment_needed',
+        'approval_status',
+        'approved_by',
+        hasLbApprovalDate ? 'approval_date' : 'NULL AS approval_date',
+        hasLbApprovalRemarks ? 'approval_remarks' : 'NULL AS approval_remarks',
+        hasLbCreatedAt ? 'created_at' : 'NOW() AS created_at',
+        hasLbUpdatedAt ? 'updated_at' : (hasLbCreatedAt ? 'created_at AS updated_at' : 'NOW() AS updated_at'),
+      ].join(', ')
+      await client.query(
+        `INSERT INTO archived_lab_bookings (original_id, lab_id, booked_by, booking_date, start_time, end_time, purpose, expected_students, equipment_needed, approval_status, approved_by, approval_date, approval_remarks, created_at, updated_at)
+         SELECT ${lbSelectParts} FROM lab_bookings WHERE booked_by = ?`,
+        [userId]
+      )
+      await client.query(
+        `INSERT INTO archived_attendance (original_id, lab_id, student_id, faculty_id, attendance_date, time_slot, status, remarks, created_at)
+         SELECT id, lab_id, student_id, faculty_id, attendance_date, time_slot, status, remarks, created_at
+         FROM attendance WHERE student_id = ?`,
+        [userId]
+      )
+      await client.query(
+        `INSERT INTO archived_marks (original_id, student_id, lab_id, faculty_id, assessment_type, assessment_name, marks_obtained, total_marks, assessment_date, academic_year, semester, remarks, created_at)
+         SELECT id, student_id, lab_id, faculty_id, assessment_type, assessment_name, marks_obtained, total_marks, assessment_date, academic_year, semester, remarks, created_at
+         FROM marks WHERE student_id = ?`,
+        [userId]
+      )
+      // Delete user (cascades will apply per FK definitions)
+      await client.query(`DELETE FROM users WHERE id = ?`, [userId])
+
+      // Retention cap for archived_users
+      const maxArchived = Number.parseInt(process.env.MAX_ARCHIVED_USERS || '5000', 10)
+      if (Number.isFinite(maxArchived) && maxArchived > 0) {
+        const cnt = await client.query(`SELECT COUNT(*) AS c FROM archived_users`)
+        const c = Number(cnt.rows?.[0]?.c || 0)
+        if (c > maxArchived) {
+          const delCount = c - maxArchived
+          await client.query(`DELETE FROM archived_users ORDER BY archived_at ASC LIMIT ${delCount}`)
+        }
+      }
+
+      return { deleted: 1, archiveId }
+    })
+  },
   // Admin metrics and helpers
   async getCounts() {
     const users = await db.query(`SELECT COUNT(*) as c FROM users WHERE is_active = 1`)
@@ -354,6 +451,91 @@ export const dbOperations = {
     await db.query(`UPDATE users SET ${sets}, updated_at = NOW() WHERE id = ?`, [...values, id])
     const sel = await db.query(`SELECT id, email, name, role, department FROM users WHERE id = ?`, [id])
     return sel.rows[0]
+  },
+
+  // Bulk create students (skip duplicates)
+  async bulkCreateStudents(rows: Array<{ name: string; studentId: string; department?: string | null }>) {
+    if (!rows || rows.length === 0) return { created: 0, reactivated: 0, skipped: 0, total: 0, users: [] as any[] }
+    // Normalize inputs and construct lowercase emails for consistency
+    const prepared = rows
+      .map((r) => {
+        const name = String(r.name || '').toUpperCase().trim()
+        const studentIdRaw = String(r.studentId || '').trim()
+        const studentId = studentIdRaw
+        const email = `${studentId.toLowerCase()}@lnmiit.ac.in`
+        return { name, studentId, email, department: r.department ?? null }
+      })
+      .filter((r) => r.name && r.studentId)
+
+    const emails = prepared.map((r) => r.email)
+    // Find existing by email (active and inactive)
+    const placeholders = emails.map(() => '?').join(',')
+    const existing = emails.length
+      ? await db.query(`SELECT id, email, is_active FROM users WHERE email IN (${placeholders})`, emails)
+      : { rows: [] as any[] }
+    const existingMap = new Map<string, { id: number; email: string; is_active: number }>(
+      (existing.rows || []).map((r: any) => [String(r.email).toLowerCase(), { id: Number(r.id), email: String(r.email).toLowerCase(), is_active: Number(r.is_active ?? 0) }])
+    )
+
+    const toReactivate = prepared.filter((r) => {
+      const ex = existingMap.get(r.email)
+      return ex && ex.is_active === 0
+    })
+    const toInsert = prepared.filter((r) => !existingMap.has(r.email))
+    const activeDuplicates = prepared.filter((r) => {
+      const ex = existingMap.get(r.email)
+      return !!ex && ex.is_active === 1
+    })
+
+    let reactivated = 0
+    let created = 0
+    let collectedUsers: any[] = []
+
+    // Reactivate inactive matches
+    if (toReactivate.length > 0) {
+      for (const r of toReactivate) {
+        try {
+          await db.query(
+            `UPDATE users SET is_active = 1, name = ?, role = 'student', department = ?, student_id = ?, updated_at = NOW() WHERE email = ?`,
+            [r.name, r.department ?? null, r.studentId, r.email]
+          )
+          reactivated++
+        } catch (e) {
+          // Ignore single-row failure and let duplicates be handled as skipped
+        }
+      }
+      const reactivateEmails = toReactivate.map((r) => r.email)
+      const selPlaceR = reactivateEmails.map(() => '?').join(',')
+      const selR = await db.query(
+        `SELECT id, name, email, role, department, is_active, created_at FROM users WHERE email IN (${selPlaceR})`,
+        reactivateEmails
+      )
+      collectedUsers.push(...selR.rows)
+    }
+
+    // Insert new ones
+    if (toInsert.length > 0) {
+      const values: any[] = []
+      const tuples = toInsert
+        .map((r) => {
+          values.push(r.email, null, r.name, 'student', r.department ?? null, null, r.studentId, null)
+          return '(?, ?, ?, ?, ?, ?, ?, ?)'
+        })
+        .join(',')
+      const sql = `INSERT INTO users (email, password_hash, name, role, department, phone, student_id, employee_id) VALUES ${tuples}`
+      const res = await db.query(sql, values)
+      created = Number(res.affectedRows || 0)
+      const insertedEmails = toInsert.map((r) => r.email)
+      const selPlace = insertedEmails.map(() => '?').join(',')
+      const sel = await db.query(
+        `SELECT id, name, email, role, department, is_active, created_at FROM users WHERE email IN (${selPlace})`,
+        insertedEmails
+      )
+      collectedUsers.push(...sel.rows)
+    }
+
+    const skipped = activeDuplicates.length
+    return { created, reactivated, skipped, total: prepared.length, users: collectedUsers }
   },
 
   // Password reset operations
@@ -851,6 +1033,137 @@ export const dbOperations = {
       }
       await this.createLog({ userId: actorUserId, action: 'UNDO_DELETE_USER', entityType: 'user', entityId: Number(snap.id), details: { fromLogId: log.id }, ipAddress: 'local', userAgent: 'undo' })
       return { undone: true }
+    }
+
+    if (action === 'HARD_DELETE_USER' && type === 'user') {
+      // Restore from archived_users by archiveId if provided
+      let details: any = null
+      try { details = typeof log.details === 'string' ? JSON.parse(log.details) : log.details } catch { details = log.details }
+      const archiveId = details?.archiveId
+      if (!archiveId) throw new Error('No archiveId to restore')
+      const ar = await db.query(`SELECT * FROM archived_users WHERE id = ?`, [Number(archiveId)])
+      const row = ar.rows[0]
+      if (!row) throw new Error('Archived snapshot not found')
+      // Choose an available email; if taken, derive a unique restore email
+      const ensureUniqueEmail = async (baseEmail: string) => {
+        const exists = async (em: string) => {
+          const q = await db.query(`SELECT id FROM users WHERE email = ?`, [em])
+          return !!q.rows[0]
+        }
+        if (!(await exists(baseEmail))) return baseEmail
+        const at = baseEmail.indexOf('@')
+        const local = at > 0 ? baseEmail.slice(0, at) : baseEmail
+        const domain = at > 0 ? baseEmail.slice(at + 1) : ''
+        const candidates = [
+          `${local}+restored@${domain}`,
+          `${local}+restored${archiveId}@${domain}`,
+          `${local}+restored${Date.now()}@${domain}`,
+        ]
+        for (const c of candidates) {
+          if (!(await exists(c))) return c
+        }
+        // As last resort, append random suffix
+        const rand = Math.random().toString(36).slice(2, 8)
+        const fallback = `${local}+restored${rand}@${domain}`
+        return fallback
+      }
+      const restoreEmail = await ensureUniqueEmail(String(row.email))
+      // Try to restore with original id; if fails due to PK collision, restore with new id
+      try {
+        await db.query(
+          `INSERT INTO users (id, email, password_hash, name, role, department, phone, student_id, employee_id, is_active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [row.original_user_id, restoreEmail, row.password_hash || null, row.name, row.role, row.department || null, row.phone || null, row.student_id || null, row.employee_id || null, row.was_active ? 1 : 0, row.created_at || null, row.updated_at || null]
+        )
+        const restoredId = Number(row.original_user_id)
+        // Restore dependent records for this user
+        // Restore lab_bookings dynamically based on target columns
+        const rLbColsRes = await db.query(
+          `SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'lab_bookings'`
+        )
+        const rLbCols = new Set((rLbColsRes.rows || []).map((r: any) => String(r.column_name || r.COLUMN_NAME)))
+        const tgtCols: string[] = ['lab_id','booked_by','booking_date','start_time','end_time','purpose','expected_students','equipment_needed','approval_status','approved_by']
+        const selParts: string[] = [
+          'lab_id',
+          '?',
+          'booking_date',
+          'start_time',
+          'end_time',
+          'purpose',
+          'expected_students',
+          'equipment_needed',
+          'approval_status',
+          'CASE WHEN approved_by = ? THEN ? ELSE approved_by END',
+        ]
+        if (rLbCols.has('approval_date')) { tgtCols.push('approval_date'); selParts.push('approval_date') }
+        if (rLbCols.has('approval_remarks')) { tgtCols.push('approval_remarks'); selParts.push('approval_remarks') }
+        if (rLbCols.has('created_at')) { tgtCols.push('created_at'); selParts.push('created_at') }
+        if (rLbCols.has('updated_at')) { tgtCols.push('updated_at'); selParts.push('updated_at') }
+        const sqlIns = `INSERT INTO lab_bookings (${tgtCols.join(', ')}) SELECT ${selParts.join(', ')} FROM archived_lab_bookings WHERE booked_by = ?`
+        await db.query(sqlIns, [restoredId, row.original_user_id, restoredId, row.original_user_id])
+        await db.query(
+          `INSERT INTO attendance (lab_id, student_id, faculty_id, attendance_date, time_slot, status, remarks, created_at)
+           SELECT lab_id, ?, faculty_id, attendance_date, time_slot, status, remarks, created_at
+           FROM archived_attendance WHERE student_id = ?`,
+          [restoredId, row.original_user_id]
+        )
+        await db.query(
+          `INSERT INTO marks (student_id, lab_id, faculty_id, assessment_type, assessment_name, marks_obtained, total_marks, assessment_date, academic_year, semester, remarks, created_at)
+           SELECT ?, lab_id, faculty_id, assessment_type, assessment_name, marks_obtained, total_marks, assessment_date, academic_year, semester, remarks, created_at
+           FROM archived_marks WHERE student_id = ?`,
+          [restoredId, row.original_user_id]
+        )
+        await this.createLog({ userId: actorUserId, action: 'UNDO_HARD_DELETE_USER', entityType: 'user', entityId: restoredId, details: { fromLogId: log.id, archiveId, restoredEmail: restoreEmail, restoredDependencies: true }, ipAddress: 'local', userAgent: 'undo' })
+        return { undone: true, userId: restoredId }
+      } catch (e: any) {
+        const code = String(e?.code || '')
+        if (code !== 'ER_DUP_ENTRY') throw e
+        const restoreEmail2 = await ensureUniqueEmail(restoreEmail)
+        const ins = await db.query(
+          `INSERT INTO users (email, password_hash, name, role, department, phone, student_id, employee_id, is_active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [restoreEmail2, row.password_hash || null, row.name, row.role, row.department || null, row.phone || null, row.student_id || null, row.employee_id || null, row.was_active ? 1 : 0, row.created_at || null, row.updated_at || null]
+        )
+        const restoredId = Number(ins.insertId)
+        // Restore dependent records with new id
+        const rLbColsRes2 = await db.query(
+          `SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'lab_bookings'`
+        )
+        const rLbCols2 = new Set((rLbColsRes2.rows || []).map((r: any) => String(r.column_name || r.COLUMN_NAME)))
+        const tgtCols2: string[] = ['lab_id','booked_by','booking_date','start_time','end_time','purpose','expected_students','equipment_needed','approval_status','approved_by']
+        const selParts2: string[] = [
+          'lab_id',
+          '?',
+          'booking_date',
+          'start_time',
+          'end_time',
+          'purpose',
+          'expected_students',
+          'equipment_needed',
+          'approval_status',
+          'CASE WHEN approved_by = ? THEN ? ELSE approved_by END',
+        ]
+        if (rLbCols2.has('approval_date')) { tgtCols2.push('approval_date'); selParts2.push('approval_date') }
+        if (rLbCols2.has('approval_remarks')) { tgtCols2.push('approval_remarks'); selParts2.push('approval_remarks') }
+        if (rLbCols2.has('created_at')) { tgtCols2.push('created_at'); selParts2.push('created_at') }
+        if (rLbCols2.has('updated_at')) { tgtCols2.push('updated_at'); selParts2.push('updated_at') }
+        const sqlIns2 = `INSERT INTO lab_bookings (${tgtCols2.join(', ')}) SELECT ${selParts2.join(', ')} FROM archived_lab_bookings WHERE booked_by = ?`
+        await db.query(sqlIns2, [restoredId, row.original_user_id, restoredId, row.original_user_id])
+        await db.query(
+          `INSERT INTO attendance (lab_id, student_id, faculty_id, attendance_date, time_slot, status, remarks, created_at)
+           SELECT lab_id, ?, faculty_id, attendance_date, time_slot, status, remarks, created_at
+           FROM archived_attendance WHERE student_id = ?`,
+          [restoredId, row.original_user_id]
+        )
+        await db.query(
+          `INSERT INTO marks (student_id, lab_id, faculty_id, assessment_type, assessment_name, marks_obtained, total_marks, assessment_date, academic_year, semester, remarks, created_at)
+           SELECT ?, lab_id, faculty_id, assessment_type, assessment_name, marks_obtained, total_marks, assessment_date, academic_year, semester, remarks, created_at
+           FROM archived_marks WHERE student_id = ?`,
+          [restoredId, row.original_user_id]
+        )
+        await this.createLog({ userId: actorUserId, action: 'UNDO_HARD_DELETE_USER', entityType: 'user', entityId: restoredId, details: { fromLogId: log.id, archiveId, restoredWithNewId: true, restoredEmail: restoreEmail2, restoredDependencies: true }, ipAddress: 'local', userAgent: 'undo' })
+        return { undone: true, userId: restoredId }
+      }
     }
 
   throw new Error('Undo not supported for this action')
