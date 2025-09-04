@@ -185,6 +185,10 @@ export const dbOperations = {
          FROM marks WHERE student_id = ?`,
         [userId]
       )
+      
+      // Delete password_resets first to avoid foreign key constraint
+      await client.query(`DELETE FROM password_resets WHERE user_id = ?`, [userId])
+      
       // Delete user (cascades will apply per FK definitions)
       await client.query(`DELETE FROM users WHERE id = ?`, [userId])
 
@@ -1225,10 +1229,10 @@ export const dbOperations = {
     )
     const hasHodEmail = Array.isArray(hasColRes.rows) && hasColRes.rows[0] && Number(hasColRes.rows[0].cnt) > 0
     const select = hasHodEmail
-      ? `SELECT d.id, d.name, d.code, d.hod_id, d.hod_email AS hod_email, u.name AS hod_name, u.email AS hod_user_email, d.created_at FROM departments d LEFT JOIN users u ON u.id = d.hod_id ORDER BY d.name`
-      : `SELECT d.id, d.name, d.code, d.hod_id, NULL AS hod_email, u.name AS hod_name, u.email AS hod_user_email, d.created_at FROM departments d LEFT JOIN users u ON u.id = d.hod_id ORDER BY d.name`
+      ? `SELECT d.id, d.name, d.code, d.hod_id, d.hod_email, u.name AS hod_name, d.created_at FROM departments d LEFT JOIN users u ON u.id = d.hod_id ORDER BY d.name`
+      : `SELECT d.id, d.name, d.code, d.hod_id, NULL AS hod_email, u.name AS hod_name, d.created_at FROM departments d LEFT JOIN users u ON u.id = d.hod_id ORDER BY d.name`
     const res = await db.query(select)
-    return res.rows.map((r: any) => ({ ...r, hod_email: r.hod_email ?? r.hod_user_email }))
+    return res.rows
   },
 
   // Lightweight, idempotent migrations for critical columns
@@ -1429,14 +1433,14 @@ export const dbOperations = {
         const u = await client.query(`SELECT id, role FROM users WHERE id = ? AND is_active = 1`, [hodId])
         const ur = u.rows[0]
         if (!ur) throw new Error("User not found")
-        if (String(ur.role) !== 'hod') throw new Error("User is not HOD")
+        if (String(ur.role) !== 'faculty') throw new Error("User must be a faculty member to be assigned as HOD")
   // Ensure this user is not already HOD of another department
   const existing = await client.query(`SELECT id FROM departments WHERE hod_id = ? AND id <> ?`, [hodId, departmentId])
   if (existing.rows[0]) throw new Error('This user is already assigned as HOD of another department')
       }
       await client.query(`UPDATE departments SET hod_id = ? WHERE id = ?`, [hodId, departmentId])
       const sel = await client.query(
-        `SELECT d.id, d.name, d.code, d.hod_id, u.name AS hod_name, u.email AS hod_email
+        `SELECT d.id, d.name, d.code, d.hod_id, u.name AS hod_name, d.hod_email
          FROM departments d
          LEFT JOIN users u ON u.id = d.hod_id
          WHERE d.id = ?`,

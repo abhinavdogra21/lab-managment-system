@@ -32,7 +32,6 @@ export default function OrganizationPage() {
   const [departments, setDepartments] = useState<Department[]>([])
   const [labs, setLabs] = useState<Lab[]>([])
   const [faculties, setFaculties] = useState<User[]>([])
-  const [hods, setHods] = useState<User[]>([])
   const [labStaff, setLabStaff] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<"departments" | "labs" | "staff">("departments")
@@ -72,18 +71,16 @@ export default function OrganizationPage() {
   const canManage = role === "admin"
 
   const loadAll = async () => {
-    const [dRes, lRes, fRes, sRes, hRes] = await Promise.all([
+    const [dRes, lRes, fRes, sRes] = await Promise.all([
       fetch("/api/departments", { cache: "no-store" }).then((r) => r.json()),
       fetch("/api/labs", { cache: "no-store" }).then((r) => r.json()),
       fetch("/api/users?role=faculty", { cache: "no-store" }).then((r) => r.json()),
       fetch("/api/users?role=lab_staff", { cache: "no-store" }).then((r) => r.json()),
-      fetch("/api/users?role=hod", { cache: "no-store" }).then((r) => r.json()),
     ])
     setDepartments(dRes.departments || [])
     setLabs(lRes.labs || [])
     setFaculties(fRes.users || [])
     setLabStaff(sRes.users || [])
-    setHods(hRes.users || [])
   }
 
   useEffect(() => {
@@ -340,12 +337,17 @@ export default function OrganizationPage() {
                             <SelectTrigger className="w-full"><SelectValue placeholder="Assign HOD" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none">Unassigned</SelectItem>
-                              {hods.map((u) => (
-                                <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+                              {faculties
+                                .filter((u) => u.department === d.code)
+                                .map((u) => (
+                                <SelectItem key={u.id} value={String(u.id)}>{u.name} ({u.email})</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
-                          <div className="text-xs text-muted-foreground">Dept HOD Email: {d.hod_email || "—"}</div>
+                          <div className="text-xs text-muted-foreground">
+                            <div>Dept HOD Email: {d.hod_email || "—"}</div>
+                            <div className="text-gray-500">Faculty assigned as HOD gets access to dept email</div>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
@@ -808,12 +810,12 @@ export default function OrganizationPage() {
                 <Input value={staffForm.middle} onChange={(e) => setStaffForm((s) => ({ ...s, middle: e.target.value }))} placeholder="Middle name" />
               </div>
               <div>
-                <Label className="text-xs">Last Name</Label>
+                <Label className="text-xs">Last Name <span className="text-red-500">*</span></Label>
                 <Input value={staffForm.last} onChange={(e) => setStaffForm((s) => ({ ...s, last: e.target.value }))} placeholder="Last name" />
               </div>
             </div>
             <div>
-              <Label className="text-xs">Email</Label>
+              <Label className="text-xs">Email <span className="text-red-500">*</span></Label>
               <Input value={staffForm.email} onChange={(e) => setStaffForm((s) => ({ ...s, email: e.target.value }))} placeholder="name@lnmiit.ac.in" />
             </div>
             <div className="md:col-span-2">
@@ -832,7 +834,7 @@ export default function OrganizationPage() {
             <Button variant="outline" onClick={() => setStaffDialogOpen(false)}>Cancel</Button>
             <Button disabled={loading} onClick={async () => {
               const fullName = [staffForm.first, staffForm.middle, staffForm.last].filter(Boolean).join(" ").toUpperCase()
-              if (!staffForm.first.trim() || !staffForm.email.trim()) { toast({ title: "First name and email required", variant: "destructive" }); return }
+              if (!staffForm.first.trim() || !staffForm.last.trim() || !staffForm.email.trim()) { toast({ title: "First name, last name and email are required", variant: "destructive" }); return }
               setLoading(true)
               try {
                 const res = await fetch("/api/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: fullName, email: staffForm.email, role: "lab_staff" }) })
