@@ -220,3 +220,74 @@ CREATE TABLE IF NOT EXISTS password_resets (
   INDEX idx_password_resets_expires (expires_at),
   CONSTRAINT fk_password_resets_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
+
+-- Timetable entries for lab scheduling
+CREATE TABLE IF NOT EXISTS timetable_entries (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  lab_id INT NOT NULL,
+  day_of_week INT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6), -- 0=Sunday, 1=Monday, ..., 6=Saturday
+  time_slot_start TIME NOT NULL,
+  time_slot_end TIME NOT NULL,
+  notes TEXT, -- Optional details about the lab session
+  is_active TINYINT(1) DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  
+  INDEX idx_timetable_entries_lab_day (lab_id, day_of_week),
+  INDEX idx_timetable_entries_time (time_slot_start, time_slot_end),
+  
+  CONSTRAINT fk_timetable_entries_lab FOREIGN KEY (lab_id) REFERENCES labs(id) ON DELETE CASCADE,
+  
+  -- Ensure no overlapping time slots for same lab and day
+  UNIQUE KEY unique_lab_day_time (lab_id, day_of_week, time_slot_start, time_slot_end)
+) ENGINE=InnoDB;
+
+-- Timetable templates for different academic years/semesters
+CREATE TABLE IF NOT EXISTS timetable_templates (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL, -- e.g., "Odd Semester 2025", "Even Semester 2024"
+  academic_year VARCHAR(20) NOT NULL, -- e.g., "2024-25"
+  semester_type ENUM('odd', 'even') NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  is_active TINYINT(1) DEFAULT 0, -- Only one template can be active at a time
+  created_by INT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  
+  INDEX idx_timetable_templates_active (is_active),
+  INDEX idx_timetable_templates_created_by (created_by),
+  
+  CONSTRAINT fk_timetable_templates_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- Link timetable entries to templates
+CREATE TABLE IF NOT EXISTS timetable_template_entries (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  template_id INT NOT NULL,
+  timetable_entry_id INT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  
+  UNIQUE KEY unique_template_entry (template_id, timetable_entry_id),
+  
+  CONSTRAINT fk_template_entries_template FOREIGN KEY (template_id) REFERENCES timetable_templates(id) ON DELETE CASCADE,
+  CONSTRAINT fk_template_entries_entry FOREIGN KEY (timetable_entry_id) REFERENCES timetable_entries(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Special events/holidays that affect timetable
+CREATE TABLE IF NOT EXISTS timetable_exceptions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  date DATE NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  exception_type ENUM('holiday', 'exam', 'event', 'lab_closure') NOT NULL,
+  affects_all_labs TINYINT(1) DEFAULT 1,
+  affected_lab_ids TEXT, -- JSON array of lab IDs if not all labs
+  created_by INT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  
+  INDEX idx_timetable_exceptions_date (date),
+  INDEX idx_timetable_exceptions_type (exception_type),
+  
+  CONSTRAINT fk_timetable_exceptions_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;

@@ -46,8 +46,13 @@ export default function DepartmentAndLabManagementPage() {
   const [labDialogOpen, setLabDialogOpen] = useState(false)
   const [labDialogMode, setLabDialogMode] = useState<"create" | "edit">("create")
   const [labForm, setLabForm] = useState<{ id?: number; name: string; code: string; departmentId: number | ""; capacity?: number | ""; location?: string }>({ name: "", code: "", departmentId: "" })
+  const [staffDialogOpen, setStaffDialogOpen] = useState(false)
+  const [staffDialogMode, setStaffDialogMode] = useState<"create" | "edit">("create")
+  const [staffForm, setStaffForm] = useState<{ id?: number; firstName: string; middleName?: string; lastName: string; email: string; salutation?: string; department?: string }>({ firstName: "", lastName: "", email: "" })
   const [labsDeptFilter, setLabsDeptFilter] = useState<string | "all">("all")
   const [labsQuery, setLabsQuery] = useState("")
+  const [staffQuery, setStaffQuery] = useState("")
+  const [staffLabFilter, setStaffLabFilter] = useState<string | "all">("all")
   const [hodPopoverOpen, setHodPopoverOpen] = useState<{ [key: number]: boolean }>({})
   const [labStaffPopoverOpen, setLabStaffPopoverOpen] = useState<{ [key: number]: boolean }>({})
 
@@ -194,6 +199,130 @@ export default function DepartmentAndLabManagementPage() {
       setLoading(false)
     }
   }
+
+  // Staff management functions
+  const openCreateStaff = () => { setStaffDialogMode("create"); setStaffForm({ firstName: "", lastName: "", email: "" }); setStaffDialogOpen(true) }
+  const openEditStaff = (staff: User) => { 
+    setStaffDialogMode("edit"); 
+    // Split the name back into parts (assuming space-separated)
+    const nameParts = staff.name.split(' ')
+    const firstName = nameParts[0] || ""
+    const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : ""
+    const middleName = nameParts.length > 2 ? nameParts.slice(1, -1).join(' ') : ""
+    
+    setStaffForm({ 
+      id: staff.id, 
+      firstName,
+      middleName,
+      lastName,
+      email: staff.email, 
+      salutation: "", // API might not return salutation
+      department: staff.department || "" 
+    }); 
+    setStaffDialogOpen(true) 
+  }
+
+  const saveStaffDialog = async () => {
+    // Combine atomic name fields
+    const fullName = [staffForm.firstName, staffForm.middleName, staffForm.lastName]
+      .filter(part => part && part.trim())
+      .join(' ')
+    
+    if (!staffForm.firstName.trim() || !staffForm.email.trim()) {
+      toast({ title: "First name and email are required", variant: "destructive" })
+      return
+    }
+    setLoading(true)
+    try {
+      if (staffDialogMode === "create") {
+        const payload = {
+          name: fullName,
+          email: staffForm.email,
+          role: "lab_staff",
+          salutation: staffForm.salutation || undefined,
+          department: staffForm.department || undefined
+        }
+        const res = await fetch("/api/admin/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data?.error || "Failed to create lab staff")
+        setLabStaff((prev) => [...prev, data.user])
+        toast({ title: "Lab staff created" })
+      } else {
+        const payload = {
+          id: staffForm.id,
+          name: fullName,
+          email: staffForm.email,
+          salutation: staffForm.salutation || undefined,
+          department: staffForm.department || undefined
+        }
+        const res = await fetch(`/api/admin/users/${staffForm.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data?.error || "Failed to update lab staff")
+        setLabStaff((prev) => prev.map((s) => (s.id === staffForm.id ? { ...s, ...data.user } : s)))
+        toast({ title: "Lab staff updated" })
+      }
+      setStaffDialogOpen(false)
+    } catch (e: any) {
+      toast({ title: "Save failed", description: e?.message || "", variant: "destructive" })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const deleteStaff = async (staff: User) => {
+    // Check if staff is assigned to any labs
+    const assignedLabs = labs.filter(lab => 
+      lab.staff_ids_csv?.split(',').map(id => parseInt(id.trim())).includes(staff.id)
+    )
+    
+    if (assignedLabs.length > 0) {
+      toast({ 
+        title: "Cannot delete staff", 
+        description: `This staff member is assigned to ${assignedLabs.length} lab(s). Please unassign them first.`,
+        variant: "destructive" 
+      })
+      return
+    }
+
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/admin/users/${staff.id}`, { method: "DELETE" })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || "Failed to delete lab staff")
+      setLabStaff((prev) => prev.filter((s) => s.id !== staff.id))
+      toast({ title: "Lab staff deleted" })
+    } catch (e: any) {
+      toast({ title: "Delete failed", description: e?.message || "", variant: "destructive" })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Filter functions for staff
+  const filteredStaff = labStaff.filter((staff) => {
+    const matchesQuery = staffQuery === "" || 
+      staff.name.toLowerCase().includes(staffQuery.toLowerCase()) ||
+      staff.email.toLowerCase().includes(staffQuery.toLowerCase()) ||
+      (staff.department && staff.department.toLowerCase().includes(staffQuery.toLowerCase()))
+    
+    if (staffLabFilter === "all") return matchesQuery
+    
+    if (staffLabFilter === "unassigned") {
+      const isAssigned = labs.some(lab => 
+        lab.staff_ids_csv?.split(',').map(id => parseInt(id.trim())).includes(staff.id)
+      )
+      return matchesQuery && !isAssigned
+    }
+    
+    // Filter by specific lab
+    const isAssignedToLab = labs.some(lab => 
+      lab.code === staffLabFilter && 
+      lab.staff_ids_csv?.split(',').map(id => parseInt(id.trim())).includes(staff.id)
+    )
+    return matchesQuery && isAssignedToLab
+  })
+
+  if (!authChecked) return null
 
   return (
     <div className="p-6 space-y-6">
@@ -496,6 +625,146 @@ export default function DepartmentAndLabManagementPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="staff">
+          <Card>
+            <CardHeader className="flex items-center justify-between gap-4">
+              <CardTitle>Lab Staff Management</CardTitle>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs">Filter by Lab</Label>
+                  <Select value={staffLabFilter} onValueChange={(v) => setStaffLabFilter(v as any)}>
+                    <SelectTrigger className="w-52"><SelectValue placeholder="All" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Staff</SelectItem>
+                      <SelectItem value="unassigned">Unassigned Staff</SelectItem>
+                      {labs.map((lab) => (
+                        <SelectItem key={lab.id} value={lab.code}>
+                          <span className="font-medium">{lab.code}</span>
+                          {lab.name !== lab.code && (
+                            <span className="text-muted-foreground ml-2">- {lab.name}</span>
+                          )}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Input 
+                  className="w-60" 
+                  placeholder="Search staff by name, email, department..." 
+                  value={staffQuery} 
+                  onChange={(e) => setStaffQuery(e.target.value)} 
+                />
+                <Button onClick={openCreateStaff}>Add Lab Staff</Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Assigned Labs</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredStaff.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground">
+                        {staffQuery || staffLabFilter !== "all" ? "No lab staff match your search criteria." : "No lab staff found. Add lab staff using the button above."}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredStaff.map((staff) => {
+                      // Find labs assigned to this staff member
+                      const assignedLabs = labs.filter(lab => 
+                        lab.staff_ids_csv?.split(',').map(id => parseInt(id.trim())).includes(staff.id)
+                      )
+                      
+                      return (
+                        <TableRow key={staff.id}>
+                          <TableCell className="font-medium">{staff.name}</TableCell>
+                          <TableCell>{staff.email}</TableCell>
+                          <TableCell>{staff.department || 'N/A'}</TableCell>
+                          <TableCell>
+                            {assignedLabs.length > 0 ? (
+                              <div className="space-y-1">
+                                {assignedLabs.length <= 3 ? (
+                                  // Show all labs if 3 or fewer
+                                  <div className="flex flex-wrap gap-1">
+                                    {assignedLabs.map((lab) => (
+                                      <span 
+                                        key={lab.id} 
+                                        className="inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded"
+                                      >
+                                        {lab.code}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  // Show compact view for 4+ labs
+                                  <div className="space-y-1">
+                                    <div className="text-sm font-medium">
+                                      {assignedLabs.length} labs assigned
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {assignedLabs.slice(0, 2).map(lab => lab.code).join(", ")}
+                                      {assignedLabs.length > 2 && `, +${assignedLabs.length - 2} more`}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">No labs assigned</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <div className="flex gap-2">
+                              <Button size="sm" variant="outline" onClick={() => openEditStaff(staff)}>
+                                Edit
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button size="sm" variant="destructive">Delete</Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Lab Staff?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This will permanently delete "{staff.name}" from the system. 
+                                      {assignedLabs.length > 0 && (
+                                        <span className="text-red-600 font-medium">
+                                          <br />Warning: This staff member is assigned to {assignedLabs.length} lab(s). 
+                                          They will be unassigned from all labs.
+                                        </span>
+                                      )}
+                                      <br />This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction 
+                                      className="bg-red-600 hover:bg-red-700"
+                                      onClick={() => deleteStaff(staff)}
+                                    >
+                                      Delete Staff
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Department create/edit dialog */}
@@ -563,6 +832,84 @@ export default function DepartmentAndLabManagementPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setLabDialogOpen(false)}>Cancel</Button>
             <Button onClick={saveLabDialog} disabled={loading}>{labDialogMode === "create" ? "Create" : "Save"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Staff create/edit dialog */}
+      <Dialog open={staffDialogOpen} onOpenChange={setStaffDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{staffDialogMode === "create" ? "Add Lab Staff" : "Edit Lab Staff"}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
+            <div>
+              <Label className="text-xs">Salutation</Label>
+              <Select value={staffForm.salutation || "none"} onValueChange={(v) => setStaffForm((s) => ({ ...s, salutation: v === "none" ? "" : v }))}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Select Salutation" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Salutation</SelectItem>
+                  <SelectItem value="prof">Prof.</SelectItem>
+                  <SelectItem value="dr">Dr.</SelectItem>
+                  <SelectItem value="mr">Mr.</SelectItem>
+                  <SelectItem value="mrs">Mrs.</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">First Name <span className="text-red-600">*</span></Label>
+              <Input 
+                value={staffForm.firstName} 
+                onChange={(e) => setStaffForm((s) => ({ ...s, firstName: e.target.value }))} 
+                placeholder="e.g. John" 
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Middle Name</Label>
+              <Input 
+                value={staffForm.middleName || ""} 
+                onChange={(e) => setStaffForm((s) => ({ ...s, middleName: e.target.value }))} 
+                placeholder="e.g. Michael" 
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Last Name</Label>
+              <Input 
+                value={staffForm.lastName} 
+                onChange={(e) => setStaffForm((s) => ({ ...s, lastName: e.target.value }))} 
+                placeholder="e.g. Doe" 
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Label className="text-xs">Email <span className="text-red-600">*</span></Label>
+              <Input 
+                type="email"
+                value={staffForm.email} 
+                onChange={(e) => setStaffForm((s) => ({ ...s, email: e.target.value }))} 
+                placeholder="e.g. john.doe@lnmiit.ac.in" 
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Label className="text-xs">Department</Label>
+              <Select value={staffForm.department || "none"} onValueChange={(v) => setStaffForm((s) => ({ ...s, department: v === "none" ? "" : v }))}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Select Department" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Department</SelectItem>
+                  {departments.map((d) => (
+                    <SelectItem key={d.id} value={d.code}>{d.name} ({d.code})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStaffDialogOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={saveStaffDialog} 
+              disabled={loading || !staffForm.firstName.trim() || !staffForm.email.trim()}
+            >
+              {staffDialogMode === "create" ? "Create" : "Save"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -178,5 +178,72 @@ CREATE TABLE IF NOT EXISTS password_resets (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Timetable entries for lab scheduling
+CREATE TABLE IF NOT EXISTS timetable_entries (
+    id SERIAL PRIMARY KEY,
+    lab_id INTEGER REFERENCES labs(id) ON DELETE CASCADE,
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6), -- 0=Sunday, 1=Monday, ..., 6=Saturday
+    time_slot_start TIME NOT NULL,
+    time_slot_end TIME NOT NULL,
+    subject_code VARCHAR(50),
+    subject_name VARCHAR(255),
+    faculty_id INTEGER REFERENCES users(id),
+    batch VARCHAR(100), -- e.g., "CSE 3rd Year", "ECE 2nd Year"
+    semester VARCHAR(20), -- e.g., "5th", "3rd"
+    section VARCHAR(10), -- e.g., "A", "B", "C"
+    student_count INTEGER DEFAULT 0,
+    notes TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Ensure no overlapping time slots for same lab and day
+    CONSTRAINT unique_lab_day_time UNIQUE (lab_id, day_of_week, time_slot_start, time_slot_end)
+);
+
+-- Timetable templates for different academic years/semesters
+CREATE TABLE IF NOT EXISTS timetable_templates (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL, -- e.g., "Odd Semester 2025", "Even Semester 2024"
+    academic_year VARCHAR(20) NOT NULL, -- e.g., "2024-25"
+    semester_type VARCHAR(10) NOT NULL CHECK (semester_type IN ('odd', 'even')),
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    is_active BOOLEAN DEFAULT false, -- Only one template can be active at a time
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Link timetable entries to templates
+CREATE TABLE IF NOT EXISTS timetable_template_entries (
+    id SERIAL PRIMARY KEY,
+    template_id INTEGER REFERENCES timetable_templates(id) ON DELETE CASCADE,
+    timetable_entry_id INTEGER REFERENCES timetable_entries(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT unique_template_entry UNIQUE (template_id, timetable_entry_id)
+);
+
+-- Special events/holidays that affect timetable
+CREATE TABLE IF NOT EXISTS timetable_exceptions (
+    id SERIAL PRIMARY KEY,
+    date DATE NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    exception_type VARCHAR(50) NOT NULL CHECK (exception_type IN ('holiday', 'exam', 'event', 'lab_closure')),
+    affects_all_labs BOOLEAN DEFAULT true,
+    affected_lab_ids TEXT, -- JSON array of lab IDs if not all labs
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token);
 CREATE INDEX IF NOT EXISTS idx_password_resets_expires ON password_resets(expires_at);
+
+-- Timetable indexes for performance
+CREATE INDEX IF NOT EXISTS idx_timetable_entries_lab_day ON timetable_entries(lab_id, day_of_week);
+CREATE INDEX IF NOT EXISTS idx_timetable_entries_faculty ON timetable_entries(faculty_id);
+CREATE INDEX IF NOT EXISTS idx_timetable_entries_time ON timetable_entries(time_slot_start, time_slot_end);
+CREATE INDEX IF NOT EXISTS idx_timetable_templates_active ON timetable_templates(is_active);
+CREATE INDEX IF NOT EXISTS idx_timetable_exceptions_date ON timetable_exceptions(date);
