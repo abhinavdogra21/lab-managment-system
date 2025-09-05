@@ -16,6 +16,7 @@ import {
   UserCheck,
   Building,
   X,
+  CheckSquare,
 } from "lucide-react"
 
 interface User {
@@ -71,10 +72,10 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
       case "lab-staff":
         return [
           ...baseItems,
-          { name: "Review Requests", href: withPrefix("/dashboard/approve"), icon: UserCheck },
+          { name: "Approve Requests", href: withPrefix("/dashboard/approve"), icon: UserCheck },
           { name: "Inventory", href: withPrefix("/dashboard/inventory"), icon: Package },
           { name: "Issue/Return", href: withPrefix("/dashboard/issue-return"), icon: ClipboardList },
-          { name: "Attendance", href: withPrefix("/dashboard/attendance"), icon: UserCheck },
+          { name: "Attendance", href: withPrefix("/dashboard/attendance"), icon: CheckSquare },
           { name: "Reports", href: withPrefix("/dashboard/reports"), icon: BarChart3 },
         ]
 

@@ -8,7 +8,7 @@ const mockUsers = [
   {
     id: "1",
     email: "admin@lnmiit.ac.in",
-    password: "admin123",
+    password: "123",
     name: "System Administrator",
     role: "admin",
     department: "IT",
@@ -16,7 +16,7 @@ const mockUsers = [
   {
     id: "2",
     email: "hod.cse@lnmiit.ac.in",
-    password: "admin123",
+    password: "123",
     name: "Dr. Rajesh Kumar",
     role: "hod",
     department: "CSE",
@@ -24,7 +24,7 @@ const mockUsers = [
   {
     id: "7",
     email: "hod.ece@lnmiit.ac.in",
-    password: "admin123",
+    password: "123",
     name: "Dr. Priya Sharma",
     role: "hod",
     department: "ECE",
@@ -32,7 +32,7 @@ const mockUsers = [
   {
     id: "3",
     email: "faculty1@lnmiit.ac.in",
-    password: "admin123",
+    password: "123",
     name: "Prof. Amit Singh",
     role: "faculty",
     department: "CSE",
@@ -40,7 +40,7 @@ const mockUsers = [
   {
     id: "8",
     email: "faculty2@lnmiit.ac.in",
-    password: "admin123",
+    password: "123",
     name: "Dr. Neha Gupta",
     role: "faculty",
     department: "ECE",
@@ -48,7 +48,7 @@ const mockUsers = [
   {
     id: "4",
     email: "labstaff1@lnmiit.ac.in",
-    password: "admin123",
+    password: "123",
     name: "Mr. Suresh Patel",
     role: "lab-staff",
     department: "CSE",
@@ -56,7 +56,7 @@ const mockUsers = [
   {
     id: "9",
     email: "labstaff2@lnmiit.ac.in",
-    password: "admin123",
+    password: "123",
     name: "Ms. Kavita Jain",
     role: "lab-staff",
     department: "ECE",
@@ -64,7 +64,7 @@ const mockUsers = [
   {
     id: "5",
     email: "21ucs001@lnmiit.ac.in",
-    password: "admin123",
+    password: "123",
     name: "Rahul Agarwal",
     role: "student",
     department: "CSE",
@@ -73,7 +73,7 @@ const mockUsers = [
   {
     id: "10",
     email: "21uec001@lnmiit.ac.in",
-    password: "admin123",
+    password: "123",
     name: "Priyanka Mehta",
     role: "student",
     department: "ECE",
@@ -103,7 +103,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Please use your LNMIIT email address" }, { status: 400 })
     }
 
-    const normalizedRole = String(userRole).replace(/-/g, "_")
+  // normalize role: convert hyphens to underscores and compare case-insensitively
+  const normalizedRole = String(userRole).replace(/-/g, "_").toLowerCase()
 
     // DB-backed auth when enabled
     if (process.env.USE_DB_AUTH === "true") {
@@ -112,7 +113,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid credentials or role" }, { status: 401 })
       }
       // Compare role (normalize hyphen/underscore differences)
-      if (String(dbUser.role) !== normalizedRole) {
+      if (String(dbUser.role).toLowerCase() !== normalizedRole) {
         return NextResponse.json({ error: "Invalid credentials or role" }, { status: 401 })
       }
       // Verify password (scrypt format: salt:hash) or legacy sha256
@@ -168,7 +169,11 @@ export async function POST(request: NextRequest) {
     }
 
   // Fallback: Find user in mock database
-    const user = mockUsers.find((u) => u.email === email && u.password === password && u.role === userRole)
+    // Fallback mock lookup: normalize role in mock users too so case/hyphen differences don't block login
+    const user = mockUsers.find((u) => {
+      const mockRoleNorm = String(u.role).replace(/-/g, "_").toLowerCase()
+      return u.email === email && u.password === password && mockRoleNorm === normalizedRole
+    })
     if (!user) return NextResponse.json({ error: "Invalid credentials or role" }, { status: 401 })
 
   // Create encoded session payload and set as httpOnly cookie for API auth (demo only)

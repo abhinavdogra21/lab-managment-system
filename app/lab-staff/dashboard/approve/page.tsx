@@ -7,8 +7,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
-import { Calendar, Clock, Check, X, ArrowLeft, User, Building, CheckCircle2, XCircle, AlertCircle, Users, CheckCircle } from 'lucide-react'
+import { Calendar, Clock, Check, X, ArrowLeft, User, Building, CheckCircle2, XCircle, AlertCircle, Users, CheckCircle, Search } from 'lucide-react'
 import Link from 'next/link'
+import { Input } from '@/components/ui/input'
 
 interface RequestItem {
   id: number
@@ -33,9 +34,11 @@ export default function LabStaffApprovePage() {
   const [actionLoading, setActionLoading] = useState<number | null>(null)
   const [pendingItems, setPendingItems] = useState<RequestItem[]>([])
   const [approvedItems, setApprovedItems] = useState<RequestItem[]>([])
+  const [rejectedItems, setRejectedItems] = useState<RequestItem[]>([])
   const [activeTab, setActiveTab] = useState('pending')
   const [remarks, setRemarks] = useState<Record<number, string>>({})
   const [showTimeline, setShowTimeline] = useState<Record<number, boolean>>({})
+  const [searchTerm, setSearchTerm] = useState('')
 
   const loadPendingRequests = async () => {
     setLoading(true)
@@ -71,6 +74,38 @@ export default function LabStaffApprovePage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const loadRejectedRequests = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/lab-staff/requests?status=rejected', { cache: 'no-store' })
+      if (res.ok) {
+        const data = await res.json()
+        setRejectedItems(data.requests || [])
+      } else {
+        setRejectedItems([])
+      }
+    } catch (error) {
+      console.error("Failed to load rejected requests:", error)
+      setRejectedItems([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Filter function for search
+  const filterItems = (items: RequestItem[]) => {
+    if (!searchTerm.trim()) return items
+    
+    const searchLower = searchTerm.toLowerCase()
+    return items.filter(item => 
+      item.student_email.toLowerCase().includes(searchLower) ||
+      item.student_name.toLowerCase().includes(searchLower) ||
+      (item.faculty_name && item.faculty_name.toLowerCase().includes(searchLower)) ||
+      item.id.toString().includes(searchLower) ||
+      item.lab_name.toLowerCase().includes(searchLower)
+    )
   }
 
   const handleAction = async (requestId: number, action: 'approve' | 'reject') => {
@@ -116,8 +151,10 @@ export default function LabStaffApprovePage() {
         // Reload the current tab
         if (activeTab === 'pending') {
           loadPendingRequests()
-        } else {
+        } else if (activeTab === 'approved') {
           loadApprovedRequests()
+        } else if (activeTab === 'rejected') {
+          loadRejectedRequests()
         }
       } else {
         const error = await res.json()
@@ -446,8 +483,10 @@ export default function LabStaffApprovePage() {
   useEffect(() => {
     if (activeTab === 'pending') {
       loadPendingRequests()
-    } else {
+    } else if (activeTab === 'approved') {
       loadApprovedRequests()
+    } else if (activeTab === 'rejected') {
+      loadRejectedRequests()
     }
   }, [activeTab])
 
@@ -472,21 +511,39 @@ export default function LabStaffApprovePage() {
         </div>
       </div>
 
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search by student email, faculty name, or request ID..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3">
-        <TabsList className="grid w-full grid-cols-2 max-w-sm h-8">
+        <TabsList className="grid w-full grid-cols-3 max-w-md h-8">
           <TabsTrigger value="pending" className="flex items-center gap-1 text-xs">
             <AlertCircle className="h-3 w-3" />
             Pending
-            {pendingItems.length > 0 && (
-              <Badge variant="secondary" className="ml-1 text-xs">{pendingItems.length}</Badge>
+            {filterItems(pendingItems).length > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs">{filterItems(pendingItems).length}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="approved" className="flex items-center gap-1 text-xs">
             <CheckCircle2 className="h-3 w-3" />
             Approved
-            {approvedItems.length > 0 && (
-              <Badge variant="secondary" className="ml-1 text-xs">{approvedItems.length}</Badge>
+            {filterItems(approvedItems).length > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs">{filterItems(approvedItems).length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="rejected" className="flex items-center gap-1 text-xs">
+            <XCircle className="h-3 w-3" />
+            Rejected
+            {filterItems(rejectedItems).length > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs">{filterItems(rejectedItems).length}</Badge>
             )}
           </TabsTrigger>
         </TabsList>
@@ -500,15 +557,19 @@ export default function LabStaffApprovePage() {
                 <p className="text-xs text-muted-foreground">Loading pending requests...</p>
               </div>
             </div>
-          ) : pendingItems.length === 0 ? (
+          ) : filterItems(pendingItems).length === 0 ? (
             <div className="text-center py-6">
               <CheckCircle2 className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-              <h3 className="text-sm font-medium text-gray-900 mb-1">No pending requests</h3>
-              <p className="text-xs text-gray-500">All lab requests have been processed.</p>
+              <h3 className="text-sm font-medium text-gray-900 mb-1">
+                {searchTerm ? 'No matching requests' : 'No pending requests'}
+              </h3>
+              <p className="text-xs text-gray-500">
+                {searchTerm ? 'Try adjusting your search terms.' : 'All lab requests have been processed.'}
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
-              {pendingItems.map((item) => (
+              {filterItems(pendingItems).map((item) => (
                 <RequestCard key={item.id} item={item} showActions={true} />
               ))}
             </div>
@@ -524,15 +585,47 @@ export default function LabStaffApprovePage() {
                 <p className="text-xs text-muted-foreground">Loading approved requests...</p>
               </div>
             </div>
-          ) : approvedItems.length === 0 ? (
+          ) : filterItems(approvedItems).length === 0 ? (
             <div className="text-center py-6">
-              <XCircle className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-              <h3 className="text-sm font-medium text-gray-900 mb-1">No approved requests</h3>
-              <p className="text-xs text-gray-500">No lab requests have been approved yet.</p>
+              <CheckCircle2 className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+              <h3 className="text-sm font-medium text-gray-900 mb-1">
+                {searchTerm ? 'No matching requests' : 'No approved requests'}
+              </h3>
+              <p className="text-xs text-gray-500">
+                {searchTerm ? 'Try adjusting your search terms.' : 'No lab requests have been approved yet.'}
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
-              {approvedItems.map((item) => (
+              {filterItems(approvedItems).map((item) => (
+                <RequestCard key={item.id} item={item} showActions={false} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Rejected Requests Tab */}
+        <TabsContent value="rejected" className="space-y-3">
+          {loading ? (
+            <div className="flex items-center justify-center py-6">
+              <div className="text-center">
+                <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-2"></div>
+                <p className="text-xs text-muted-foreground">Loading rejected requests...</p>
+              </div>
+            </div>
+          ) : filterItems(rejectedItems).length === 0 ? (
+            <div className="text-center py-6">
+              <XCircle className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+              <h3 className="text-sm font-medium text-gray-900 mb-1">
+                {searchTerm ? 'No matching requests' : 'No rejected requests'}
+              </h3>
+              <p className="text-xs text-gray-500">
+                {searchTerm ? 'Try adjusting your search terms.' : 'No requests have been rejected.'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filterItems(rejectedItems).map((item) => (
                 <RequestCard key={item.id} item={item} showActions={false} />
               ))}
             </div>

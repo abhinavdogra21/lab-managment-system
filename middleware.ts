@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 const roleMap: Array<{ pattern: RegExp; roles: string[] }> = [
   // Pages
   { pattern: /^\/admin(?:\/|$)/, roles: ["admin"] },
-  { pattern: /^\/hod(?:\/|$)/, roles: ["faculty", "admin"] },
+  { pattern: /^\/hod(?:\/|$)/, roles: ["hod", "faculty", "admin"] },
   { pattern: /^\/faculty(?:\/|$)/, roles: ["faculty", "admin"] },
   { pattern: /^\/lab-staff(?:\/|$)/, roles: ["lab_staff", "admin"] },
   { pattern: /^\/student(?:\/|$)/, roles: ["student", "admin"] },
@@ -12,7 +12,7 @@ const roleMap: Array<{ pattern: RegExp; roles: string[] }> = [
   { pattern: /^\/non-teaching(?:\/|$)/, roles: ["non_teaching", "admin"] },
   // APIs (canonical)
   { pattern: /^\/api\/admin(?:\/|$)/, roles: ["admin"] },
-  { pattern: /^\/api\/hod(?:\/|$)/, roles: ["faculty", "admin"] },
+  { pattern: /^\/api\/hod(?:\/|$)/, roles: ["hod", "faculty", "admin"] },
   { pattern: /^\/api\/student(?:\/|$)/, roles: ["student", "admin"] },
   { pattern: /^\/api\/faculty(?:\/|$)/, roles: ["faculty", "admin"] },
   { pattern: /^\/api\/lab-staff(?:\/|$)/, roles: ["lab_staff", "admin"] },
