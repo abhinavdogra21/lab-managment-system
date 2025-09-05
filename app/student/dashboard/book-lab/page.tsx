@@ -42,6 +42,14 @@ interface TimeSlot {
   is_available: boolean
 }
 
+interface BookedSlotItem {
+  start_time: string
+  end_time: string
+  time_range: string
+  purpose: string
+  type: 'booking' | 'class'
+}
+
 export default function BookLabPage() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -52,6 +60,9 @@ export default function BookLabPage() {
   const [faculties, setFaculties] = useState<Faculty[]>([])
   const [labs, setLabs] = useState<Lab[]>([])
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([])
+  const [bookedSlots, setBookedSlots] = useState<BookedSlotItem[]>([])
+  const [startTime, setStartTime] = useState("")
+  const [endTime, setEndTime] = useState("")
   
   // Form states
   const [selectedDepartment, setSelectedDepartment] = useState<string>("")
@@ -68,83 +79,64 @@ export default function BookLabPage() {
 
   const loadDepartments = async () => {
     try {
-      const res = await fetch("/api/admin/departments")
-      if (res.ok) {
-        const text = await res.text()
-        try {
-          const data = JSON.parse(text)
-          setDepartments(data.departments || [])
-        } catch (parseError) {
-          console.error("JSON parse error for departments:", parseError)
-          // Provide fallback departments
-          setDepartments([
-            { id: 1, name: "Computer Science", code: "CS" },
-            { id: 2, name: "Electronics & Communication", code: "ECE" },
-            { id: 3, name: "Mechanical Engineering", code: "ME" },
-            { id: 4, name: "Civil Engineering", code: "CE" }
-          ])
+  console.log("Fetching departments from /api/student/departments")
+  const res = await fetch("/api/student/departments")
+      console.log("Response status:", res.status)
+      console.log("Response content-type:", res.headers.get('content-type'))
+      
+      const text = await res.text()
+      console.log("Response text (first 200 chars):", text.substring(0, 200))
+      
+      if (res.ok && text.trim().startsWith('{')) {
+        const data = JSON.parse(text)
+        if (data.departments && Array.isArray(data.departments)) {
+          setDepartments(data.departments)
+          console.log("Successfully loaded", data.departments.length, "departments")
         }
       } else {
-        console.error("Failed to fetch departments:", res.status)
-        // Provide fallback departments
-        setDepartments([
-          { id: 1, name: "Computer Science", code: "CS" },
-          { id: 2, name: "Electronics & Communication", code: "ECE" },
-          { id: 3, name: "Mechanical Engineering", code: "ME" },
-          { id: 4, name: "Civil Engineering", code: "CE" }
-        ])
+        console.log("API response not valid JSON or not successful, keeping fallback data")
       }
     } catch (error) {
-      console.error("Failed to load departments:", error)
-      // Provide fallback departments
-      setDepartments([
-        { id: 1, name: "Computer Science", code: "CS" },
-        { id: 2, name: "Electronics & Communication", code: "ECE" },
-        { id: 3, name: "Mechanical Engineering", code: "ME" },
-        { id: 4, name: "Civil Engineering", code: "CE" }
-      ])
+      console.error("Error loading departments, keeping fallback data:", error)
     }
   }
 
   const loadFaculties = async (departmentId: string) => {
     if (!departmentId) return
     try {
-      const res = await fetch(`/api/admin/users?role=faculty&department_id=${departmentId}`)
+  const res = await fetch(`/api/student/faculties?department_id=${departmentId}`)
       if (res.ok) {
         const text = await res.text()
+        console.log("Faculty API response:", text.substring(0, 200)) // Log first 200 chars
+        
+        // Check if response is HTML (error page)
+        if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+          console.error("Received HTML instead of JSON for faculties")
+          setFaculties([])
+          return
+        }
+        
         try {
           const data = JSON.parse(text)
           setFaculties(data.users || [])
         } catch (parseError) {
           console.error("JSON parse error for faculties:", parseError)
-          // Provide fallback faculty
-          setFaculties([
-            { id: 6, name: "Prof. Amit Singh", email: "amit@lnmiit.ac.in", department_id: parseInt(departmentId) },
-            { id: 7, name: "Dr. Neha Gupta", email: "neha@lnmiit.ac.in", department_id: parseInt(departmentId) }
-          ])
+          setFaculties([])
         }
       } else {
         console.error("Failed to fetch faculties:", res.status)
-        // Provide fallback faculty
-        setFaculties([
-          { id: 6, name: "Prof. Amit Singh", email: "amit@lnmiit.ac.in", department_id: parseInt(departmentId) },
-          { id: 7, name: "Dr. Neha Gupta", email: "neha@lnmiit.ac.in", department_id: parseInt(departmentId) }
-        ])
+        setFaculties([])
       }
     } catch (error) {
       console.error("Failed to load faculties:", error)
-      // Provide fallback faculty
-      setFaculties([
-        { id: 6, name: "Prof. Amit Singh", email: "amit@lnmiit.ac.in", department_id: parseInt(departmentId) },
-        { id: 7, name: "Dr. Neha Gupta", email: "neha@lnmiit.ac.in", department_id: parseInt(departmentId) }
-      ])
+      setFaculties([])
     }
   }
 
   const loadLabs = async (departmentId: string) => {
-    if (!departmentId) return
+    // Load ALL labs regardless of department - students should be able to book any lab
     try {
-      const res = await fetch(`/api/admin/labs?department_id=${departmentId}`)
+      const res = await fetch(`/api/student/labs`)
       if (res.ok) {
         const text = await res.text()
         try {
@@ -152,27 +144,15 @@ export default function BookLabPage() {
           setLabs(data.labs || [])
         } catch (parseError) {
           console.error("JSON parse error for labs:", parseError)
-          // Provide fallback labs
-          setLabs([
-            { id: 1, name: "CP1", code: "CP1", department_id: parseInt(departmentId), capacity: 40, location: "Block A" },
-            { id: 2, name: "CP2", code: "CP2", department_id: parseInt(departmentId), capacity: 30, location: "Block B" }
-          ])
+          setLabs([])
         }
       } else {
         console.error("Failed to fetch labs:", res.status)
-        // Provide fallback labs
-        setLabs([
-          { id: 1, name: "CP1", code: "CP1", department_id: parseInt(departmentId), capacity: 40, location: "Block A" },
-          { id: 2, name: "CP2", code: "CP2", department_id: parseInt(departmentId), capacity: 30, location: "Block B" }
-        ])
+        setLabs([])
       }
     } catch (error) {
       console.error("Failed to load labs:", error)
-      // Provide fallback labs
-      setLabs([
-        { id: 1, name: "CP1", code: "CP1", department_id: parseInt(departmentId), capacity: 40, location: "Block A" },
-        { id: 2, name: "CP2", code: "CP2", department_id: parseInt(departmentId), capacity: 30, location: "Block B" }
-      ])
+      setLabs([])
     }
   }
 
@@ -180,13 +160,30 @@ export default function BookLabPage() {
     if (!labId || !date) return
     try {
       const dateStr = format(date, 'yyyy-MM-dd')
+      console.log(`Loading available slots for lab ${labId} on ${dateStr}`)
       const res = await fetch(`/api/student/available-slots?lab_id=${labId}&date=${dateStr}`)
+      console.log("Available slots response status:", res.status)
+      
       if (res.ok) {
-        const data = await res.json()
-        setAvailableSlots(data.slots || [])
+        const text = await res.text()
+        console.log("Available slots response:", text.substring(0, 200))
+        
+        try {
+          const data = JSON.parse(text)
+          console.log("Parsed slots data:", data)
+          // Fix: API returns availableSlots, not slots
+          setAvailableSlots(data.availableSlots || [])
+        } catch (parseError) {
+          console.error("JSON parse error for available slots:", parseError)
+          setAvailableSlots([])
+        }
+      } else {
+        console.error("Failed to fetch available slots:", res.status)
+        setAvailableSlots([])
       }
     } catch (error) {
       console.error("Failed to load available slots:", error)
+      setAvailableSlots([])
     }
   }
 
@@ -202,7 +199,8 @@ export default function BookLabPage() {
 
   const handleLabAndDateChange = () => {
     if (selectedLab && selectedDate) {
-      loadAvailableSlots(selectedLab, selectedDate)
+  loadAvailableSlots(selectedLab, selectedDate)
+  loadBookedSchedule(selectedLab, selectedDate)
     }
   }
 
@@ -211,20 +209,25 @@ export default function BookLabPage() {
   }, [selectedLab, selectedDate])
 
   const handleSubmit = async () => {
-    if (!selectedDepartment || !selectedFaculty || !selectedLab || !selectedDate || !selectedTimeSlot || !purpose.trim()) {
+    const manualSelected = !selectedTimeSlot && startTime && endTime
+    if (!selectedDepartment || !selectedFaculty || !selectedLab || !selectedDate || (!selectedTimeSlot && !manualSelected) || !purpose.trim()) {
       toast({ title: "Missing Information", description: "Please fill all required fields", variant: "destructive" })
       return
     }
 
     setLoading(true)
     try {
-      const [startTime, endTime] = selectedTimeSlot.split(' - ')
+      const [sTime, eTime] = selectedTimeSlot ? selectedTimeSlot.split(' - ') : [startTime, endTime]
+      if (!sTime || !eTime) throw new Error("Invalid time range")
+      if (manualSelected && (hasConflict())) {
+        throw new Error("Selected time conflicts with schedule")
+      }
       const requestData = {
         lab_id: parseInt(selectedLab),
         faculty_supervisor_id: parseInt(selectedFaculty),
         booking_date: format(selectedDate, 'yyyy-MM-dd'),
-        start_time: startTime,
-        end_time: endTime,
+        start_time: sTime,
+        end_time: eTime,
         purpose: purpose.trim()
       }
 
@@ -246,6 +249,8 @@ export default function BookLabPage() {
       setSelectedLab("")
       setSelectedDate(undefined)
       setSelectedTimeSlot("")
+  setStartTime("")
+  setEndTime("")
       setPurpose("")
       setRemarks("")
       
@@ -256,9 +261,33 @@ export default function BookLabPage() {
     }
   }
 
+  const loadBookedSchedule = async (labId: string, date: Date) => {
+    try {
+      const dateStr = format(date, 'yyyy-MM-dd')
+      const res = await fetch(`/api/student/booked-slots?lab_id=${labId}&date=${dateStr}`)
+      if (res.ok) {
+        const data = await res.json()
+        setBookedSlots(data.booked_slots || [])
+      } else {
+        setBookedSlots([])
+      }
+    } catch {
+      setBookedSlots([])
+    }
+  }
+
+  const hasConflict = () => {
+    if (!startTime || !endTime) return false
+    const s = `${startTime}:00`
+    const e = `${endTime}:00`
+    return bookedSlots.some(b => (s < `${b.end_time}:00` && e > `${b.start_time}:00`))
+  }
+
+  const isInvalidTimeRange = () => !!startTime && !!endTime && startTime >= endTime
+
   const canProceedToStep2 = selectedDepartment && selectedFaculty && selectedLab
-  const canProceedToStep3 = canProceedToStep2 && selectedDate && selectedTimeSlot
-  const canSubmit = canProceedToStep3 && purpose.trim()
+  const canProceedToStep3 = !!(canProceedToStep2 && selectedDate && (selectedTimeSlot || (startTime && endTime && !hasConflict() && !isInvalidTimeRange())))
+  const canSubmit = !!(canProceedToStep3 && purpose.trim())
 
   const getSelectedDepartmentName = () => departments.find(d => d.id.toString() === selectedDepartment)?.name || ""
   const getSelectedFacultyName = () => faculties.find(f => f.id.toString() === selectedFaculty)?.name || ""
@@ -414,28 +443,44 @@ export default function BookLabPage() {
               </div>
 
               {selectedDate && (
-                <div>
-                  <Label>Available Time Slots <span className="text-red-600">*</span></Label>
-                  {availableSlots.length === 0 ? (
-                    <div className="p-4 border rounded-lg text-center text-muted-foreground">
-                      <Clock className="h-8 w-8 mx-auto mb-2" />
-                      <p>No available slots for selected date</p>
-                      <p className="text-sm">Please select a different date</p>
+                <div className="space-y-4">
+                  <div>
+                    <Label>Booked/Scheduled Slots</Label>
+                    {bookedSlots.length === 0 ? (
+                      <div className="p-3 border rounded-md text-sm text-muted-foreground">No bookings or classes for this date.</div>
+                    ) : (
+                      <div className="space-y-2 mt-2">
+                        {bookedSlots.map((s, i) => (
+                          <div key={i} className={`p-2 rounded border text-sm ${s.type === 'booking' ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'}`}>
+                            <div className="flex justify-between">
+                              <span className="font-medium">{s.time_range}</span>
+                              <Badge variant="outline">{s.type === 'booking' ? 'Booking' : 'Class'}</Badge>
+                            </div>
+                            <div className="text-muted-foreground">{s.purpose}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Start Time (HH:MM)</Label>
+                      <Input type="time" min="08:00" max="18:00" value={startTime} onChange={(e) => { setStartTime(e.target.value); setSelectedTimeSlot("") }} />
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2 mt-2">
-                      {availableSlots.map((slot, index) => (
-                        <Button
-                          key={index}
-                          variant={selectedTimeSlot === `${slot.start_time} - ${slot.end_time}` ? "default" : "outline"}
-                          className="justify-start"
-                          onClick={() => setSelectedTimeSlot(`${slot.start_time} - ${slot.end_time}`)}
-                          disabled={!slot.is_available}
-                        >
-                          {slot.start_time} - {slot.end_time}
-                          {!slot.is_available && <Badge variant="destructive" className="ml-2">Booked</Badge>}
-                        </Button>
-                      ))}
+                    <div>
+                      <Label>End Time (HH:MM)</Label>
+                      <Input type="time" min="08:00" max="18:00" value={endTime} onChange={(e) => { setEndTime(e.target.value); setSelectedTimeSlot("") }} />
+                    </div>
+                  </div>
+                  {hasConflict() && (
+                    <div className="p-3 border border-red-200 bg-red-50 text-sm text-red-700 rounded">
+                      The selected time range overlaps with an existing booking or class.
+                    </div>
+                  )}
+                  {startTime && endTime && (startTime < '08:00' || endTime > '18:00') && (
+                    <div className="p-3 border border-amber-200 bg-amber-50 text-sm text-amber-800 rounded">
+                      Time must be between 08:00 and 18:00.
                     </div>
                   )}
                 </div>
@@ -472,7 +517,7 @@ export default function BookLabPage() {
                 <p>Faculty: <span className="font-medium">{getSelectedFacultyName()}</span></p>
                 <p>Lab: <span className="font-medium">{getSelectedLabName()}</span></p>
                 <p>Date: <span className="font-medium">{selectedDate ? format(selectedDate, "PPP") : ""}</span></p>
-                <p>Time: <span className="font-medium">{selectedTimeSlot}</span></p>
+                <p>Time: <span className="font-medium">{selectedTimeSlot || (startTime && endTime ? `${startTime} - ${endTime}` : "")}</span></p>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -496,15 +541,7 @@ export default function BookLabPage() {
                 />
               </div>
 
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h4 className="font-medium text-blue-900 mb-2">Approval Process</h4>
-                <div className="text-sm text-blue-700 space-y-1">
-                  <p>1. Faculty Supervisor will review and approve/reject</p>
-                  <p>2. Lab Staff will verify availability and approve/reject</p>
-                  <p>3. HOD will give final approval</p>
-                  <p>4. You'll receive email notifications at each step</p>
-                </div>
-              </div>
+              {/* Approval process info removed as requested */}
 
               <div className="flex gap-2 pt-4">
                 <Button variant="outline" onClick={() => setCurrentStep(2)} className="flex-1">

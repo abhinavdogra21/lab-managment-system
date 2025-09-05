@@ -43,9 +43,8 @@ export default function MyRequestsPage() {
   const loadMyRequests = async () => {
     setLoading(true)
     try {
-      // TODO: Get student ID from auth context
-      const studentId = 1 // Temporary hardcode
-      const res = await fetch(`/api/student/my-requests-new?student_id=${studentId}`)
+      // Student id comes from cookie on the server; the param is optional
+      const res = await fetch(`/api/student/my-requests-new`, { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
         setRequests(data.requests || [])
@@ -129,61 +128,155 @@ export default function MyRequestsPage() {
     }
   }
 
-  const TimelineView = ({ request }: { request: BookingWithTimeline }) => (
-    <div className="space-y-4">
-      <div className="text-sm text-muted-foreground space-y-1">
-        <p><span className="font-medium">Lab:</span> {request.lab_name}</p>
-        <p><span className="font-medium">Faculty:</span> {request.faculty_name}</p>
-        <p><span className="font-medium">Date:</span> {new Date(request.date).toLocaleDateString()}</p>
-        <p><span className="font-medium">Time:</span> {request.start_time} - {request.end_time}</p>
-      </div>
+  const TimelineView = ({ request }: { request: BookingWithTimeline }) => {
+    // Create standard timeline steps for visual consistency
+    const allSteps = [
+      { name: 'Submitted', status: 'completed', icon: Clock },
+      { name: 'Faculty Review', status: getStepStatus(request, 'Faculty Review'), icon: User },
+      { name: 'Lab Staff Review', status: getStepStatus(request, 'Lab Staff Review'), icon: Users },
+      { name: 'HOD Review', status: getStepStatus(request, 'HOD Review'), icon: Building },
+      { name: 'Approved', status: getFinalApprovalStatus(request), icon: CheckCircle }
+    ]
 
-      <div className="relative">
-        <div className="absolute left-6 top-8 bottom-0 w-0.5 bg-gray-200"></div>
-        
-        <div className="space-y-6">
-          {request.timeline.map((step, index) => (
-            <div key={index} className="relative flex items-start space-x-4">
-              <div className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center border-2 ${
-                step.step_status === 'completed' 
-                  ? 'bg-green-50 border-green-200' 
-                  : step.step_status === 'pending'
-                  ? 'bg-yellow-50 border-yellow-200'
-                  : 'bg-gray-50 border-gray-200'
-              }`}>
-                {getStepIcon(step.step_name)}
-              </div>
+    return (
+      <div className="space-y-6">
+        {/* Request Details */}
+        <div className="text-sm space-y-1 p-4 bg-gray-50 rounded-lg">
+          <p><span className="font-medium">Lab:</span> {request.lab_name}</p>
+          <p><span className="font-medium">Faculty:</span> {request.faculty_name}</p>
+          <p><span className="font-medium">Date:</span> {new Date(request.date).toLocaleDateString()}</p>
+          <p><span className="font-medium">Time:</span> {request.start_time} - {request.end_time}</p>
+        </div>
+
+        {/* Horizontal Timeline */}
+        <div className="px-4">
+          <div className="flex items-center justify-between relative">
+            {/* Timeline line */}
+            <div className="absolute top-6 left-6 right-6 h-0.5 bg-gray-200"></div>
+            
+            {/* Timeline steps */}
+            {allSteps.map((step, index) => {
+              // Fix the timeline step matching logic
+              let timelineStep = null
+              if (step.name === 'Submitted') {
+                timelineStep = { completed_at: request.created_at }
+              } else {
+                timelineStep = request.timeline.find(t => {
+                  const stepTitle = getStepTitle(t.step_name)
+                  return stepTitle.includes('Faculty') && step.name === 'Faculty Review' ||
+                         stepTitle.includes('Lab Staff') && step.name === 'Lab Staff Review' ||
+                         stepTitle.includes('HOD') && step.name === 'HOD Review'
+                })
+              }
               
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center space-x-2">
-                  <h4 className="text-sm font-medium">{getStepTitle(step.step_name)}</h4>
-                  {getStatusIcon(step.step_status)}
-                </div>
-                
-                {step.completed_at && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Completed on {new Date(step.completed_at).toLocaleString()}
-                  </p>
-                )}
-                
-                {step.user_name && (
-                  <p className="text-xs text-muted-foreground">
-                    by {step.user_name}
-                  </p>
-                )}
-                
-                {step.remarks && (
-                  <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
-                    <span className="font-medium">Remarks:</span> {step.remarks}
+              return (
+                <div key={index} className="flex flex-col items-center space-y-2 relative z-10">
+                  {/* Step circle */}
+                  <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center ${
+                    step.status === 'completed' 
+                      ? 'bg-green-100 border-green-300' 
+                      : step.status === 'pending'
+                      ? 'bg-blue-100 border-blue-300'
+                      : step.status === 'rejected'
+                      ? 'bg-red-100 border-red-300'
+                      : 'bg-white border-gray-300'
+                  }`}>
+                    <step.icon className={`h-5 w-5 ${
+                      step.status === 'completed' ? 'text-green-600' :
+                      step.status === 'pending' ? 'text-blue-600' :
+                      step.status === 'rejected' ? 'text-red-600' :
+                      'text-gray-400'
+                    }`} />
                   </div>
-                )}
-              </div>
+                  
+                  {/* Step label */}
+                  <div className="text-center">
+                    <p className="text-xs font-medium">{step.name}</p>
+                    <p className={`text-xs ${
+                      step.status === 'completed' ? 'text-green-600' :
+                      step.status === 'pending' ? 'text-blue-600' :
+                      step.status === 'rejected' ? 'text-red-600' :
+                      'text-gray-500'
+                    }`}>
+                      {step.status === 'completed' ? 'Done' :
+                       step.status === 'pending' ? 'In Progress' :
+                       step.status === 'rejected' ? 'Rejected' :
+                       'Waiting'}
+                    </p>
+                  </div>
+                  
+                  {/* Show completion details */}
+                  {timelineStep?.completed_at && (
+                    <div className="text-xs text-gray-500 text-center mt-1">
+                      {new Date(timelineStep.completed_at).toLocaleDateString()}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          
+          {/* Remarks section */}
+          {request.timeline.some(t => t.remarks) && (
+            <div className="mt-6 space-y-2">
+              <h4 className="text-sm font-medium">Remarks:</h4>
+              {request.timeline.filter(t => t.remarks).map((step, index) => (
+                <div key={index} className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
+                  <span className="font-medium">{getStepTitle(step.step_name)}:</span> {step.remarks}
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       </div>
-    </div>
-  )
+    )
+  }
+
+  // Helper function to determine step status with proper flow logic
+  const getStepStatus = (request: BookingWithTimeline, stepName: string) => {
+    // If request is rejected, all remaining steps are rejected
+    if (request.status === 'rejected') return 'rejected'
+    
+    // Status-based checking first (prioritized over timeline data)
+    if (stepName === 'Faculty Review') {
+      if (request.status === 'pending_faculty') return 'pending'
+      if (['pending_lab_staff', 'pending_hod', 'approved'].includes(request.status)) return 'completed'
+    }
+    if (stepName === 'Lab Staff Review') {
+      if (request.status === 'pending_lab_staff') return 'pending'
+      if (['pending_hod', 'approved'].includes(request.status)) return 'completed'
+      if (request.status === 'pending_faculty') return 'waiting'
+    }
+    if (stepName === 'HOD Review') {
+      if (request.status === 'pending_hod') return 'pending'
+      if (request.status === 'approved') return 'completed'
+      if (['pending_faculty', 'pending_lab_staff'].includes(request.status)) return 'waiting'
+    }
+    
+    // Fallback to timeline data if status-based check doesn't match
+    const step = request.timeline.find(t => getStepTitle(t.step_name) === stepName)
+    if (step?.step_status === 'completed') return 'completed'
+    
+    return 'waiting'
+  }
+
+  // Helper function for final approval status
+  const getFinalApprovalStatus = (request: BookingWithTimeline) => {
+    if (request.status === 'approved') return 'completed'
+    if (request.status === 'rejected') return 'rejected'
+    
+    // Check if all previous steps are completed
+    const allPreviousCompleted = request.timeline.every(step => 
+      step.step_status === 'completed'
+    )
+    
+    // Only show as pending if all previous steps are done
+    if (allPreviousCompleted && request.status !== 'pending_faculty' && request.status !== 'pending_lab_staff' && request.status !== 'pending_hod') {
+      return 'pending'
+    }
+    
+    return 'waiting'
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
@@ -235,9 +328,9 @@ export default function MyRequestsPage() {
                           View Timeline
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="max-w-2xl">
+                      <DialogContent className="max-w-3xl">
                         <DialogHeader>
-                          <DialogTitle>Request Approval Timeline</DialogTitle>
+                          <DialogTitle>Request Timeline</DialogTitle>
                         </DialogHeader>
                         <TimelineView request={request} />
                       </DialogContent>

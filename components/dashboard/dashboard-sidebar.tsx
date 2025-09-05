@@ -57,7 +57,6 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
           ...baseItems,
           { name: "Book Lab", href: withPrefix("/dashboard/book-lab"), icon: Calendar },
           { name: "My Requests", href: withPrefix("/dashboard/my-requests"), icon: Package },
-          { name: "Request History", href: withPrefix("/dashboard/history"), icon: FileText },
         ]
 
       case "faculty":

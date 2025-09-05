@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
+import { verifyToken } from "@/lib/auth"
 
 const db = Database.getInstance()
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
-    const studentId = searchParams.get('student_id') || '99' // Use test student ID
+  const user = await verifyToken(request)
+    const paramId = searchParams.get('student_id')
+    if (!user && !paramId) {
+      return NextResponse.json({ success: true, requests: [] })
+    }
+    const studentId = String(user?.userId || paramId)
     
     // Get booking requests with timeline information
     const result = await db.query(`

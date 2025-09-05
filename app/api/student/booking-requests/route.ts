@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
+import { verifyToken } from "@/lib/auth"
+import { isSmtpConfigured, sendMail } from "@/lib/email"
 
 const db = Database.getInstance()
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
-    const studentId = searchParams.get('student_id') || '99' // Use test student ID for now
+  const user = await verifyToken(request)
+    const paramId = searchParams.get('student_id')
+    if (!user && !paramId) {
+      return NextResponse.json({ success: true, requests: [] })
+    }
+    const studentId = String(user?.userId || paramId)
     
     // Get booking requests with lab and faculty details
     const result = await db.query(`
@@ -64,20 +71,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const studentId = 99 // Use test student ID for now
+  const user = await verifyToken(request)
+  const studentId = user?.userId || 99
 
-    // Check for conflicts with existing bookings
+    // Check for conflicts with existing bookings (overlap if start < existing.end AND end > existing.start)
     const conflictResult = await db.query(`
       SELECT id FROM booking_requests 
       WHERE lab_id = ? 
       AND booking_date = ? 
       AND status IN ('pending_faculty', 'pending_lab_staff', 'pending_hod', 'approved')
-      AND (
-        (start_time < ? AND end_time > ?) OR
-        (start_time < ? AND end_time > ?) OR
-        (start_time >= ? AND end_time <= ?)
-      )
-    `, [lab_id, booking_date, end_time, start_time, start_time, end_time, start_time, end_time])
+      AND (start_time < ? AND end_time > ?)
+    `, [lab_id, booking_date, end_time, start_time])
 
     if (conflictResult.rows.length > 0) {
       return NextResponse.json(
@@ -86,19 +90,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check for conflicts with timetable
-    const date = new Date(booking_date)
-    const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
+    // Check for conflicts with timetable (day_of_week INT 0-6; columns: time_slot_start/time_slot_end)
+    const dateObj = new Date(booking_date)
+    const dayOfWeek = dateObj.getDay() // 0=Sunday
     const timetableResult = await db.query(`
       SELECT id FROM timetable_entries 
       WHERE lab_id = ? 
       AND day_of_week = ? 
-      AND (
-        (start_time < ? AND end_time > ?) OR
-        (start_time < ? AND end_time > ?) OR
-        (start_time >= ? AND end_time <= ?)
-      )
-    `, [lab_id, dayOfWeek, end_time, start_time, start_time, end_time, start_time, end_time])
+      AND is_active = true
+      AND (time_slot_start < ? AND time_slot_end > ?)
+    `, [lab_id, dayOfWeek, end_time, start_time])
 
     if (timetableResult.rows.length > 0) {
       return NextResponse.json(
@@ -131,6 +132,33 @@ export async function POST(request: NextRequest) {
       purpose,
       'pending_faculty'
     ])
+
+    // Notify faculty via email if SMTP configured
+    try {
+      const smtp = isSmtpConfigured()
+      if (smtp.configured) {
+        const fac = await db.query(`SELECT email, name FROM users WHERE id = ? LIMIT 1`, [faculty_supervisor_id])
+        const lab = await db.query(`SELECT name FROM labs WHERE id = ? LIMIT 1`, [lab_id])
+        const facultyEmail = fac.rows?.[0]?.email
+        const facultyName = fac.rows?.[0]?.name || 'Faculty'
+        const labName = lab.rows?.[0]?.name || 'Lab'
+        if (facultyEmail) {
+          const subject = `New Lab Booking Request: ${labName} on ${booking_date}`
+          const html = `<p>Dear ${facultyName},</p>
+            <p>You have a new lab booking request awaiting your review.</p>
+            <ul>
+              <li><b>Lab:</b> ${labName}</li>
+              <li><b>Date:</b> ${booking_date}</li>
+              <li><b>Time:</b> ${start_time} - ${end_time}</li>
+              <li><b>Purpose:</b> ${purpose}</li>
+            </ul>
+            <p>Please log in to review and take action.</p>`
+          await sendMail({ to: facultyEmail, subject, html })
+        }
+      }
+    } catch (e) {
+      console.warn('Faculty notification email skipped or failed:', (e as any)?.message || e)
+    }
 
     return NextResponse.json({ 
       success: true,
