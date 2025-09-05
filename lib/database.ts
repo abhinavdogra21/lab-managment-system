@@ -9,7 +9,7 @@ const dbConfig = {
   port: Number.parseInt(process.env.DB_PORT || "3306"),
   database: process.env.DB_NAME || "lnmiit_lab_management",
   user: process.env.DB_USER || "root",
-  password: process.env.DB_PASSWORD || "password",
+  password: process.env.DB_PASSWORD || "Abhin@v21dogr@",
   waitForConnections: true,
   connectionLimit: Number.parseInt(process.env.DB_POOL_LIMIT || "5"),
   queueLimit: 0,
