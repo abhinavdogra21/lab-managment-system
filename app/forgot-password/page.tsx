@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("")
   const [role, setRole] = useState("student")
+  const [name, setName] = useState("")
   const [sent, setSent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -22,7 +23,7 @@ export default function ForgotPasswordPage() {
       const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, role }),
+        body: JSON.stringify({ email, role, name: role === "student" ? name : undefined }),
       })
       if (res.ok) {
         setSent(true)
@@ -64,6 +65,18 @@ export default function ForgotPasswordPage() {
                 />
                 <p className="text-sm text-muted-foreground">Use your @lnmiit.ac.in address.</p>
               </div>
+              {role === "student" && (
+                <div className="space-y-2">
+                  <Input
+                    type="text"
+                    placeholder="Your full name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required={role === "student"}
+                  />
+                  <p className="text-sm text-muted-foreground">We'll create your student account with this name.</p>
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="text-base font-medium">User type</label>
                 <select

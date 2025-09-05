@@ -82,8 +82,10 @@ export function LoginForm() {
         // Store user data in localStorage for client-side access
         localStorage.setItem("user", JSON.stringify(data.user))
 
-        // Redirect to dashboard
-        window.location.href = "/dashboard"
+        // Redirect to role-scoped dashboard
+        const role = data?.user?.role || ""
+        const target = role ? `/${role}/dashboard` : "/"
+        window.location.href = target
       } else {
         alert(data.error || "Login failed")
       }

@@ -11,13 +11,10 @@ const nextConfig = {
   },
   async rewrites() {
     return [
+      // Legacy path to new admin route
       {
-        source: "/:role(admin|student|faculty|lab-staff|hod|tnp)/dashboard",
-        destination: "/dashboard",
-      },
-      {
-        source: "/:role(admin|student|faculty|lab-staff|hod|tnp)/dashboard/:path*",
-        destination: "/dashboard/:path*",
+        source: "/admin/dashboard/organization",
+        destination: "/admin/dashboard/department-and-lab-management",
       },
     ]
   },

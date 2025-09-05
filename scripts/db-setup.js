@@ -70,6 +70,13 @@ async function run() {
       // ignore
     }
 
+    // users: ensure salutation column exists
+    try {
+      await ensureColumn('users', 'salutation', "ENUM('prof','dr','mr','mrs','none') DEFAULT 'none'")
+    } catch (_) {
+      // ignore if fails
+    }
+
     // inventory columns required by seed
   try { await ensureColumn('inventory', 'lab_id', 'INT NULL') } catch (_) {}
     try { await ensureColumn('inventory', 'item_code', 'VARCHAR(100) NULL') } catch (_) {}

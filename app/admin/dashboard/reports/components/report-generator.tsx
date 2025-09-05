@@ -56,8 +56,9 @@ export function ReportGenerator({ user }: ReportGeneratorProps) {
   const [previewCount, setPreviewCount] = useState<number | null>(null)
 
   const canUseLogsApi = useMemo(() => {
-    return ["security_audit", "activity_summary", "system_overview"].includes(selectedReportType)
-  }, [selectedReportType])
+    const roleCanFetch = user.role === "admin" || user.role === "hod"
+    return roleCanFetch && ["security_audit", "activity_summary", "system_overview"].includes(selectedReportType)
+  }, [selectedReportType, user.role])
 
   // Get available report types based on user role
   const getReportTypes = (role: string) => {
@@ -287,7 +288,7 @@ export function ReportGenerator({ user }: ReportGeneratorProps) {
       // Fetch dataset from server for supported report types
       let dataset: any[] = []
       if (canUseLogsApi) {
-        const res = await fetch("/api/reports", {
+        const res = await fetch("/api/admin/reports", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

@@ -381,8 +381,8 @@ export const dbOperations = {
   // User operations
   async createUser(userData: any) {
     const query = `
-      INSERT INTO users (email, password_hash, name, role, department, phone, student_id, employee_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO users (email, password_hash, name, role, department, phone, student_id, employee_id, salutation)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
     const values = [
       userData.email,
@@ -393,17 +393,18 @@ export const dbOperations = {
       userData.phone,
       userData.studentId,
       userData.employeeId,
+      userData.salutation || 'none',
     ]
     const result = await db.query(query, values)
     const userRes = await db.query(
-      "SELECT id, email, name, role, department FROM users WHERE id = ?",
+      "SELECT id, email, name, role, department, salutation FROM users WHERE id = ?",
       [result.insertId]
     )
     return userRes.rows[0]
   },
 
   async listUsers(filter?: { role?: string | null; department?: string | null; activeOnly?: boolean }) {
-    let query = "SELECT id, email, name, role, department, is_active, created_at, updated_at FROM users WHERE 1=1"
+    let query = "SELECT id, email, name, role, department, salutation, is_active, created_at, updated_at FROM users WHERE 1=1"
     const params: any[] = []
     if (filter?.role) {
       query += " AND role = ?"
@@ -422,7 +423,7 @@ export const dbOperations = {
   },
 
   async getUserByEmail(email: string) {
-    const query = "SELECT * FROM users WHERE email = ? AND is_active = 1"
+  const query = "SELECT * FROM users WHERE email = ? AND is_active = 1"
     const result = await db.query(query, [email])
     return result.rows[0]
   },
@@ -439,21 +440,22 @@ export const dbOperations = {
     return res.rows[0]
   },
 
-  async updateUser(id: number, fields: { department?: string | null; role?: string | null; name?: string | null; email?: string | null }) {
+  async updateUser(id: number, fields: { department?: string | null; role?: string | null; name?: string | null; email?: string | null; salutation?: string | null }) {
     const allowed: Record<string, any> = {}
     if (fields.department !== undefined) allowed.department = fields.department
     if (fields.role !== undefined) allowed.role = fields.role
     if (fields.name !== undefined) allowed.name = fields.name
     if (fields.email !== undefined) allowed.email = fields.email
+    if (fields.salutation !== undefined) allowed.salutation = fields.salutation
     const keys = Object.keys(allowed)
     if (keys.length === 0) {
-      const sel = await db.query(`SELECT id, email, name, role, department FROM users WHERE id = ?`, [id])
+      const sel = await db.query(`SELECT id, email, name, role, department, salutation FROM users WHERE id = ?`, [id])
       return sel.rows[0]
     }
     const sets = keys.map((k) => `${k} = ?`).join(", ")
     const values = keys.map((k) => allowed[k])
     await db.query(`UPDATE users SET ${sets}, updated_at = NOW() WHERE id = ?`, [...values, id])
-    const sel = await db.query(`SELECT id, email, name, role, department FROM users WHERE id = ?`, [id])
+    const sel = await db.query(`SELECT id, email, name, role, department, salutation FROM users WHERE id = ?`, [id])
     return sel.rows[0]
   },
 

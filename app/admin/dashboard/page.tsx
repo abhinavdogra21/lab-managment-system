@@ -1,0 +1,173 @@
+"use client"
+import { useEffect, useState } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Activity, Database, HardDrive, Users, FlaskConical } from "lucide-react"
+
+type StatResponse = {
+  totalUsers: number
+  activeLabs: number
+  dbUptimeSeconds: number
+  dbSizeMB: number
+  pendingApprovals: number
+  recentLogs: Array<{ id: number; created_at: string; action: string; user_email?: string; entity_type?: string; details?: any }>
+}
+
+export default function AdminDashboardPage() {
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [data, setData] = useState<StatResponse | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const res = await fetch("/api/admin/stats", { cache: "no-store" })
+        if (!res.ok) throw new Error(`Failed to load stats (${res.status})`)
+        const json = (await res.json()) as StatResponse
+        if (mounted) setData(json)
+      } catch (e: any) {
+        if (mounted) setError(e?.message || "Failed to load stats")
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const skeleton = (
+    <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <Card key={i}>
+          <CardHeader>
+            <div className="h-4 w-32 bg-muted rounded" />
+          </CardHeader>
+          <CardContent>
+            <div className="h-8 w-20 bg-muted rounded" />
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+
+  const fmtMB = (n: number) => `${(n ?? 0).toFixed(1)} MB`
+  const fmtUptime = (s: number) => {
+    const d = Math.floor(s / 86400)
+    const h = Math.floor((s % 86400) / 3600)
+    return d > 0 ? `${d}d ${h}h` : `${h}h`
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="font-montserrat text-2xl font-bold text-foreground">Admin Overview</h1>
+        <p className="text-muted-foreground">Key metrics and your system7s recent activity</p>
+      </div>
+
+      {loading && skeleton}
+      {error && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Error loading stats</CardTitle>
+            <CardDescription>{error}</CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
+      {data && (
+        <>
+          {/* KPI Cards */}
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Users className="h-5 w-5 text-primary" /> Total Users
+                </CardTitle>
+                <CardDescription>All active and archived users</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{data.totalUsers ?? 0}</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <FlaskConical className="h-5 w-5 text-primary" /> Active Labs
+                </CardTitle>
+                <CardDescription>Labs currently available</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{data.activeLabs ?? 0}</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <HardDrive className="h-5 w-5 text-primary" /> DB Size
+                </CardTitle>
+                <CardDescription>Approximate database storage</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{fmtMB(data.dbSizeMB || 0)}</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Database className="h-5 w-5 text-primary" /> DB Uptime
+                </CardTitle>
+                <CardDescription>Database availability window</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{fmtUptime(data.dbUptimeSeconds || 0)}</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Recent System Activity */}
+          <div className="grid gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-primary" /> Recent Activity
+                </CardTitle>
+                <CardDescription>Latest system logs</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {data.recentLogs?.length ? (
+                  data.recentLogs.map((log) => (
+                    <div key={log.id} className="text-sm">
+                      <div className="flex items-center justify-between">
+                        <div className="font-medium">{log.action}</div>
+                        <Badge variant="outline" className="ml-2">
+                          {new Date(log.created_at).toLocaleString()}
+                        </Badge>
+                      </div>
+                      <div className="text-muted-foreground">
+                        {log.user_email || "system"} • {log.entity_type || "-"}
+                      </div>
+                      {log.details && (
+                        <div className="text-muted-foreground/80 truncate">
+                          {typeof log.details === "string" ? log.details : JSON.stringify(log.details)}
+                        </div>
+                      )}
+                      <Separator className="my-2" />
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-muted-foreground">No recent logs</div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}

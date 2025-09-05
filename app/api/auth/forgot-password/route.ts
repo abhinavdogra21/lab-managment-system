@@ -10,7 +10,7 @@ function isLikelyStudentEmail(email: string) {
 
 export async function POST(req: Request) {
   try {
-    const { email, role } = await req.json()
+  const { email, role, name } = await req.json()
     if (!email) return NextResponse.json({ error: "Email is required" }, { status: 400 })
     if (!email.endsWith("@lnmiit.ac.in")) {
       return NextResponse.json({ error: "Please use your LNMIIT email" }, { status: 400 })
@@ -21,12 +21,12 @@ export async function POST(req: Request) {
       const requestedRole = String(role || "").toLowerCase()
       const treatAsStudent = requestedRole === "student" || (!requestedRole && isLikelyStudentEmail(email))
       if (treatAsStudent) {
-        // Auto-create student record
-        const local = email.split("@")[0]
-        const displayName = local
-          .replace(/\./g, " ")
-          .replace(/_/g, " ")
-          .replace(/\b\w/g, (m: string) => m.toUpperCase()) || "Student"
+        // Auto-create student record — now require full name to be provided
+        const providedName = String(name || "").trim()
+        if (!providedName) {
+          return NextResponse.json({ error: "Full name is required to create your student account" }, { status: 400 })
+        }
+        const displayName = providedName
         user = await dbOperations.createUser({
           email,
           passwordHash: null,
@@ -36,6 +36,7 @@ export async function POST(req: Request) {
           phone: null,
           studentId: null,
           employeeId: null,
+          salutation: 'none',
         })
       } else {
         // For non-student roles, require existing user

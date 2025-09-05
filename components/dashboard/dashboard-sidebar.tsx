@@ -90,8 +90,8 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
       case "admin":
         return [
           ...baseItems,
-          { name: "User Management", href: withPrefix("/dashboard/users"), icon: Users },
-          { name: "Department and Lab Management", href: withPrefix("/dashboard/organization"), icon: Building },
+          { name: "User Management", href: "/admin/users", icon: Users },
+          { name: "Department and Lab Management", href: "/admin/dashboard/department-and-lab-management", icon: Building },
           { name: "System Logs", href: withPrefix("/dashboard/logs"), icon: FileText },
           { name: "Reports", href: withPrefix("/dashboard/reports"), icon: BarChart3 },
           { name: "Analytics", href: withPrefix("/dashboard/analytics"), icon: BarChart3 },
@@ -127,10 +127,10 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
             // Normalize for active match across prefixed and non-prefixed URLs
             const normalized = pathname?.replace(/^\/(admin|student|faculty|lab-staff|hod|tnp)(?=\/)/, "") || ""
             const itemPath = item.href.replace(prefix, "")
-            const isDashboardRoot = itemPath === "/dashboard"
+            const isDashboardRoot = itemPath === "/dashboard" || item.href === "/admin/users"
             const isExact = normalized === itemPath
             const isPrefix = normalized.startsWith(itemPath + "/")
-            const active = isDashboardRoot ? isExact : (isExact || isPrefix)
+            const active = item.href === "/admin/users" ? pathname === "/admin/users" : (isDashboardRoot ? isExact : (isExact || isPrefix))
             return (
               <Button
               key={item.name}
