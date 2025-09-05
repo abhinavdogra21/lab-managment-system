@@ -339,9 +339,6 @@ export default function TimetablePage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-bold">Timetable Management</h1>
           <p className="text-muted-foreground text-sm sm:text-base">Simple lab scheduling - Day, Time, Lab details</p>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-            Add timetable entries manually with just the essential information: which lab is scheduled when
-          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm">
