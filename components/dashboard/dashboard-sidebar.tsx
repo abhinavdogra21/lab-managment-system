@@ -71,6 +71,7 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
       case "lab-staff":
         return [
           ...baseItems,
+          { name: "Review Requests", href: withPrefix("/dashboard/approve"), icon: UserCheck },
           { name: "Inventory", href: withPrefix("/dashboard/inventory"), icon: Package },
           { name: "Issue/Return", href: withPrefix("/dashboard/issue-return"), icon: ClipboardList },
           { name: "Attendance", href: withPrefix("/dashboard/attendance"), icon: UserCheck },

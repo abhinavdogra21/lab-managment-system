@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Login Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; border-left: 4px solid #007acc; }
+        .error { border-left-color: #d32f2f; }
+        .success { border-left-color: #388e3c; }
+        form { margin: 20px 0; }
+        input, select, button { margin: 5px; padding: 8px; }
+    </style>
+</head>
+<body>
+    <h1>Login Debug Test - labstaff2</h1>
+    
+    <form id="loginForm">
+        <div>
+            <label>Role:</label>
+            <select id="userRole" required>
+                <option value="">Choose role...</option>
+                <option value="lab-staff" selected>Lab Staff</option>
+            </select>
+        </div>
+        <div>
+            <label>Email:</label>
+            <input type="email" id="email" value="labstaff2@lnmiit.ac.in" required>
+        </div>
+        <div>
+            <label>Password:</label>
+            <input type="password" id="password" value="123" required>
+        </div>
+        <button type="submit">Login</button>
+    </form>
+
+    <div id="logs"></div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const div = document.createElement('div');
+            div.className = `log ${type}`;
+            div.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+            logs.appendChild(div);
+            console.log(`[${type.toUpperCase()}]`, message);
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const userRole = document.getElementById('userRole').value;
+            
+            log('Starting login process...');
+            log(`Email: ${email}, Role: ${userRole}`);
+            
+            try {
+                log('Sending API request...');
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email,
+                        password,
+                        userRole
+                    })
+                });
+
+                log(`API Response Status: ${response.status}`);
+                
+                const data = await response.json();
+                log(`API Response Data: ${JSON.stringify(data, null, 2)}`);
+
+                if (response.ok) {
+                    log('✅ API login successful', 'success');
+                    
+                    // Store user data in localStorage
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    log('✅ User data stored in localStorage', 'success');
+                    
+                    // Check what's in localStorage
+                    const stored = localStorage.getItem('user');
+                    log(`localStorage content: ${stored}`, 'success');
+                    
+                    // Construct redirect URL
+                    const role = data?.user?.role || '';
+                    const target = role ? `/${role}/dashboard` : '/';
+                    log(`Redirect URL: ${target}`, 'success');
+                    
+                    // Test if the target URL is accessible
+                    log('Testing target URL accessibility...');
+                    try {
+                        const testResponse = await fetch(target);
+                        log(`Target URL status: ${testResponse.status}`);
+                        
+                        if (testResponse.ok) {
+                            log('✅ Target URL is accessible, redirecting...', 'success');
+                            setTimeout(() => {
+                                window.location.href = target;
+                            }, 1000);
+                        } else {
+                            log(`❌ Target URL returned ${testResponse.status}`, 'error');
+                        }
+                    } catch (urlError) {
+                        log(`❌ Error testing target URL: ${urlError.message}`, 'error');
+                    }
+                    
+                } else {
+                    log(`❌ Login failed: ${data.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Network error: ${error.message}`, 'error');
+            }
+        });
+        
+        // Log initial state
+        window.addEventListener('load', () => {
+            log('Page loaded');
+            const existingUser = localStorage.getItem('user');
+            if (existingUser) {
+                log(`Existing user in localStorage: ${existingUser}`);
+            } else {
+                log('No existing user in localStorage');
+            }
+        });
+    </script>
+</body>
+</html>

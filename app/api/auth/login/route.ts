@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
       const tokenPayload = {
         userId: Number.parseInt(String(dbUser.id), 10),
         email: dbUser.email,
-        role: String(dbUser.role).replace(/_/g, "-"),
+        role: String(dbUser.role),  // Keep database role format (lab_staff) for middleware
         name: dbUser.name,
         department: dbUser.department,
       }
@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
   const tokenPayload = {
       userId: Number.parseInt(user.id, 10),
       email: user.email,
-      role: user.role,
+      role: normalizedRole,  // Use normalized role (lab_staff) for middleware compatibility
       name: user.name,
       department: user.department,
     }
