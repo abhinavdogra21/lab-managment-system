@@ -1,2 +1,22 @@
 "use client"
-export default function StudentHistoryPage() { return <div className="p-6"><h1 className="text-xl font-semibold">History</h1><p className="text-sm text-muted-foreground">Coming soon.</p></div> }
+
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+
+export default function StudentHistoryPage() {
+  const router = useRouter()
+  
+  useEffect(() => {
+    // Redirect to the my requests page which shows history
+    router.replace("/student/dashboard/my-requests")
+  }, [router])
+
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="text-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto"></div>
+        <p className="mt-2 text-muted-foreground">Redirecting to your history...</p>
+      </div>
+    </div>
+  )
+}

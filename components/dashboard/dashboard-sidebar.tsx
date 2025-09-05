@@ -55,9 +55,9 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
       case "student":
         return [
           ...baseItems,
-          { name: "Request Items", href: withPrefix("/dashboard/requests"), icon: Package },
-          { name: "My Bookings", href: withPrefix("/dashboard/bookings"), icon: Calendar },
-          { name: "History", href: withPrefix("/dashboard/history"), icon: FileText },
+          { name: "Book Lab", href: withPrefix("/dashboard/book-lab"), icon: Calendar },
+          { name: "My Requests", href: withPrefix("/dashboard/my-requests"), icon: Package },
+          { name: "Request History", href: withPrefix("/dashboard/history"), icon: FileText },
         ]
 
       case "faculty":

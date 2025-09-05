@@ -53,31 +53,58 @@ export default function StudentDashboard() {
         }
       } catch {}
     }
-    loadBookingRequests()
+    // Only load booking requests if we have a user
+    if (u) {
+      loadBookingRequests()
+    }
   }, [])
 
   const loadBookingRequests = async () => {
     try {
+      console.log("Loading booking requests...")
       const res = await fetch("/api/student/booking-requests")
+      console.log("Response status:", res.status)
+      console.log("Response headers:", Object.fromEntries(res.headers.entries()))
+      
       if (res.ok) {
-        const data = await res.json()
-        setBookingRequests(data.requests || [])
+        const text = await res.text()
+        console.log("Response text:", text.substring(0, 200))
         
-        // Calculate stats
-        const requests = data.requests || []
-        const pending = requests.filter((r: BookingRequest) => r.status === 'pending_faculty' || r.status === 'pending_lab_staff' || r.status === 'pending_hod').length
-        const approved = requests.filter((r: BookingRequest) => r.status === 'approved').length
-        const rejected = requests.filter((r: BookingRequest) => r.status === 'rejected').length
-        
-        setStats({
-          pending,
-          approved,
-          rejected,
-          total: requests.length
-        })
+        try {
+          const data = JSON.parse(text)
+          console.log("Parsed data:", data)
+          setBookingRequests(data.requests || [])
+          
+          // Calculate stats
+          const requests = data.requests || []
+          const pending = requests.filter((r: BookingRequest) => r.status === 'pending_faculty' || r.status === 'pending_lab_staff' || r.status === 'pending_hod').length
+          const approved = requests.filter((r: BookingRequest) => r.status === 'approved').length
+          const rejected = requests.filter((r: BookingRequest) => r.status === 'rejected').length
+          
+          setStats({
+            pending,
+            approved,
+            rejected,
+            total: requests.length
+          })
+        } catch (parseError: any) {
+          console.error("JSON parse error:", parseError.message)
+          console.error("Response text that failed to parse:", text)
+          // Set some default data so the page still works
+          setBookingRequests([])
+          setStats({ pending: 0, approved: 0, rejected: 0, total: 0 })
+        }
+      } else {
+        console.error("API responded with error:", res.status)
+        // Set default data so page still works
+        setBookingRequests([])
+        setStats({ pending: 0, approved: 0, rejected: 0, total: 0 })
       }
-    } catch (error) {
-      console.error("Failed to load booking requests:", error)
+    } catch (error: any) {
+      console.error("Failed to load booking requests:", error.message)
+      // Set default data so page still works
+      setBookingRequests([])
+      setStats({ pending: 0, approved: 0, rejected: 0, total: 0 })
     }
   }
 
