@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
-import { CalendarIcon, Plus, Edit, Trash2, Clock, Users, BookOpen, Search, Filter, Upload, Download, Eye } from "lucide-react"
+import { CalendarIcon, Plus, Edit, Trash2, Clock, Users, Search, Filter, Upload, Download, Eye } from "lucide-react"
 import { format, addDays, startOfWeek } from "date-fns"
 
 // Types
@@ -34,16 +34,6 @@ interface TimetableEntry {
   time_slot_start: string // HH:MM format
   time_slot_end: string // HH:MM format
   notes?: string // Optional details about the lab session
-  is_active: boolean
-}
-
-interface TimetableTemplate {
-  id: number
-  name: string
-  academic_year: string
-  semester_type: 'odd' | 'even'
-  start_date: string
-  end_date: string
   is_active: boolean
 }
 
@@ -69,7 +59,6 @@ export default function TimetablePage() {
   // Data states
   const [labs, setLabs] = useState<Lab[]>([])
   const [timetableEntries, setTimetableEntries] = useState<TimetableEntry[]>([])
-  const [templates, setTemplates] = useState<TimetableTemplate[]>([])
   
   // Filter states
   const [selectedLab, setSelectedLab] = useState<string>("all")
@@ -100,7 +89,6 @@ export default function TimetablePage() {
   useEffect(() => {
     loadLabs()
     loadTimetableEntries()
-    loadTemplates()
   }, [])
 
   const loadLabs = async () => {
@@ -124,18 +112,6 @@ export default function TimetablePage() {
       }
     } catch (error) {
       console.error("Failed to load timetable entries:", error)
-    }
-  }
-
-  const loadTemplates = async () => {
-    try {
-      const res = await fetch("/api/admin/timetable/templates")
-      if (res.ok) {
-        const data = await res.json()
-        setTemplates(data.templates || [])
-      }
-    } catch (error) {
-      console.error("Failed to load templates:", error)
     }
   }
 
@@ -388,7 +364,7 @@ export default function TimetablePage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="view">
             <Eye className="h-4 w-4 mr-2" />
             View Timetable
@@ -396,10 +372,6 @@ export default function TimetablePage() {
           <TabsTrigger value="manage">
             <Clock className="h-4 w-4 mr-2" />
             Manage Entries
-          </TabsTrigger>
-          <TabsTrigger value="templates">
-            <BookOpen className="h-4 w-4 mr-2" />
-            Templates
           </TabsTrigger>
         </TabsList>
 
@@ -607,51 +579,6 @@ export default function TimetablePage() {
                     ))}
                   </TableBody>
                 </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Templates Tab */}
-        <TabsContent value="templates" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Timetable Templates</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Manage academic year and semester-wise timetable templates. Templates allow you to:
-              </p>
-              <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1 mt-2">
-                <li>Save different timetable configurations for Odd/Even semesters</li>
-                <li>Quickly switch between academic year schedules</li>
-                <li>Backup and restore timetable data</li>
-                <li>Apply bulk changes across multiple time periods</li>
-              </ul>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                <BookOpen className="h-12 w-12 mx-auto mb-4" />
-                <p className="font-medium">Template Management Coming Soon</p>
-                <p className="text-sm">Create and manage reusable timetable templates for different semesters</p>
-                <div className="mt-4 p-4 bg-blue-50 rounded-lg text-left">
-                  <h4 className="font-medium text-blue-900 mb-2">Current Features Available:</h4>
-                  <ul className="text-sm text-blue-700 space-y-1">
-                    <li>• View lab schedules in weekly grid format</li>
-                    <li>• Filter by lab, day, or search subjects/batches</li>
-                    <li>• Add/edit/delete individual timetable entries</li>
-                    <li>• Manage subject codes, faculty assignments, and student batches</li>
-                    <li>• Prevent time slot conflicts automatically</li>
-                  </ul>
-                </div>
-                <div className="mt-4 p-4 bg-green-50 rounded-lg text-left">
-                  <h4 className="font-medium text-green-900 mb-2">Upcoming Features:</h4>
-                  <ul className="text-sm text-green-700 space-y-1">
-                    <li>• Excel import/export for bulk timetable management</li>
-                    <li>• Template creation and semester-wise activation</li>
-                    <li>• Integration with booking system for available slots</li>
-                    <li>• Faculty schedule conflict detection</li>
-                    <li>• Automated report generation</li>
-                  </ul>
-                </div>
               </div>
             </CardContent>
           </Card>
