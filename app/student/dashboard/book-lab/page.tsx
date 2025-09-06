@@ -238,9 +238,10 @@ export default function BookLabPage() {
       })
 
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || "Failed to submit request")
 
-      toast({ title: "Request Submitted", description: "Your lab booking request has been submitted successfully" })
+  if (!res.ok) throw new Error(data?.error || "Failed to submit request")
+
+  toast({ title: "Request raised successfully!", description: "Your lab booking request has been submitted and is pending approval." })
       
       // Reset form
       setCurrentStep(1)

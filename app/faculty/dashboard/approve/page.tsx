@@ -32,7 +32,9 @@ export default function FacultyApprovePage() {
   const [actionLoading, setActionLoading] = useState<number | null>(null)
   const [pendingItems, setPendingItems] = useState<RequestItem[]>([])
   const [approvedItems, setApprovedItems] = useState<RequestItem[]>([])
+  const [rejectedItems, setRejectedItems] = useState<RequestItem[]>([])
   const [activeTab, setActiveTab] = useState('pending')
+  const [search, setSearch] = useState('')
   const [remarks, setRemarks] = useState<Record<number, string>>({})
   const [showTimeline, setShowTimeline] = useState<Record<number, boolean>>({})
 
@@ -57,7 +59,8 @@ export default function FacultyApprovePage() {
   const loadApprovedRequests = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/faculty/requests?status=approved', { cache: 'no-store' })
+      // Fetch both approved and pending_lab_staff requests
+  const res = await fetch('/api/faculty/requests?status=approved,pending_lab_staff', { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
         setApprovedItems(data.requests || [])
@@ -75,10 +78,30 @@ export default function FacultyApprovePage() {
   useEffect(() => {
     if (activeTab === 'pending') {
       loadPendingRequests()
-    } else {
+    } else if (activeTab === 'approved') {
       loadApprovedRequests()
+    } else if (activeTab === 'rejected') {
+      loadRejectedRequests()
     }
   }, [activeTab])
+
+  const loadRejectedRequests = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/faculty/requests?status=rejected', { cache: 'no-store' })
+      if (res.ok) {
+        const data = await res.json()
+        setRejectedItems(data.requests || [])
+      } else {
+        setRejectedItems([])
+      }
+    } catch (error) {
+      console.error("Failed to load rejected requests:", error)
+      setRejectedItems([])
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleAction = async (requestId: number, action: 'approve' | 'reject') => {
     const requestRemarks = remarks[requestId]?.trim()
@@ -112,19 +135,20 @@ export default function FacultyApprovePage() {
           description: data.message || `Request ${action}d successfully`,
           variant: "default"
         })
-        
-        // Clear remarks for this request
+
+        // Only clear remarks for this request if action succeeded
         setRemarks(prev => {
           const newRemarks = { ...prev }
           delete newRemarks[requestId]
           return newRemarks
         })
-        
-        // Reload the current tab
-        if (activeTab === 'pending') {
-          loadPendingRequests()
-        } else {
-          loadApprovedRequests()
+
+        // Always reload pending requests first
+        await loadPendingRequests()
+        // If action was approve, also reload approved requests so the request moves tab
+        if (action === 'approve') {
+          await loadApprovedRequests()
+          setActiveTab('approved')
         }
       } else {
         const error = await res.json()
@@ -397,13 +421,23 @@ export default function FacultyApprovePage() {
         <div>
           <h1 className="text-xl font-bold">Review Lab Requests</h1>
           <p className="text-xs text-muted-foreground">
-            {activeTab === 'pending' ? `${pendingItems.length} requests pending your approval` : `${approvedItems.length} approved requests`}
+            {activeTab === 'pending' ? `${pendingItems.length} requests pending your approval` : activeTab === 'approved' ? `${approvedItems.length} approved requests` : `${rejectedItems.length} rejected requests`}
           </p>
         </div>
       </div>
 
+      <div className="max-w-md mb-2">
+        <input
+          type="text"
+          placeholder="Search by student name, email, or request ID..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="w-full px-3 py-2 border rounded text-xs"
+        />
+      </div>
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3">
-        <TabsList className="grid w-full grid-cols-2 max-w-md h-8">
+        <TabsList className="grid w-full grid-cols-3 max-w-md h-8">
           <TabsTrigger value="pending" className="flex items-center gap-1 text-xs">
             Pending
             {pendingItems.length > 0 && <Badge variant="secondary" className="ml-1 text-xs">{pendingItems.length}</Badge>}
@@ -411,6 +445,10 @@ export default function FacultyApprovePage() {
           <TabsTrigger value="approved" className="flex items-center gap-1 text-xs">
             Approved
             {approvedItems.length > 0 && <Badge variant="secondary" className="ml-1 text-xs">{approvedItems.length}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="rejected" className="flex items-center gap-1 text-xs">
+            Rejected
+            {rejectedItems.length > 0 && <Badge variant="secondary" className="ml-1 text-xs">{rejectedItems.length}</Badge>}
           </TabsTrigger>
         </TabsList>
 
@@ -429,7 +467,11 @@ export default function FacultyApprovePage() {
             </Card>
           ) : (
             <div className="grid gap-4">
-              {pendingItems.map((item) => (
+              {pendingItems.filter(item =>
+                item.student_name.toLowerCase().includes(search.toLowerCase()) ||
+                item.student_email.toLowerCase().includes(search.toLowerCase()) ||
+                item.id.toString().includes(search)
+              ).map((item) => (
                 <RequestCard key={item.id} item={item} showActions={true} />
               ))}
             </div>
@@ -451,7 +493,37 @@ export default function FacultyApprovePage() {
             </Card>
           ) : (
             <div className="grid gap-4">
-              {approvedItems.map((item) => (
+              {approvedItems.filter(item =>
+                item.student_name.toLowerCase().includes(search.toLowerCase()) ||
+                item.student_email.toLowerCase().includes(search.toLowerCase()) ||
+                item.id.toString().includes(search)
+              ).map((item) => (
+                <RequestCard key={item.id} item={item} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="rejected" className="space-y-4">
+          {loading ? (
+            <Card>
+              <CardContent className="text-center py-8">
+                <p className="text-gray-500">Loading...</p>
+              </CardContent>
+            </Card>
+          ) : rejectedItems.length === 0 ? (
+            <Card>
+              <CardContent className="text-center py-8">
+                <p className="text-gray-500">No rejected requests</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4">
+              {rejectedItems.filter(item =>
+                item.student_name.toLowerCase().includes(search.toLowerCase()) ||
+                item.student_email.toLowerCase().includes(search.toLowerCase()) ||
+                item.id.toString().includes(search)
+              ).map((item) => (
                 <RequestCard key={item.id} item={item} />
               ))}
             </div>

@@ -134,6 +134,8 @@ export async function POST(request: NextRequest) {
     ])
 
     // Notify faculty via email if SMTP configured
+    // Email notification code commented out for testing purposes
+    /*
     try {
       const smtp = isSmtpConfigured()
       if (smtp.configured) {
@@ -159,6 +161,7 @@ export async function POST(request: NextRequest) {
     } catch (e) {
       console.warn('Faculty notification email skipped or failed:', (e as any)?.message || e)
     }
+    */
 
     return NextResponse.json({ 
       success: true,

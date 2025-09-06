@@ -309,18 +309,15 @@ export default function MyRequestsPage() {
                       <h3 className="font-medium">{request.lab_name}</h3>
                       {getOverallStatusBadge(request.status)}
                     </div>
-                    
                     <div className="text-sm text-muted-foreground space-y-1">
                       <p>Faculty: {request.faculty_name}</p>
                       <p>Date: {new Date(request.date).toLocaleDateString()}</p>
                       <p>Time: {request.start_time} - {request.end_time}</p>
                       <p>Submitted: {new Date(request.created_at).toLocaleDateString()}</p>
                     </div>
-                    
                     <p className="text-sm mt-2">{request.purpose}</p>
                   </div>
-                  
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 items-end">
                     <Dialog>
                       <DialogTrigger asChild>
                         <Button variant="outline" size="sm">
@@ -335,6 +332,24 @@ export default function MyRequestsPage() {
                         <TimelineView request={request} />
                       </DialogContent>
                     </Dialog>
+                    {/* Withdraw button for pending requests */}
+                    {['pending_faculty','pending_lab_staff','pending_hod'].includes(request.status) && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={async () => {
+                          const res = await fetch(`/api/student/booking-requests/${request.id}/withdraw`, { method: 'POST' })
+                          if (res.ok) {
+                            toast({ title: 'Request withdrawn', description: 'Your booking request has been withdrawn.' })
+                            loadMyRequests()
+                          } else {
+                            toast({ title: 'Error', description: 'Failed to withdraw request', variant: 'destructive' })
+                          }
+                        }}
+                      >
+                        Withdraw Request
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>

@@ -18,8 +18,14 @@ export async function GET(request: NextRequest) {
     let params: any[] = [user.userId]
 
     if (status !== 'all') {
-      whereClause += ' AND br.status = ?'
-      params.push(status)
+      if (status.includes(',')) {
+        const statuses = status.split(',').map(s => s.trim())
+        whereClause += ` AND br.status IN (${statuses.map(() => '?').join(',')})`
+        params.push(...statuses)
+      } else {
+        whereClause += ' AND br.status = ?'
+        params.push(status)
+      }
     }
 
     const result = await db.query(`

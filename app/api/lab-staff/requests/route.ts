@@ -2,10 +2,37 @@ import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
 
 export async function GET(request: NextRequest) {
+  // ...existing code...
+  // Debug logging will be placed after userId and assignedLabIds are defined
   try {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get("status") || "pending_lab_staff"
     const db = Database.getInstance()
+
+    // Get lab staff user ID from token (reuse logic from action route)
+    const cookieStore = await import('next/headers').then(m => m.cookies())
+    const token = cookieStore.get('auth-token')?.value
+    console.log('Lab Staff API Debug: raw token', token)
+    if (!token) {
+      console.error('Lab Staff API Debug: No auth-token cookie found')
+      return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 })
+    }
+    let decoded, userId
+    try {
+      decoded = JSON.parse(decodeURIComponent(token))
+      userId = decoded.userId
+    } catch (err) {
+      console.error('Lab Staff API Debug: Error decoding token', err, token)
+      return NextResponse.json({ success: false, error: "Invalid token" }, { status: 401 })
+    }
+
+  // Get labs assigned to this staff
+  const assignedLabsRes = await db.query("SELECT lab_id FROM lab_staff_assignments WHERE staff_id = ?", [userId])
+  const assignedLabIds = assignedLabsRes.rows.map((row: any) => row.lab_id)
+  console.log('Lab Staff API Debug:', { userId, assignedLabIds })
+  if (assignedLabIds.length === 0) {
+    return NextResponse.json({ success: true, requests: [] })
+  }
 
     let query = `
       SELECT 
@@ -18,29 +45,30 @@ export async function GET(request: NextRequest) {
       JOIN users u ON br.requested_by = u.id
       JOIN labs l ON br.lab_id = l.id
       LEFT JOIN users f ON br.faculty_supervisor_id = f.id
+      WHERE br.lab_id IN (${assignedLabIds.map(() => '?').join(',')})
     `
-
-    const params: any[] = []
+    const params: any[] = [...assignedLabIds]
 
     if (status === "pending_lab_staff") {
-      query += " WHERE br.status = ?"
+      query += " AND br.status = ?"
       params.push("pending_lab_staff")
     } else if (status === "all") {
-      // Get all requests that lab staff has seen (approved by faculty)
-      query += " WHERE br.status IN (?, ?, ?, ?)"
+      query += " AND br.status IN (?, ?, ?, ?)"
       params.push("pending_lab_staff", "pending_hod", "approved", "rejected")
     } else if (status === "approved") {
-      query += " WHERE br.status IN (?, ?)"
+      query += " AND br.status IN (?, ?)"
       params.push("pending_hod", "approved")
     } else if (status === "rejected") {
-      query += " WHERE br.status = ?"
+      query += " AND br.status = ?"
       params.push("rejected")
     }
 
     query += " ORDER BY br.created_at DESC"
 
     const result = await db.query(query, params)
+  console.log('Lab Staff API Debug: requests found', result.rows.length)
     const requests = result.rows
+  console.log('Lab Staff API Debug: requests found', requests.length)
 
     // Build timeline for each request
     const requestsWithTimeline = await Promise.all(
