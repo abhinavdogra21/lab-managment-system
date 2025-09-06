@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -35,8 +35,47 @@ export default function FacultyApprovePage() {
   const [rejectedItems, setRejectedItems] = useState<RequestItem[]>([])
   const [activeTab, setActiveTab] = useState('pending')
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [remarks, setRemarks] = useState<Record<number, string>>({})
   const [showTimeline, setShowTimeline] = useState<Record<number, boolean>>({})
+
+  // Debounce search to improve performance
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  // Memoized remarks change handler to prevent re-renders
+  const handleRemarksChange = useCallback((requestId: number, value: string) => {
+    setRemarks(prev => ({ ...prev, [requestId]: value }))
+  }, [])
+
+  // Memoized filtered arrays to prevent unnecessary re-computations
+  const filteredPendingItems = useMemo(() => {
+    return pendingItems.filter(item =>
+      item.student_name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      item.student_email.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      item.id.toString().includes(debouncedSearch)
+    )
+  }, [pendingItems, debouncedSearch])
+
+  const filteredApprovedItems = useMemo(() => {
+    return approvedItems.filter(item =>
+      item.student_name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      item.student_email.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      item.id.toString().includes(debouncedSearch)
+    )
+  }, [approvedItems, debouncedSearch])
+
+  const filteredRejectedItems = useMemo(() => {
+    return rejectedItems.filter(item =>
+      item.student_name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      item.student_email.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      item.id.toString().includes(debouncedSearch)
+    )
+  }, [rejectedItems, debouncedSearch])
 
   const loadPendingRequests = async () => {
     setLoading(true)
@@ -103,8 +142,10 @@ export default function FacultyApprovePage() {
     }
   }
 
-  const handleAction = async (requestId: number, action: 'approve' | 'reject') => {
-    const requestRemarks = remarks[requestId]?.trim()
+  const handleAction = async (requestId: number, action: 'approve' | 'reject', overrideRemarks?: string) => {
+    const requestRemarks = typeof overrideRemarks === 'string'
+      ? overrideRemarks.trim()
+      : remarks[requestId]?.trim()
     
     if (action === 'reject' && !requestRemarks) {
       toast({
@@ -306,7 +347,24 @@ export default function FacultyApprovePage() {
   }
 
   // Request Card component
-  const RequestCard = ({ item, showActions = false }: { item: RequestItem, showActions?: boolean }) => (
+  const RequestCard = React.memo(({ item, showActions = false }: { item: RequestItem, showActions?: boolean }) => {
+    const textareaRef = React.useRef<HTMLTextAreaElement>(null)
+
+    const getCurrentRemark = () => {
+      return textareaRef.current?.value || ''
+    }
+
+    const handleApprove = () => {
+      const currentRemark = getCurrentRemark()
+      handleAction(item.id, 'approve', currentRemark)
+    }
+
+    const handleReject = () => {
+      const currentRemark = getCurrentRemark()
+      handleAction(item.id, 'reject', currentRemark)
+    }
+
+    return (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-4 space-y-3">
         <div className="flex items-center justify-between">
@@ -378,36 +436,61 @@ export default function FacultyApprovePage() {
         )}
 
         {showActions && (
-          <div className="space-y-2 pt-2 border-t">
-            <Textarea 
-              placeholder="Add your remarks (optional for approval, required for rejection)..." 
-              value={remarks[item.id] || ''} 
-              onChange={(e) => setRemarks(prev => ({ ...prev, [item.id]: e.target.value }))} 
-              className="min-h-[60px] text-xs" 
-            />
+          <div className="space-y-3 pt-3 border-t border-gray-200 bg-gray-50 rounded-b-lg p-3 -m-3 mt-3">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-gray-700 block">
+                Your Remarks
+              </label>
+              <textarea
+                ref={textareaRef}
+                placeholder="Add your remarks (optional for approval, required for rejection)..."
+                defaultValue={remarks[item.id] || ''}
+                className="min-h-[80px] w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
+                rows={3}
+              />
+            </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 pt-2">
               <Button 
-                onClick={() => handleAction(item.id, 'approve')} 
+                onClick={handleApprove} 
                 disabled={actionLoading === item.id}
-                className="flex-1 bg-green-600 hover:bg-green-700 h-8 text-xs"
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 text-sm transition-colors"
               >
-                <Check className="h-3 w-3 mr-1" /> Approve
+                {actionLoading === item.id ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                    Processing...
+                  </div>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 mr-1" /> Approve
+                  </>
+                )}
               </Button>
               <Button 
-                onClick={() => handleAction(item.id, 'reject')} 
+                onClick={handleReject} 
                 disabled={actionLoading === item.id}
                 variant="destructive" 
-                className="flex-1 h-8 text-xs"
+                className="flex-1 font-medium py-2 text-sm transition-colors"
               >
-                <X className="h-3 w-3 mr-1" /> Reject
+                {actionLoading === item.id ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                    Processing...
+                  </div>
+                ) : (
+                  <>
+                    <X className="h-4 w-4 mr-1" /> Reject
+                  </>
+                )}
               </Button>
             </div>
           </div>
         )}
       </CardContent>
     </Card>
-  )
+    )
+  })
 
   return (
     <div className="space-y-3">
@@ -467,11 +550,7 @@ export default function FacultyApprovePage() {
             </Card>
           ) : (
             <div className="grid gap-4">
-              {pendingItems.filter(item =>
-                item.student_name.toLowerCase().includes(search.toLowerCase()) ||
-                item.student_email.toLowerCase().includes(search.toLowerCase()) ||
-                item.id.toString().includes(search)
-              ).map((item) => (
+              {filteredPendingItems.map((item) => (
                 <RequestCard key={item.id} item={item} showActions={true} />
               ))}
             </div>
@@ -493,11 +572,7 @@ export default function FacultyApprovePage() {
             </Card>
           ) : (
             <div className="grid gap-4">
-              {approvedItems.filter(item =>
-                item.student_name.toLowerCase().includes(search.toLowerCase()) ||
-                item.student_email.toLowerCase().includes(search.toLowerCase()) ||
-                item.id.toString().includes(search)
-              ).map((item) => (
+              {filteredApprovedItems.map((item) => (
                 <RequestCard key={item.id} item={item} />
               ))}
             </div>
@@ -519,11 +594,7 @@ export default function FacultyApprovePage() {
             </Card>
           ) : (
             <div className="grid gap-4">
-              {rejectedItems.filter(item =>
-                item.student_name.toLowerCase().includes(search.toLowerCase()) ||
-                item.student_email.toLowerCase().includes(search.toLowerCase()) ||
-                item.id.toString().includes(search)
-              ).map((item) => (
+              {filteredRejectedItems.map((item) => (
                 <RequestCard key={item.id} item={item} />
               ))}
             </div>

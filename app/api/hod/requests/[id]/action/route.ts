@@ -12,7 +12,7 @@ export async function POST(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const requestId = parseInt(params.id)
+    const requestId = parseInt((await params).id)
     const { action, remarks } = await request.json()
 
     if (!['approve', 'reject'].includes(action)) {

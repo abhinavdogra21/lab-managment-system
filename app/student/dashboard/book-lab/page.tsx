@@ -47,6 +47,7 @@ interface BookedSlotItem {
   end_time: string
   time_range: string
   purpose: string
+  booker_name?: string
   type: 'booking' | 'class'
 }
 
@@ -215,13 +216,25 @@ export default function BookLabPage() {
       return
     }
 
+    if (manualSelected) {
+      if (hasConflict()) {
+        toast({ title: "Time Conflict", description: "Selected time conflicts with existing bookings", variant: "destructive" })
+        return
+      }
+      if (isInvalidTimeRange()) {
+        toast({ title: "Invalid Time Range", description: "End time must be after start time", variant: "destructive" })
+        return
+      }
+      if (isOutsideBusinessHours()) {
+        toast({ title: "Invalid Time", description: "Lab bookings are only allowed between 8:00 AM and 8:00 PM", variant: "destructive" })
+        return
+      }
+    }
+
     setLoading(true)
     try {
       const [sTime, eTime] = selectedTimeSlot ? selectedTimeSlot.split(' - ') : [startTime, endTime]
       if (!sTime || !eTime) throw new Error("Invalid time range")
-      if (manualSelected && (hasConflict())) {
-        throw new Error("Selected time conflicts with schedule")
-      }
       const requestData = {
         lab_id: parseInt(selectedLab),
         faculty_supervisor_id: parseInt(selectedFaculty),
@@ -286,8 +299,26 @@ export default function BookLabPage() {
 
   const isInvalidTimeRange = () => !!startTime && !!endTime && startTime >= endTime
 
+  const isOutsideBusinessHours = () => {
+    if (!startTime || !endTime) return false
+    const start = parseInt(startTime.split(':')[0])
+    const end = parseInt(endTime.split(':')[0])
+    const startMinutes = parseInt(startTime.split(':')[1])
+    const endMinutes = parseInt(endTime.split(':')[1])
+    
+    // Convert to minutes for easier comparison
+    const startTotalMinutes = start * 60 + startMinutes
+    const endTotalMinutes = end * 60 + endMinutes
+    
+    // Business hours: 8:00 AM (480 minutes) to 8:00 PM (1200 minutes)
+    const businessStart = 8 * 60 // 8:00 AM
+    const businessEnd = 20 * 60 // 8:00 PM
+    
+    return startTotalMinutes < businessStart || endTotalMinutes > businessEnd
+  }
+
   const canProceedToStep2 = selectedDepartment && selectedFaculty && selectedLab
-  const canProceedToStep3 = !!(canProceedToStep2 && selectedDate && (selectedTimeSlot || (startTime && endTime && !hasConflict() && !isInvalidTimeRange())))
+  const canProceedToStep3 = !!(canProceedToStep2 && selectedDate && (selectedTimeSlot || (startTime && endTime && !hasConflict() && !isInvalidTimeRange() && !isOutsideBusinessHours())))
   const canSubmit = !!(canProceedToStep3 && purpose.trim())
 
   const getSelectedDepartmentName = () => departments.find(d => d.id.toString() === selectedDepartment)?.name || ""
@@ -452,12 +483,22 @@ export default function BookLabPage() {
                     ) : (
                       <div className="space-y-2 mt-2">
                         {bookedSlots.map((s, i) => (
-                          <div key={i} className={`p-2 rounded border text-sm ${s.type === 'booking' ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'}`}>
-                            <div className="flex justify-between">
-                              <span className="font-medium">{s.time_range}</span>
-                              <Badge variant="outline">{s.type === 'booking' ? 'Booking' : 'Class'}</Badge>
+                          <div key={i} className={`p-3 rounded border text-sm ${s.type === 'booking' ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'}`}>
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="flex justify-between items-center mb-1">
+                                  <span className="font-medium">{s.time_range}</span>
+                                  <Badge variant="outline">{s.type === 'booking' ? 'Booking' : 'Class'}</Badge>
+                                </div>
+                                <div className="text-muted-foreground mb-1">{s.purpose}</div>
+                                {s.booker_name && s.type === 'booking' && (
+                                  <div className="flex items-center gap-1 text-xs text-blue-600">
+                                    <User className="h-3 w-3" />
+                                    <span>Booked by: {s.booker_name}</span>
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                            <div className="text-muted-foreground">{s.purpose}</div>
                           </div>
                         ))}
                       </div>
@@ -467,23 +508,46 @@ export default function BookLabPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label>Start Time (HH:MM)</Label>
-                      <Input type="time" min="08:00" max="18:00" value={startTime} onChange={(e) => { setStartTime(e.target.value); setSelectedTimeSlot("") }} />
+                      <Input type="time" min="08:00" max="20:00" value={startTime} onChange={(e) => { setStartTime(e.target.value); setSelectedTimeSlot("") }} />
                     </div>
                     <div>
                       <Label>End Time (HH:MM)</Label>
-                      <Input type="time" min="08:00" max="18:00" value={endTime} onChange={(e) => { setEndTime(e.target.value); setSelectedTimeSlot("") }} />
+                      <Input type="time" min="08:00" max="20:00" value={endTime} onChange={(e) => { setEndTime(e.target.value); setSelectedTimeSlot("") }} />
                     </div>
                   </div>
-                  {hasConflict() && (
-                    <div className="p-3 border border-red-200 bg-red-50 text-sm text-red-700 rounded">
-                      The selected time range overlaps with an existing booking or class.
+                  
+                  {/* Validation Messages */}
+                  {startTime && endTime && (
+                    <div className="space-y-2">
+                      {hasConflict() && (
+                        <div className="p-3 border border-red-200 bg-red-50 text-sm text-red-700 rounded flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          The selected time range overlaps with an existing booking or class.
+                        </div>
+                      )}
+                      {isInvalidTimeRange() && (
+                        <div className="p-3 border border-red-200 bg-red-50 text-sm text-red-700 rounded flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          End time must be after start time.
+                        </div>
+                      )}
+                      {isOutsideBusinessHours() && (
+                        <div className="p-3 border border-amber-200 bg-amber-50 text-sm text-amber-800 rounded flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          Lab bookings are only allowed between 8:00 AM and 8:00 PM.
+                        </div>
+                      )}
                     </div>
                   )}
-                  {startTime && endTime && (startTime < '08:00' || endTime > '18:00') && (
-                    <div className="p-3 border border-amber-200 bg-amber-50 text-sm text-amber-800 rounded">
-                      Time must be between 08:00 and 18:00.
+                  
+                  {/* Business Hours Info */}
+                  <div className="p-3 border border-blue-200 bg-blue-50 text-sm text-blue-700 rounded">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Clock className="h-4 w-4" />
+                      <strong>Lab Booking Hours</strong>
                     </div>
-                  )}
+                    Labs are available for booking between 8:00 AM and 8:00 PM only.
+                  </div>
                 </div>
               )}
 

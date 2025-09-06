@@ -1,13 +1,408 @@
-# LNMIIT Lab Management System
+# Lab Management System
 
-A role-based lab management platform for LNMIIT (Next.js App Router + TypeScript). This repo ships with a functional UI, working API stubs, and a mock authentication flow so you can demo every route and navigation. A MySQL schema and seeds are included; wire the DB when ready.
+A comprehensive web-based laboratory management system built with Next.js 15, TypeScript, and MySQL. This system facilitates lab booking, equipment management, user administration, and real-time analytics for educational institutions.
 
-## Project Structure Guide (For Developers & AI)
+## Features
 
-This section helps developers and AI assistants understand the current codebase organization and where to find specific functionality.
+### 🔐 Authentication & Authorization
+- Role-based access control (Admin, HOD, Faculty, Lab Staff, TNP, Student)
+- Secure login/logout system
+- Password reset functionality
+- JWT-based session management
 
-### 🏗️ Architecture Overview
-- **Framework**: Next.js 15 App Router + React 19 + TypeScript
+### 📅 Lab Booking System
+- Real-time lab availability checking
+- Multi-stage approval workflow (Faculty → Lab Staff → HOD)
+- Business hours validation (8 AM - 8 PM)
+- Booking history and status tracking
+- Daily schedule view for administrators
+
+### 👥 User Management
+- User registration and profile management
+- Department-wise user organization
+- Bulk user operations
+- Activity logging and audit trails
+
+### 🔧 Equipment & Inventory Management
+- Equipment catalog with specifications
+- Issue/return tracking
+- Maintenance scheduling
+- Stock level monitoring
+
+### 📊 Analytics & Reporting
+- Real-time dashboard with key metrics
+- Usage statistics and trends
+- Custom report generation
+- Export functionality (Excel, PDF)
+
+### 🎯 Additional Features
+- Event management and announcements
+- Attendance tracking
+- Timetable integration
+- Email notifications
+- Mobile-responsive design
+
+## Tech Stack
+
+- **Frontend:** Next.js 15, React 19, TypeScript
+- **Backend:** Next.js API Routes, Node.js
+- **Database:** MySQL 8.0+
+- **Styling:** Tailwind CSS, shadcn/ui components
+- **Authentication:** Custom JWT implementation
+- **Email:** Nodemailer with SMTP
+- **Charts:** Recharts
+- **Forms:** React Hook Form with Zod validation
+- **Date Handling:** date-fns
+
+## Prerequisites
+
+Before setting up the project, ensure you have the following installed:
+
+- **Node.js** (v18.0.0 or higher)
+- **pnpm** (v8.0.0 or higher) - `npm install -g pnpm`
+- **MySQL** (v8.0.0 or higher)
+- **Git**
+
+## Installation & Setup
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/abhinavdogra21/lab-managment-system.git
+cd lab-managment-system
+```
+
+### 2. Install Dependencies
+
+```bash
+pnpm install
+```
+
+### 3. Database Setup
+
+#### Option A: Automatic Database Setup (Recommended)
+
+Run the automated setup script:
+
+```bash
+# Make the setup script executable
+chmod +x scripts/setup-db.sh
+
+# Run the setup script
+./scripts/setup-db.sh
+```
+
+This script will:
+- Create the MySQL database
+- Set up all required tables
+- Add indexes for performance
+- Insert initial seed data
+- Create archival tables
+
+#### Option B: Manual Database Setup
+
+1. **Create Database:**
+```sql
+CREATE DATABASE lnmiit_lab_management CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+2. **Run SQL Scripts:**
+```bash
+# Connect to MySQL and run the setup scripts
+mysql -u root -p lnmiit_lab_management < scripts/01-create-tables-mysql.sql
+mysql -u root -p lnmiit_lab_management < scripts/02-add-indexes-mysql.sql
+mysql -u root -p lnmiit_lab_management < scripts/02-seed-data.sql
+mysql -u root -p lnmiit_lab_management < scripts/03-archival-tables-mysql.sql
+```
+
+### 4. Environment Configuration
+
+Create a `.env.local` file in the root directory:
+
+```env
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=your_mysql_password
+DB_NAME=lnmiit_lab_management
+
+# JWT Configuration
+JWT_SECRET=your_super_secret_jwt_key_here_make_it_long_and_random
+JWT_EXPIRES_IN=7d
+
+# Application Configuration
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NODE_ENV=development
+
+# Email Configuration (Optional - for notifications)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
+SMTP_PASSWORD=your_app_password
+FROM_EMAIL=noreply@yourdomain.com
+FROM_NAME="Lab Management System"
+
+# Admin Configuration
+ADMIN_EMAIL=admin@lnmiit.ac.in
+ADMIN_PASSWORD=admin123
+```
+
+### 5. Start the Development Server
+
+```bash
+pnpm run dev
+```
+
+The application will be available at `http://localhost:3000`
+
+### 6. Initial Login
+
+**Default Admin Credentials:**
+- Email: `admin@lnmiit.ac.in`
+- Password: `admin123`
+
+⚠️ **Important:** Change the default admin password immediately after first login.
+
+## Database Schema Overview
+
+### Core Tables
+
+- **users** - User accounts and profiles
+- **departments** - Academic departments
+- **labs** - Laboratory information
+- **equipment** - Equipment catalog
+- **booking_requests** - Lab booking requests with approval workflow
+- **timetable_entries** - Regular class schedules
+- **events** - Event and announcement management
+- **logs** - System activity logging
+
+### Key Relationships
+
+- Users belong to departments
+- Labs are managed by departments
+- Bookings require multi-stage approvals
+- Equipment is assigned to specific labs
+- All major actions are logged for audit trails
+
+## Project Structure
+
+```
+lab-managment-system/
+├── app/                          # Next.js 15 app directory
+│   ├── api/                      # API routes
+│   │   ├── admin/               # Admin-specific endpoints
+│   │   ├── auth/                # Authentication endpoints
+│   │   ├── bookings/            # Booking management
+│   │   ├── users/               # User management
+│   │   └── ...
+│   ├── dashboard/               # Dashboard pages
+│   │   ├── analytics/           # Analytics dashboard
+│   │   ├── bookings/            # Booking management
+│   │   ├── labs/                # Lab management
+│   │   └── ...
+│   ├── layout.tsx               # Root layout
+│   └── page.tsx                 # Home page
+├── components/                   # Reusable React components
+│   ├── auth/                    # Authentication components
+│   ├── dashboard/               # Dashboard-specific components
+│   ├── ui/                      # shadcn/ui components
+│   └── ...
+├── lib/                         # Utility libraries
+│   ├── auth.ts                  # Authentication utilities
+│   ├── database.ts              # Database connection
+│   ├── email.ts                 # Email utilities
+│   └── utils.ts                 # General utilities
+├── hooks/                       # Custom React hooks
+├── scripts/                     # Database and setup scripts
+├── public/                      # Static assets
+└── styles/                      # Global styles
+```
+
+## API Endpoints
+
+### Authentication
+- `POST /api/auth/login` - User login
+- `POST /api/auth/logout` - User logout
+- `POST /api/auth/register` - User registration
+- `POST /api/auth/forgot-password` - Password reset request
+- `POST /api/auth/reset-password` - Password reset confirmation
+
+### Bookings
+- `GET /api/bookings` - Get user's bookings
+- `POST /api/bookings` - Create new booking
+- `PUT /api/bookings/[id]` - Update booking
+- `DELETE /api/bookings/[id]` - Cancel booking
+
+### Admin
+- `GET /api/admin/stats` - Dashboard statistics
+- `GET /api/admin/users` - User management
+- `GET /api/admin/labs` - Lab management
+- `GET /api/admin/daily-schedule` - Daily lab schedule
+
+## Configuration Options
+
+### Database Configuration
+
+The application supports various MySQL configurations. Update the database settings in `.env.local`:
+
+```env
+# For custom MySQL setup
+DB_HOST=your_mysql_host
+DB_PORT=3306
+DB_USER=your_mysql_user
+DB_PASSWORD=your_mysql_password
+DB_NAME=lnmiit_lab_management
+
+# For connection pooling (optional)
+DB_CONNECTION_LIMIT=10
+DB_QUEUE_LIMIT=0
+```
+
+### Email Configuration
+
+Configure email settings for notifications:
+
+```env
+# Gmail SMTP (recommended for development)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_gmail@gmail.com
+SMTP_PASSWORD=your_app_password
+
+# Custom SMTP server
+SMTP_HOST=mail.yourserver.com
+SMTP_PORT=587
+SMTP_USER=your_email@yourserver.com
+SMTP_PASSWORD=your_password
+```
+
+## Development Guidelines
+
+### Code Style
+- Use TypeScript for type safety
+- Follow ESLint and Prettier configurations
+- Use meaningful variable and function names
+- Comment complex business logic
+
+### Database Queries
+- Use parameterized queries to prevent SQL injection
+- Implement proper error handling
+- Use transactions for multi-table operations
+- Index frequently queried columns
+
+### Security Best Practices
+- Validate all user inputs
+- Use JWT tokens with appropriate expiration
+- Implement rate limiting for API endpoints
+- Sanitize user data before database operations
+- Use HTTPS in production
+
+## Deployment
+
+### Production Build
+
+```bash
+# Build the application
+pnpm run build
+
+# Start production server
+pnpm run start
+```
+
+### Environment Variables for Production
+
+```env
+NODE_ENV=production
+NEXT_PUBLIC_APP_URL=https://yourdomain.com
+DB_HOST=your_production_db_host
+JWT_SECRET=your_production_jwt_secret
+```
+
+### Database Migration
+
+For production deployment, run migrations:
+
+```bash
+# Run production setup
+mysql -u your_user -p your_production_db < scripts/01-create-tables-mysql.sql
+mysql -u your_user -p your_production_db < scripts/02-add-indexes-mysql.sql
+mysql -u your_user -p your_production_db < scripts/02-seed-data.sql
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Database Connection Error**
+   - Verify MySQL is running
+   - Check database credentials in `.env.local`
+   - Ensure database exists
+
+2. **Port Already in Use**
+   ```bash
+   # Kill process on port 3000
+   lsof -ti:3000 | xargs kill
+   ```
+
+3. **Build Errors**
+   ```bash
+   # Clear Next.js cache
+   rm -rf .next
+   pnpm run build
+   ```
+
+4. **Module Resolution Issues**
+   ```bash
+   # Clear node_modules and reinstall
+   rm -rf node_modules pnpm-lock.yaml
+   pnpm install
+   ```
+
+### Performance Optimization
+
+1. **Database Optimization**
+   - Add indexes on frequently queried columns
+   - Use connection pooling
+   - Implement query caching
+
+2. **Frontend Optimization**
+   - Use Next.js Image component for images
+   - Implement proper loading states
+   - Use React.memo for expensive components
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Make your changes and commit: `git commit -m "Add feature"`
+4. Push to the branch: `git push origin feature-name`
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+For support and questions:
+- Create an issue on GitHub
+- Email: support@yourdomain.com
+- Documentation: [Project Wiki](https://github.com/abhinavdogra21/lab-managment-system/wiki)
+
+## Changelog
+
+### Version 1.0.0
+- Initial release with core functionality
+- User authentication and authorization
+- Lab booking system with approval workflow
+- Admin dashboard and analytics
+- Equipment management
+- Email notifications
+
+---
+
+**Built with ❤️ for educational institutions**
 - **Styling**: Tailwind CSS + Radix UI components
 - **Database**: MySQL with fallbacks for demo mode
 - **Authentication**: Cookie-based sessions with role-based access control (RBAC)

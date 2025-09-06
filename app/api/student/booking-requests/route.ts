@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       FROM booking_requests br
       LEFT JOIN labs l ON br.lab_id = l.id
       LEFT JOIN users u ON br.faculty_supervisor_id = u.id
-      WHERE br.requested_by = ? AND br.request_type = 'lab_booking'
+      WHERE br.requested_by = ?
       ORDER BY br.created_at DESC
     `, [studentId])
 

@@ -23,34 +23,38 @@ export async function GET(request: NextRequest) {
     
     try {
       const bookingsResult = await db.query(`
-    SELECT start_time, end_time, purpose
-    FROM booking_requests 
-    WHERE lab_id = ? 
-    AND booking_date = ? 
-    AND status IN ('pending_faculty', 'pending_lab_staff', 'pending_hod', 'approved')
+        SELECT br.start_time, br.end_time, br.purpose, u.name as booker_name
+        FROM booking_requests br
+        JOIN users u ON br.requested_by = u.id
+        WHERE br.lab_id = ? 
+        AND br.booking_date = ? 
+        AND br.status IN ('pending_faculty', 'pending_lab_staff', 'pending_hod', 'approved')
       `, [labId, date])
       
       bookedSlots = [...bookedSlots, ...bookingsResult.rows.map((booking: any) => ({
         start_time: booking.start_time,
         end_time: booking.end_time,
         purpose: booking.purpose || 'Lab Booking',
+        booker_name: booking.booker_name,
         type: 'booking'
       }))]
     } catch (bookingError: any) {
       console.log('Booking query failed, trying alternative table')
       try {
         const altBookingsResult = await db.query(`
-          SELECT start_time, end_time, purpose
-          FROM lab_bookings 
-          WHERE lab_id = ? 
-          AND booking_date = ? 
-          AND approval_status IN ('pending', 'approved')
+          SELECT lb.start_time, lb.end_time, lb.purpose, u.name as booker_name
+          FROM lab_bookings lb
+          JOIN users u ON lb.booked_by = u.id
+          WHERE lb.lab_id = ? 
+          AND lb.booking_date = ? 
+          AND lb.approval_status IN ('pending', 'approved')
         `, [labId, date])
         
         bookedSlots = [...bookedSlots, ...altBookingsResult.rows.map((booking: any) => ({
           start_time: booking.start_time,
           end_time: booking.end_time,
           purpose: booking.purpose || 'Lab Booking',
+          booker_name: booking.booker_name,
           type: 'booking'
         }))]
       } catch (altError: any) {
@@ -94,6 +98,7 @@ export async function GET(request: NextRequest) {
         end_time: endTime,
         time_range: `${startTime} - ${endTime}`,
         purpose: slot.purpose,
+        booker_name: slot.booker_name || null,
         type: slot.type
       }
     })

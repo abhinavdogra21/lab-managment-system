@@ -2,8 +2,10 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { Activity, Database, HardDrive, Users, FlaskConical } from "lucide-react"
+import { Activity, Database, HardDrive, Users, FlaskConical, Calendar, Clock } from "lucide-react"
+import Link from "next/link"
 
 type StatResponse = {
   totalUsers: number
@@ -129,6 +131,50 @@ export default function AdminDashboardPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Quick Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" /> 
+                Quick Actions
+              </CardTitle>
+              <CardDescription>Common administrative tasks</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <Button asChild variant="outline" className="h-auto p-4">
+                  <Link href="/admin/dashboard/daily-schedule" className="flex flex-col items-center gap-2">
+                    <Clock className="h-6 w-6 text-blue-600" />
+                    <div className="text-center">
+                      <div className="font-medium">Daily Schedule</div>
+                      <div className="text-xs text-muted-foreground">View lab bookings & classes</div>
+                    </div>
+                  </Link>
+                </Button>
+                
+                <Button asChild variant="outline" className="h-auto p-4">
+                  <Link href="/admin/dashboard/timetable" className="flex flex-col items-center gap-2">
+                    <Calendar className="h-6 w-6 text-green-600" />
+                    <div className="text-center">
+                      <div className="font-medium">Weekly Timetable</div>
+                      <div className="text-xs text-muted-foreground">Manage class schedules</div>
+                    </div>
+                  </Link>
+                </Button>
+                
+                <Button asChild variant="outline" className="h-auto p-4">
+                  <Link href="/admin/dashboard/labs" className="flex flex-col items-center gap-2">
+                    <FlaskConical className="h-6 w-6 text-purple-600" />
+                    <div className="text-center">
+                      <div className="font-medium">Lab Management</div>
+                      <div className="text-xs text-muted-foreground">Configure labs & equipment</div>
+                    </div>
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Recent System Activity */}
           <div className="grid gap-6">

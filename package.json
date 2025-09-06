@@ -1,13 +1,19 @@
 {
-  "name": "my-v0-project",
-  "version": "0.1.0",
+  "name": "lab-management-system",
+  "version": "1.0.0",
+  "description": "A comprehensive web-based laboratory management system for educational institutions",
   "private": true,
   "scripts": {
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
-    "db:setup": "node scripts/db-setup.js"
+    "db:setup": "node scripts/db-setup.js",
+    "setup": "./scripts/setup-db.sh",
+    "setup:manual": "echo 'Please run: chmod +x scripts/setup-db.sh && ./scripts/setup-db.sh'",
+    "db:reset": "echo 'This will delete all data. Use with caution.' && mysql -u root -p -e 'DROP DATABASE IF EXISTS lnmiit_lab_management; CREATE DATABASE lnmiit_lab_management CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'",
+    "db:migrate": "mysql -u root -p lnmiit_lab_management < scripts/01-create-tables-mysql.sql && mysql -u root -p lnmiit_lab_management < scripts/02-add-indexes-mysql.sql && mysql -u root -p lnmiit_lab_management < scripts/02-seed-data.sql",
+    "postinstall": "echo '🚀 Installation complete! Run: pnpm setup (to setup database) or pnpm dev (if already setup)'"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

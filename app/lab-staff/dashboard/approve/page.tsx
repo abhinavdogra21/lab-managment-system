@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -39,6 +39,11 @@ export default function LabStaffApprovePage() {
   const [remarks, setRemarks] = useState<Record<number, string>>({})
   const [showTimeline, setShowTimeline] = useState<Record<number, boolean>>({})
   const [searchTerm, setSearchTerm] = useState('')
+
+  // Memoized remarks change handler to prevent re-renders
+  const handleRemarksChange = useCallback((requestId: number, value: string) => {
+    setRemarks(prev => ({ ...prev, [requestId]: value }))
+  }, [])
 
   const loadPendingRequests = async () => {
     setLoading(true)
@@ -108,8 +113,10 @@ export default function LabStaffApprovePage() {
     )
   }
 
-  const handleAction = async (requestId: number, action: 'approve' | 'reject') => {
-    const requestRemarks = remarks[requestId]?.trim()
+  const handleAction = async (requestId: number, action: 'approve' | 'reject', overrideRemarks?: string) => {
+    const requestRemarks = typeof overrideRemarks === 'string'
+      ? overrideRemarks.trim()
+      : remarks[requestId]?.trim()
     
     if (action === 'reject' && !requestRemarks) {
       toast({
@@ -345,7 +352,24 @@ export default function LabStaffApprovePage() {
     return 'waiting'
   }
 
-  const RequestCard = ({ item, showActions = false }: { item: RequestItem, showActions?: boolean }) => (
+  const RequestCard = React.memo(({ item, showActions = false }: { item: RequestItem, showActions?: boolean }) => {
+    const textareaRef = React.useRef<HTMLTextAreaElement>(null)
+
+    const getCurrentRemark = () => {
+      return textareaRef.current?.value || ''
+    }
+
+    const handleApprove = () => {
+      const currentRemark = getCurrentRemark()
+      handleAction(item.id, 'approve', currentRemark)
+    }
+
+    const handleReject = () => {
+      const currentRemark = getCurrentRemark()
+      handleAction(item.id, 'reject', currentRemark)
+    }
+
+    return (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-4 space-y-3">
         {/* Header - Lab and Student Info */}
@@ -429,16 +453,16 @@ export default function LabStaffApprovePage() {
         {/* Action Section for Pending Requests */}
         {showActions && (
           <div className="space-y-2 pt-2 border-t">
-            <Textarea
+            <textarea
+              ref={textareaRef}
               placeholder="Add your remarks (optional for approval, required for rejection)..."
-              value={remarks[item.id] || ''}
-              onChange={(e) => setRemarks(prev => ({ ...prev, [item.id]: e.target.value }))}
-              className="min-h-[60px] text-xs"
+              defaultValue={remarks[item.id] || ''}
+              className="min-h-[60px] text-xs w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
             />
 
             <div className="flex gap-2">
               <Button
-                onClick={() => handleAction(item.id, 'approve')}
+                onClick={handleApprove}
                 disabled={actionLoading === item.id}
                 className="flex-1 bg-green-600 hover:bg-green-700 h-8 text-xs"
               >
@@ -456,7 +480,7 @@ export default function LabStaffApprovePage() {
               </Button>
 
               <Button
-                onClick={() => handleAction(item.id, 'reject')}
+                onClick={handleReject}
                 disabled={actionLoading === item.id}
                 variant="destructive"
                 className="flex-1 h-8 text-xs"
@@ -478,7 +502,8 @@ export default function LabStaffApprovePage() {
         )}
       </CardContent>
     </Card>
-  )
+    )
+  })
 
   useEffect(() => {
     if (activeTab === 'pending') {
