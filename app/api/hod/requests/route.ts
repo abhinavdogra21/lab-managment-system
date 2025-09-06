@@ -40,9 +40,14 @@ export async function GET(request: NextRequest) {
     const params = [user.department]
 
     if (status && status !== 'all') {
-      // specific status requested
-      query += ` AND br.status = ?`
-      params.push(status)
+      if (status === 'rejected') {
+        // For rejected status, only show requests rejected BY HOD (not by faculty or lab staff)
+        query += ` AND br.status = 'rejected' AND br.hod_approved_by IS NOT NULL`
+      } else {
+        // specific status requested
+        query += ` AND br.status = ?`
+        params.push(status)
+      }
     } else if (status === 'all') {
       // For 'all' status, only show requests that reached HOD level
       // This includes: pending_hod, approved, and requests rejected BY HOD

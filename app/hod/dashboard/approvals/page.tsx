@@ -3,7 +3,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
@@ -26,8 +25,11 @@ interface RequestItem {
   hod_remarks?: string
 }
 
-/* --------------------- TimelineView (stateless) --------------------- */
-const TimelineView = ({ item, getStepStatus, getFinalApprovalStatus }: { item: RequestItem, getStepStatus: any, getFinalApprovalStatus: any }) => {
+const TimelineView = ({ item, getStepStatus, getFinalApprovalStatus }: { 
+  item: RequestItem, 
+  getStepStatus: any, 
+  getFinalApprovalStatus: any 
+}) => {
   const allSteps = [
     { name: 'Submitted', status: 'completed', icon: Clock },
     { name: 'Faculty Review', status: getStepStatus(item, 'Faculty Review'), icon: User },
@@ -95,7 +97,6 @@ const TimelineView = ({ item, getStepStatus, getFinalApprovalStatus }: { item: R
   )
 }
 
-/* --------------------- RequestCard (memoized) --------------------- */
 const RequestCard = React.memo(function RequestCardComponent({
   item,
   showActions = false,
@@ -213,7 +214,6 @@ const RequestCard = React.memo(function RequestCardComponent({
               />
             </div>
 
-
             <div className="flex gap-2 pt-2">
               <Button
                 onClick={handleApprove}
@@ -256,7 +256,7 @@ const RequestCard = React.memo(function RequestCardComponent({
   )
 })
 
-export default function FacultyApprovePage() {
+export default function HODApprovePage() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<number | null>(null)
@@ -268,12 +268,10 @@ export default function FacultyApprovePage() {
   const [remarks, setRemarks] = useState<Record<number, string>>({})
   const [showTimeline, setShowTimeline] = useState<Record<number, boolean>>({})
 
-  // Memoized remarks change handler to prevent re-renders
   const handleRemarksChange = useCallback((requestId: number, value: string) => {
     setRemarks(prev => ({ ...prev, [requestId]: value }))
   }, [])
 
-  // Memoized filtered arrays to prevent unnecessary re-computations
   const filteredPendingItems = useMemo(() => {
     return pendingItems.filter(item =>
       item.student_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -301,7 +299,7 @@ export default function FacultyApprovePage() {
   const loadPendingRequests = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/faculty/requests?status=pending_faculty', { cache: 'no-store' })
+      const res = await fetch('/api/hod/requests?status=pending_hod', { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
         setPendingItems(data.requests || [])
@@ -319,7 +317,7 @@ export default function FacultyApprovePage() {
   const loadApprovedRequests = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/faculty/requests?status=approved,pending_lab_staff', { cache: 'no-store' })
+      const res = await fetch('/api/hod/requests?status=approved', { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
         setApprovedItems(data.requests || [])
@@ -329,6 +327,24 @@ export default function FacultyApprovePage() {
     } catch (error) {
       console.error("Failed to load approved requests:", error)
       setApprovedItems([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadRejectedRequests = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/hod/requests?status=rejected', { cache: 'no-store' })
+      if (res.ok) {
+        const data = await res.json()
+        setRejectedItems(data.requests || [])
+      } else {
+        setRejectedItems([])
+      }
+    } catch (error) {
+      console.error("Failed to load rejected requests:", error)
+      setRejectedItems([])
     } finally {
       setLoading(false)
     }
@@ -344,25 +360,6 @@ export default function FacultyApprovePage() {
     }
   }, [activeTab])
 
-  const loadRejectedRequests = async () => {
-    setLoading(true)
-    try {
-      const res = await fetch('/api/faculty/requests?status=rejected', { cache: 'no-store' })
-      if (res.ok) {
-        const data = await res.json()
-        setRejectedItems(data.requests || [])
-      } else {
-        setRejectedItems([])
-      }
-    } catch (error) {
-      console.error("Failed to load rejected requests:", error)
-      setRejectedItems([])
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // allow passing overrideRemarks from the RequestCard so we don't wait for parent state sync
   const handleAction = async (requestId: number, action: 'approve' | 'reject', overrideRemarks?: string) => {
     const requestRemarks = typeof overrideRemarks === 'string'
       ? overrideRemarks.trim()
@@ -379,7 +376,7 @@ export default function FacultyApprovePage() {
 
     try {
       setActionLoading(requestId)
-      const res = await fetch(`/api/faculty/requests/${requestId}/action`, {
+      const res = await fetch(`/api/hod/requests/${requestId}/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -396,7 +393,6 @@ export default function FacultyApprovePage() {
           variant: "default"
         })
 
-        // clear parent remarks for this request (if any)
         setRemarks(prev => {
           const newRemarks = { ...prev }
           delete newRemarks[requestId]
@@ -407,6 +403,9 @@ export default function FacultyApprovePage() {
         if (action === 'approve') {
           await loadApprovedRequests()
           setActiveTab('approved')
+        } else if (action === 'reject') {
+          await loadRejectedRequests()
+          setActiveTab('rejected')
         }
       } else {
         const error = await res.json()
@@ -479,35 +478,36 @@ export default function FacultyApprovePage() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'pending_faculty':
-        return <Badge variant="outline" className="text-orange-600 border-orange-300">Pending Faculty Review</Badge>
-      case 'pending_lab_staff':
-        return <Badge variant="outline" className="text-blue-600 border-blue-300">Pending Lab Staff Review</Badge>
       case 'pending_hod':
         return <Badge variant="outline" className="text-purple-600 border-purple-300">Pending HOD Review</Badge>
       case 'approved':
         return <Badge variant="outline" className="text-green-600 border-green-300">Approved</Badge>
       case 'rejected':
         return <Badge variant="outline" className="text-red-600 border-red-300">Rejected</Badge>
+      case 'pending_faculty':
+        return <Badge variant="outline" className="text-orange-600 border-orange-300">Pending Faculty Review</Badge>
+      case 'pending_lab_staff':
+        return <Badge variant="outline" className="text-blue-600 border-blue-300">Pending Lab Staff Review</Badge>
       default:
         return <Badge variant="outline">{status}</Badge>
     }
   }
 
-  /* -------------------- render -------------------- */
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
         <Button variant="outline" size="sm" asChild>
-          <Link href="/faculty/dashboard">
+          <Link href="/hod/dashboard">
             <ArrowLeft className="h-4 w-4 mr-1" />
             Back
           </Link>
         </Button>
         <div>
-          <h1 className="text-xl font-bold">Review Lab Requests</h1>
+          <h1 className="text-xl font-bold">HOD Lab Request Approvals</h1>
           <p className="text-xs text-muted-foreground">
-            {activeTab === 'pending' ? `${pendingItems.length} requests pending your approval` : activeTab === 'approved' ? `${approvedItems.length} approved requests` : `${rejectedItems.length} rejected requests`}
+            {activeTab === 'pending' ? `${pendingItems.length} requests pending your approval` : 
+             activeTab === 'approved' ? `${approvedItems.length} requests you approved` : 
+             `${rejectedItems.length} requests you rejected`}
           </p>
         </div>
       </div>
@@ -557,9 +557,6 @@ export default function FacultyApprovePage() {
                 const remarkText = remarks[item.id] || ''
                 const showTimelineForItem = !!showTimeline[item.id]
 
-                const onRemarksChange = (val: string) => handleRemarksChange(item.id, val)
-                const onToggleTimeline = () => toggleTimeline(item.id)
-
                 return (
                   <RequestCard
                     key={item.id}
@@ -567,8 +564,8 @@ export default function FacultyApprovePage() {
                     showActions={true}
                     remark={remarkText}
                     showTimelineForItem={showTimelineForItem}
-                    onRemarksChange={onRemarksChange}
-                    onToggleTimeline={onToggleTimeline}
+                    onRemarksChange={(val: string) => handleRemarksChange(item.id, val)}
+                    onToggleTimeline={() => toggleTimeline(item.id)}
                     onAction={handleAction}
                     actionLoading={actionLoading}
                     formatDate={formatDate}
