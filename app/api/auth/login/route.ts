@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import crypto from "node:crypto"
-import { dbOperations } from "@/lib/database"
+import { dbOperations, Database } from "@/lib/database"
 // Using a simple encoded JSON cookie for auth in this demo environment
 
 // Mock user database for testing
@@ -139,11 +139,31 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid credentials or role" }, { status: 401 })
       }
 
+      // For HOD users, get the actual name of the person assigned as HOD for this department
+      let displayName = dbUser.name
+      if (dbUser.role === 'hod') {
+        try {
+          const db = Database.getInstance()
+          const result = await db.query(
+            "SELECT u.name FROM departments d JOIN users u ON d.hod_id = u.id WHERE d.code = ?",
+            [dbUser.department]
+          )
+          console.log("HOD name lookup result:", result.rows)
+          if (result.rows.length > 0 && result.rows[0].name) {
+            displayName = result.rows[0].name
+            console.log("Updated display name to:", displayName)
+          }
+        } catch (error) {
+          console.log("Could not fetch HOD name, using default:", error)
+          // Fall back to default name if query fails
+        }
+      }
+
       const tokenPayload = {
         userId: Number.parseInt(String(dbUser.id), 10),
         email: dbUser.email,
         role: String(dbUser.role),  // Keep database role format (lab_staff) for middleware
-        name: dbUser.name,
+        name: displayName,
         department: dbUser.department,
       }
       const token = encodeURIComponent(JSON.stringify(tokenPayload))
@@ -152,7 +172,7 @@ export async function POST(request: NextRequest) {
         user: {
           id: String(dbUser.id),
           email: dbUser.email,
-          name: dbUser.name,
+          name: displayName,  // Use the dynamic name
           role: String(dbUser.role).replace(/_/g, "-"),
           department: dbUser.department,
           studentId: dbUser.student_id || null,
