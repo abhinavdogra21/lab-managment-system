@@ -30,24 +30,25 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         [remarks || null, user.userId, id]
       )
 
-      // Notify next approver? (lab staff assignment unknown). For now, notify student.
-      try {
-        const smtp = isSmtpConfigured()
-        if (smtp.configured) {
-          const stu = await db.query(`SELECT email, name FROM users WHERE id = ?`, [req.requested_by])
-          const lab = await db.query(`SELECT name FROM labs WHERE id = ?`, [req.lab_id])
-          const to = stu.rows?.[0]?.email
-          if (to) {
-            await sendMail({
-              to,
-              subject: 'Your lab booking request progressed to Lab Staff',
-              html: `<p>Hi ${stu.rows?.[0]?.name || 'Student'},</p><p>Your request for ${lab.rows?.[0]?.name || 'Lab'} on ${req.booking_date} ${req.start_time}-${req.end_time} has been approved by faculty and moved to Lab Staff for review.</p>`
-            })
-          }
-        }
-      } catch (e) {
-        console.warn('Email notify skipped:', (e as any)?.message || e)
-      }
+      // Email notifications disabled during testing
+      // (kept for reference; uncomment when enabling emails site-wide)
+      // try {
+      //   const smtp = isSmtpConfigured()
+      //   if (smtp.configured) {
+      //     const stu = await db.query(`SELECT email, name FROM users WHERE id = ?`, [req.requested_by])
+      //     const lab = await db.query(`SELECT name FROM labs WHERE id = ?`, [req.lab_id])
+      //     const to = stu.rows?.[0]?.email
+      //     if (to) {
+      //       await sendMail({
+      //         to,
+      //         subject: 'Your lab booking request progressed to Lab Staff',
+      //         html: `<p>Hi ${stu.rows?.[0]?.name || 'Student'},</p><p>Your request for ${lab.rows?.[0]?.name || 'Lab'} on ${req.booking_date} ${req.start_time}-${req.end_time} has been approved by faculty and moved to Lab Staff for review.</p>`
+      //       })
+      //     }
+      //   }
+      // } catch (e) {
+      //   console.warn('Email notify skipped:', (e as any)?.message || e)
+      // }
 
     } else if (action === 'reject') {
       await db.query(
@@ -55,23 +56,23 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         [remarks || 'Rejected by faculty', user.userId, remarks || null, id]
       )
 
-      // Notify student about rejection
-      try {
-        const smtp = isSmtpConfigured()
-        if (smtp.configured) {
-          const stu = await db.query(`SELECT email, name FROM users WHERE id = ?`, [req.requested_by])
-          const to = stu.rows?.[0]?.email
-          if (to) {
-            await sendMail({
-              to,
-              subject: 'Your lab booking request was rejected',
-              html: `<p>Hi ${stu.rows?.[0]?.name || 'Student'},</p><p>Your request was rejected by faculty.</p><p>Remarks: ${remarks || 'No remarks provided'}</p>`
-            })
-          }
-        }
-      } catch (e) {
-        console.warn('Email notify skipped:', (e as any)?.message || e)
-      }
+      // Email notifications disabled during testing
+      // try {
+      //   const smtp = isSmtpConfigured()
+      //   if (smtp.configured) {
+      //     const stu = await db.query(`SELECT email, name FROM users WHERE id = ?`, [req.requested_by])
+      //     const to = stu.rows?.[0]?.email
+      //     if (to) {
+      //       await sendMail({
+      //         to,
+      //         subject: 'Your lab booking request was rejected',
+      //         html: `<p>Hi ${stu.rows?.[0]?.name || 'Student'},</p><p>Your request was rejected by faculty.</p><p>Remarks: ${remarks || 'No remarks provided'}</p>`
+      //       })
+      //     }
+      //   }
+      // } catch (e) {
+      //   console.warn('Email notify skipped:', (e as any)?.message || e)
+      // }
     }
 
     return NextResponse.json({ success: true })

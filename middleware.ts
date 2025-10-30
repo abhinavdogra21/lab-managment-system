@@ -21,6 +21,7 @@ const roleMap: Array<{ pattern: RegExp; roles: string[] }> = [
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
+  const isApi = pathname.startsWith("/api/")
 
   // Legacy fallback: redirect /dashboard/* to role-scoped equivalent
   if (pathname.startsWith("/dashboard")) {
@@ -46,14 +47,34 @@ export function middleware(req: NextRequest) {
 
   // Extract role from cookie (JWT payload pre-parsed into cookie as earlier)
   const token = req.cookies.get("auth-token")?.value
-  if (!token) return NextResponse.redirect(new URL("/", req.url))
+  if (!token) {
+    if (isApi) {
+      return new NextResponse(
+        JSON.stringify({ success: false, error: "Not authenticated" }),
+        { status: 401, headers: { "content-type": "application/json" } }
+      )
+    }
+    return NextResponse.redirect(new URL("/", req.url))
+  }
   try {
     const user = JSON.parse(decodeURIComponent(token)) as { role?: string }
     const role = user?.role
     if (!role || !match.roles.includes(role)) {
+      if (isApi) {
+        return new NextResponse(
+          JSON.stringify({ success: false, error: "Forbidden" }),
+          { status: 403, headers: { "content-type": "application/json" } }
+        )
+      }
       return NextResponse.redirect(new URL("/", req.url))
     }
   } catch {
+    if (isApi) {
+      return new NextResponse(
+        JSON.stringify({ success: false, error: "Invalid session" }),
+        { status: 401, headers: { "content-type": "application/json" } }
+      )
+    }
     return NextResponse.redirect(new URL("/", req.url))
   }
   return NextResponse.next()

@@ -40,14 +40,19 @@ export async function GET(request: NextRequest) {
         u.name as student_name,
         u.email as student_email,
         l.name as lab_name,
-        f.name as faculty_name
+        f.name as faculty_name,
+        s.name as staff_approver_name,
+        h.name as hod_approver_name
       FROM booking_requests br
       JOIN users u ON br.requested_by = u.id
       JOIN labs l ON br.lab_id = l.id
       LEFT JOIN users f ON br.faculty_supervisor_id = f.id
+      LEFT JOIN users s ON br.lab_staff_approved_by = s.id
+      LEFT JOIN users h ON br.hod_approved_by = h.id
       WHERE br.lab_id IN (${assignedLabIds.map(() => '?').join(',')})
+        AND (l.staff_id IS NULL OR l.staff_id = ?)
     `
-    const params: any[] = [...assignedLabIds]
+    const params: any[] = [...assignedLabIds, userId]
 
     if (status === "pending_lab_staff") {
       query += " AND br.status = ?"

@@ -147,27 +147,39 @@ export default function LabStaffApprovePage() {
           description: data.message,
           variant: "default"
         })
-        
+
         // Clear remarks for this request
         setRemarks(prev => {
           const newRemarks = { ...prev }
           delete newRemarks[requestId]
           return newRemarks
         })
-        
-        // Reload the current tab
-        if (activeTab === 'pending') {
-          loadPendingRequests()
-        } else if (activeTab === 'approved') {
-          loadApprovedRequests()
-        } else if (activeTab === 'rejected') {
-          loadRejectedRequests()
+
+        // Always refresh pending first
+        await loadPendingRequests()
+        // Move the item to the corresponding tab and refresh it
+        if (action === 'approve') {
+          await loadApprovedRequests()
+          setActiveTab('approved')
+        } else if (action === 'reject') {
+          await loadRejectedRequests()
+          setActiveTab('rejected')
         }
       } else {
-        const error = await res.json()
+        // Robust error parsing to avoid JSON parse crash on HTML/text responses
+        let message = "Failed to process request"
+        try {
+          const error = await res.json()
+          message = error?.error || error?.message || message
+        } catch {
+          try {
+            const text = await res.text()
+            if (text) message = text.slice(0, 200)
+          } catch {}
+        }
         toast({
           title: "Error",
-          description: error.error || "Failed to process request",
+          description: message,
           variant: "destructive"
         })
       }

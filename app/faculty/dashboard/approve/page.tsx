@@ -192,10 +192,20 @@ export default function FacultyApprovePage() {
           setActiveTab('approved')
         }
       } else {
-        const error = await res.json()
+        // Robust error parsing to avoid JSON parse crash on HTML/text responses
+        let message = "Failed to process request"
+        try {
+          const error = await res.json()
+          message = error?.error || error?.message || message
+        } catch {
+          try {
+            const text = await res.text()
+            if (text) message = text.slice(0, 200)
+          } catch {}
+        }
         toast({
           title: "Error",
-          description: error.error || "Failed to process request",
+          description: message,
           variant: "destructive"
         })
       }

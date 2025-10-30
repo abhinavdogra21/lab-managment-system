@@ -497,6 +497,7 @@ export default function DepartmentAndLabManagementPage() {
                     <TableHead>Lab</TableHead>
                     <TableHead>Code</TableHead>
                     <TableHead>Staff</TableHead>
+                    <TableHead>Head Staff</TableHead>
                     <TableHead>Capacity</TableHead>
                     <TableHead>Location</TableHead>
                     <TableHead>Actions</TableHead>
@@ -580,6 +581,48 @@ export default function DepartmentAndLabManagementPage() {
                               </PopoverContent>
                             </Popover>
                           </div>
+                        </TableCell>
+                        <TableCell className="min-w-48">
+                          {(() => {
+                            const currentIds = (lab.staff_ids_csv || "").split(",").filter(Boolean).map((s) => Number(s))
+                            const candidates = labStaff.filter((u) => currentIds.includes(u.id))
+                            const currentHead = candidates.find((u) => u.id === (lab.staff_id || 0)) || null
+                            return (
+                              <div className="flex items-center gap-2">
+                                <Select
+                                  value={lab.staff_id ? String(lab.staff_id) : "none"}
+                                  onValueChange={async (v) => {
+                                    try {
+                                      const payload: any = { id: lab.id, staffId: v === "none" ? null : Number(v) }
+                                      const res = await fetch("/api/admin/labs", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+                                      const data = await res.json()
+                                      if (!res.ok) throw new Error(data?.error || "Failed to set head lab staff")
+                                      setLabs((prev) => prev.map((x) => (x.id === lab.id ? { ...x, staff_id: data.lab.staff_id, staff_name: data.lab.staff_name } : x)))
+                                      toast({ title: "Head lab staff updated" })
+                                    } catch (e: any) {
+                                      toast({ title: "Update failed", description: e?.message || "", variant: "destructive" })
+                                    }
+                                  }}
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select head" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">Unassigned</SelectItem>
+                                    {candidates.length === 0 ? (
+                                      <SelectItem value="none" disabled>No staff assigned</SelectItem>
+                                    ) : (
+                                      candidates.map((u) => (
+                                        <SelectItem key={u.id} value={String(u.id)}>
+                                          {u.name} <span className="text-xs text-muted-foreground">({u.email})</span>
+                                        </SelectItem>
+                                      ))
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )
+                          })()}
                         </TableCell>
                         <TableCell>{lab.capacity ?? "-"}</TableCell>
                         <TableCell>{lab.location ?? "-"}</TableCell>

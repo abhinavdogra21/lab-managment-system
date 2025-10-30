@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
-import { cookies } from "next/headers"
+import { verifyToken, hasRole } from "@/lib/auth"
 
 export async function POST(
   request: NextRequest,
@@ -11,19 +11,15 @@ export async function POST(
     const { action, remarks } = await request.json()
     const db = Database.getInstance()
 
-    // Get user from token
-    const cookieStore = await cookies()
-    const token = cookieStore.get('auth-token')?.value
-    
-    if (!token) {
+    // Authenticate user
+    const user = await verifyToken(request)
+    if (!user || !hasRole(user, ["lab_staff", "admin"])) {
       return NextResponse.json(
         { success: false, error: "Not authenticated" },
         { status: 401 }
       )
     }
-
-    const decoded = JSON.parse(decodeURIComponent(token))
-    const userId = decoded.id
+    const userId = user.userId
 
     // Validate action
     if (!['approve', 'reject'].includes(action)) {
@@ -47,6 +43,23 @@ export async function POST(
     }
 
     const bookingRequest = requestResult.rows[0]
+
+    // Authorization: ensure this staff is allowed to act on this lab's requests
+    const labAuth = await db.query(
+      `SELECT 
+         l.staff_id AS head_staff_id,
+         EXISTS(SELECT 1 FROM lab_staff_assignments la WHERE la.lab_id = l.id AND la.staff_id = ?) AS is_assigned
+       FROM labs l WHERE l.id = ?`,
+      [userId, bookingRequest.lab_id]
+    )
+    const authRow = labAuth.rows[0]
+    const isAssigned = authRow && (authRow.is_assigned === 1 || authRow.is_assigned === true || authRow.is_assigned === '1')
+    if (!isAssigned) {
+      return NextResponse.json({ success: false, error: "Not authorized for this lab" }, { status: 403 })
+    }
+    if (authRow.head_staff_id && Number(authRow.head_staff_id) !== Number(userId)) {
+      return NextResponse.json({ success: false, error: "Only head lab staff can process this request" }, { status: 403 })
+    }
 
     // Update the request based on action
     let newStatus: string
