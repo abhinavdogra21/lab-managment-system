@@ -71,36 +71,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     if (action === 'approve') {
-      // Final approval: ensure stock and deduct
-      // Gather items
-      const items = await db.query(
-        `SELECT i.*, c.quantity_available
-         FROM component_request_items i
-         JOIN components c ON c.id = i.component_id
-         WHERE i.request_id = ?`,
-        [id]
+      // Mark as approved - quantities will be deducted when lab staff issues the components
+      await db.query(
+        `UPDATE component_requests
+         SET status = 'approved', hod_approver_id = ?, hod_approved_at = NOW(), hod_remarks = ?
+         WHERE id = ? AND status = 'pending_hod'`,
+        [Number(user.userId), remarks, id]
       )
-      // Check stock
-      for (const it of items.rows) {
-        if (Number(it.quantity_requested) > Number(it.quantity_available)) {
-          return NextResponse.json({ error: `Insufficient stock for component ${it.component_id}` }, { status: 400 })
-        }
-      }
-      // Deduct and mark approved in a transaction
-      await db.transaction(async (client) => {
-        for (const it of items.rows) {
-          await client.query(
-            `UPDATE components SET quantity_available = quantity_available - ? WHERE id = ?`,
-            [Number(it.quantity_requested), Number(it.component_id)]
-          )
-        }
-        await client.query(
-          `UPDATE component_requests
-           SET status = 'approved', hod_approver_id = ?, hod_approved_at = NOW(), hod_remarks = ?
-           WHERE id = ? AND status = 'pending_hod'`,
-          [Number(user.userId), remarks, id]
-        )
-      })
       const sel = await db.query(`SELECT * FROM component_requests WHERE id = ?`, [id])
       return NextResponse.json({ request: sel.rows[0] })
     }

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { Calendar, CheckCircle, Clock, Eye, Package, RotateCcw, User, Users, Building, XCircle, ChevronLeft, X } from "lucide-react"
 import Link from "next/link"
@@ -60,6 +61,7 @@ export default function MyComponentRequestsPage() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [requests, setRequests] = useState<ComponentRequest[]>([])
+  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'approved' | 'issued' | 'returned' | 'rejected'>('all')
 
   useEffect(() => { loadRequests() }, [])
 
@@ -143,29 +145,51 @@ export default function MyComponentRequestsPage() {
   }
 
   function getStepState(req: ComponentRequest, step: 'faculty'|'staff'|'hod'|'final') : 'completed'|'pending'|'waiting'|'rejected' {
-    if (req.status === 'rejected') return 'rejected'
+    const status: any = req.status
+    if (status === 'rejected') return 'rejected'
     if (step === 'faculty') {
-      if (req.status === 'pending_faculty') return 'pending'
-      if (['pending_lab_staff','pending_hod','approved'].includes(req.status)) return 'completed'
+      if (status === 'pending_faculty') return 'pending'
+      if (['pending_lab_staff','pending_hod','approved'].includes(status)) return 'completed'
       return 'waiting'
     }
     if (step === 'staff') {
-      if (req.status === 'pending_lab_staff') return 'pending'
-      if (['pending_hod','approved'].includes(req.status)) return 'completed'
-      if (req.status === 'pending_faculty') return 'waiting'
+      if (status === 'pending_lab_staff') return 'pending'
+      if (['pending_hod','approved'].includes(status)) return 'completed'
+      if (status === 'pending_faculty') return 'waiting'
       return 'waiting'
     }
     if (step === 'hod') {
-      if (req.status === 'pending_hod') return 'pending'
-      if (req.status === 'approved') return 'completed'
-      if (['pending_faculty','pending_lab_staff'].includes(req.status)) return 'waiting'
+      if (status === 'pending_hod') return 'pending'
+      if (status === 'approved') return 'completed'
+      if (['pending_faculty','pending_lab_staff'].includes(status)) return 'waiting'
       return 'waiting'
     }
     // final
-    if (req.status === 'approved') return 'completed'
-    if (req.status === 'rejected') return 'rejected'
+    if (status === 'approved') return 'completed'
+    if (status === 'rejected') return 'rejected'
     return 'waiting'
   }
+
+  // Filter requests based on active tab
+  const filteredRequests = useMemo(() => {
+    if (activeTab === 'all') return requests
+    if (activeTab === 'pending') return requests.filter(r => ['pending_faculty', 'pending_lab_staff', 'pending_hod'].includes(r.status))
+    if (activeTab === 'approved') return requests.filter(r => r.status === 'approved' && !r.issued_at)
+    if (activeTab === 'issued') return requests.filter(r => r.issued_at && !r.returned_at)
+    if (activeTab === 'returned') return requests.filter(r => r.returned_at !== null)
+    if (activeTab === 'rejected') return requests.filter(r => r.status === 'rejected')
+    return requests
+  }, [requests, activeTab])
+
+  // Calculate counts for badges
+  const counts = useMemo(() => ({
+    all: requests.length,
+    pending: requests.filter(r => ['pending_faculty', 'pending_lab_staff', 'pending_hod'].includes(r.status)).length,
+    approved: requests.filter(r => r.status === 'approved' && !r.issued_at).length,
+    issued: requests.filter(r => r.issued_at && !r.returned_at).length,
+    returned: requests.filter(r => r.returned_at !== null).length,
+    rejected: requests.filter(r => r.status === 'rejected').length,
+  }), [requests])
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
@@ -189,7 +213,7 @@ export default function MyComponentRequestsPage() {
           <CardContent className="text-center py-12">
             <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
             <p className="font-medium">No component requests found</p>
-            <p className="text-sm text-muted-foreground">Use “Request Lab Components” to create your first request</p>
+            <p className="text-sm text-muted-foreground">Use "Request Lab Components" to create your first request</p>
             <div className="mt-4">
               <Button asChild>
                 <Link href="/student/dashboard/request-components">Request Lab Components</Link>
@@ -198,8 +222,37 @@ export default function MyComponentRequestsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {requests.map((req) => (
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-4">
+          <TabsList className="grid w-full grid-cols-6 max-w-3xl">
+            <TabsTrigger value="all" className="text-xs">
+              All {counts.all > 0 && <Badge variant="secondary" className="ml-1">{counts.all}</Badge>}
+            </TabsTrigger>
+            <TabsTrigger value="pending" className="text-xs">
+              Pending {counts.pending > 0 && <Badge variant="secondary" className="ml-1 bg-orange-100 text-orange-800 animate-pulse">{counts.pending}</Badge>}
+            </TabsTrigger>
+            <TabsTrigger value="approved" className="text-xs">
+              Approved {counts.approved > 0 && <Badge variant="secondary" className="ml-1 bg-green-100 text-green-800">{counts.approved}</Badge>}
+            </TabsTrigger>
+            <TabsTrigger value="issued" className="text-xs">
+              Issued {counts.issued > 0 && <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-800 animate-pulse">{counts.issued}</Badge>}
+            </TabsTrigger>
+            <TabsTrigger value="returned" className="text-xs">
+              Returned {counts.returned > 0 && <Badge variant="secondary" className="ml-1 bg-gray-100 text-gray-800">{counts.returned}</Badge>}
+            </TabsTrigger>
+            <TabsTrigger value="rejected" className="text-xs">
+              Rejected {counts.rejected > 0 && <Badge variant="destructive" className="ml-1">{counts.rejected}</Badge>}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value={activeTab} className="space-y-4">
+            {filteredRequests.length === 0 ? (
+              <Card>
+                <CardContent className="text-center py-8">
+                  <p className="text-muted-foreground">No requests found in this category</p>
+                </CardContent>
+              </Card>
+            ) : (
+              filteredRequests.map((req) => (
             <Card key={req.id}>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 justify-between">
@@ -346,8 +399,10 @@ export default function MyComponentRequestsPage() {
               </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
+              ))
+            )}
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   )
