@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { Calendar, Clock, Check, X, ArrowLeft, User, Building, CheckCircle2, Users } from 'lucide-react'
@@ -263,7 +264,8 @@ export default function HODApprovePage() {
   const [pendingItems, setPendingItems] = useState<RequestItem[]>([])
   const [approvedItems, setApprovedItems] = useState<RequestItem[]>([])
   const [rejectedItems, setRejectedItems] = useState<RequestItem[]>([])
-  const [activeTab, setActiveTab] = useState('pending')
+  const [activeTab, setActiveTab] = useState<'pending'|'approved'|'rejected'>('pending')
+  const [activeType, setActiveType] = useState<'lab'|'components'>('lab')
   const [search, setSearch] = useState('')
   const [remarks, setRemarks] = useState<Record<number, string>>({})
   const [showTimeline, setShowTimeline] = useState<Record<number, boolean>>({})
@@ -276,6 +278,9 @@ export default function HODApprovePage() {
     return pendingItems.filter(item =>
       item.student_name.toLowerCase().includes(search.toLowerCase()) ||
       item.student_email.toLowerCase().includes(search.toLowerCase()) ||
+      item.lab_name?.toLowerCase().includes(search.toLowerCase()) ||
+      item.faculty_name?.toLowerCase().includes(search.toLowerCase()) ||
+      item.purpose?.toLowerCase().includes(search.toLowerCase()) ||
       item.id.toString().includes(search)
     )
   }, [pendingItems, search])
@@ -284,6 +289,9 @@ export default function HODApprovePage() {
     return approvedItems.filter(item =>
       item.student_name.toLowerCase().includes(search.toLowerCase()) ||
       item.student_email.toLowerCase().includes(search.toLowerCase()) ||
+      item.lab_name?.toLowerCase().includes(search.toLowerCase()) ||
+      item.faculty_name?.toLowerCase().includes(search.toLowerCase()) ||
+      item.purpose?.toLowerCase().includes(search.toLowerCase()) ||
       item.id.toString().includes(search)
     )
   }, [approvedItems, search])
@@ -292,58 +300,46 @@ export default function HODApprovePage() {
     return rejectedItems.filter(item =>
       item.student_name.toLowerCase().includes(search.toLowerCase()) ||
       item.student_email.toLowerCase().includes(search.toLowerCase()) ||
+      item.lab_name?.toLowerCase().includes(search.toLowerCase()) ||
+      item.faculty_name?.toLowerCase().includes(search.toLowerCase()) ||
+      item.purpose?.toLowerCase().includes(search.toLowerCase()) ||
       item.id.toString().includes(search)
     )
   }, [rejectedItems, search])
 
-  const loadPendingRequests = async () => {
+  const loadAllLabRequests = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/hod/requests?status=pending_hod', { cache: 'no-store' })
-      if (res.ok) {
-        const data = await res.json()
+      const [pendingRes, approvedRes, rejectedRes] = await Promise.all([
+        fetch('/api/hod/requests?status=pending_hod', { cache: 'no-store' }),
+        fetch('/api/hod/requests?status=approved', { cache: 'no-store' }),
+        fetch('/api/hod/requests?status=rejected', { cache: 'no-store' })
+      ])
+
+      if (pendingRes.ok) {
+        const data = await pendingRes.json()
         setPendingItems(data.requests || [])
       } else {
         setPendingItems([])
       }
-    } catch (error) {
-      console.error("Failed to load pending requests:", error)
-      setPendingItems([])
-    } finally {
-      setLoading(false)
-    }
-  }
 
-  const loadApprovedRequests = async () => {
-    setLoading(true)
-    try {
-      const res = await fetch('/api/hod/requests?status=approved', { cache: 'no-store' })
-      if (res.ok) {
-        const data = await res.json()
+      if (approvedRes.ok) {
+        const data = await approvedRes.json()
         setApprovedItems(data.requests || [])
       } else {
         setApprovedItems([])
       }
-    } catch (error) {
-      console.error("Failed to load approved requests:", error)
-      setApprovedItems([])
-    } finally {
-      setLoading(false)
-    }
-  }
 
-  const loadRejectedRequests = async () => {
-    setLoading(true)
-    try {
-      const res = await fetch('/api/hod/requests?status=rejected', { cache: 'no-store' })
-      if (res.ok) {
-        const data = await res.json()
+      if (rejectedRes.ok) {
+        const data = await rejectedRes.json()
         setRejectedItems(data.requests || [])
       } else {
         setRejectedItems([])
       }
     } catch (error) {
-      console.error("Failed to load rejected requests:", error)
+      console.error("Failed to load lab requests:", error)
+      setPendingItems([])
+      setApprovedItems([])
       setRejectedItems([])
     } finally {
       setLoading(false)
@@ -351,14 +347,10 @@ export default function HODApprovePage() {
   }
 
   useEffect(() => {
-    if (activeTab === 'pending') {
-      loadPendingRequests()
-    } else if (activeTab === 'approved') {
-      loadApprovedRequests()
-    } else if (activeTab === 'rejected') {
-      loadRejectedRequests()
+    if (activeType === 'lab') {
+      loadAllLabRequests()
     }
-  }, [activeTab])
+  }, [activeType])
 
   const handleAction = async (requestId: number, action: 'approve' | 'reject', overrideRemarks?: string) => {
     const requestRemarks = typeof overrideRemarks === 'string'
@@ -399,14 +391,8 @@ export default function HODApprovePage() {
           return newRemarks
         })
 
-        await loadPendingRequests()
-        if (action === 'approve') {
-          await loadApprovedRequests()
-          setActiveTab('approved')
-        } else if (action === 'reject') {
-          await loadRejectedRequests()
-          setActiveTab('rejected')
-        }
+        await loadAllLabRequests()
+        setActiveTab(action === 'approve' ? 'approved' : 'rejected')
       } else {
         const error = await res.json()
         toast({
@@ -493,6 +479,198 @@ export default function HODApprovePage() {
     }
   }
 
+  // Components approvals for HOD
+  function HODComponentsApprovals() {
+    const { toast } = useToast()
+    const [loading, setLoading] = useState(false)
+    const [activeTab, setActiveTab] = useState<'pending'|'approved'|'rejected'>('pending')
+    const [all, setAll] = useState<any[]>([])
+    const [remarks, setRemarks] = useState<Record<number, string>>({})
+
+    const loadAll = async () => {
+      setLoading(true)
+      try {
+        const res = await fetch('/api/hod/component-requests', { cache: 'no-store' })
+        const text = await res.text()
+        if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
+        const data = JSON.parse(text)
+        setAll(data.requests || [])
+      } catch (e: any) {
+        toast({ title: 'Failed to load', description: e?.message || 'Could not load component requests', variant: 'destructive' })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    useEffect(() => { loadAll() }, [])
+
+    const filtered = useMemo(() => {
+      if (activeTab === 'pending') return all.filter(r => r.status === 'pending_hod')
+      if (activeTab === 'approved') return all.filter(r => r.status === 'approved')
+      return all.filter(r => r.status === 'rejected')
+    }, [all, activeTab])
+
+    const counts = useMemo(() => ({
+      pending: all.filter(r => r.status === 'pending_hod').length,
+      approved: all.filter(r => r.status === 'approved').length,
+      rejected: all.filter(r => r.status === 'rejected').length,
+    }), [all])
+
+    const act = async (id: number, action: 'approve'|'reject') => {
+      if (action === 'reject' && !remarks[id]) {
+        toast({ title: 'Remarks required', description: 'Please add remarks for rejection.', variant: 'destructive' })
+        return
+      }
+      try {
+        const res = await fetch(`/api/hod/component-requests/${id}/action`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, remarks: remarks[id] || null })
+        })
+        const text = await res.text()
+        if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
+        toast({ title: 'Updated', description: `Request ${action}d successfully.` })
+        setRemarks(prev => { const p = { ...prev }; delete p[id]; return p })
+        await loadAll()
+        setActiveTab(action === 'approve' ? 'approved' : 'rejected')
+      } catch (e: any) {
+        toast({ title: 'Action failed', description: e?.message || 'Could not update request', variant: 'destructive' })
+      }
+    }
+
+    const badge = (status: string) => {
+      switch (status) {
+        case 'pending_faculty': return <Badge className="bg-orange-100 text-orange-800" variant="secondary">Pending Faculty</Badge>
+        case 'pending_lab_staff': return <Badge className="bg-blue-100 text-blue-800" variant="secondary">Pending Lab Staff</Badge>
+        case 'pending_hod': return <Badge className="bg-purple-100 text-purple-800" variant="secondary">Pending HOD</Badge>
+        case 'approved': return <Badge className="bg-green-100 text-green-800" variant="secondary">Approved</Badge>
+        case 'rejected': return <Badge variant="destructive">Rejected</Badge>
+        default: return <Badge variant="outline">{status}</Badge>
+      }
+    }
+
+    return (
+      <div className="space-y-3">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-3">
+          <TabsList className="grid w-full grid-cols-3 max-w-md h-8">
+            <TabsTrigger value="pending" className="flex items-center gap-1 text-xs">
+              Pending
+              {counts.pending > 0 && <Badge variant="secondary" className="ml-1 text-xs bg-orange-100 text-orange-800 animate-pulse">{counts.pending}</Badge>}
+            </TabsTrigger>
+            <TabsTrigger value="approved" className="flex items-center gap-1 text-xs">
+              Approved
+              {counts.approved > 0 && <Badge variant="secondary" className="ml-1 text-xs bg-green-100 text-green-800">{counts.approved}</Badge>}
+            </TabsTrigger>
+            <TabsTrigger value="rejected" className="flex items-center gap-1 text-xs">
+              Rejected
+              {counts.rejected > 0 && <Badge variant="destructive" className="ml-1 text-xs">{counts.rejected}</Badge>}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="pending">
+            {loading ? (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">Loading...</CardContent></Card>
+            ) : filtered.length === 0 ? (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">No requests found</CardContent></Card>
+            ) : (
+              <div className="space-y-3">
+                {filtered.map((r: any) => (
+                  <Card key={r.id}>
+                    <CardContent className="p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-medium">{r.lab_name} • <span className="text-muted-foreground">{r.requester_name}</span></div>
+                        {badge(r.status)}
+                      </div>
+                      {r.purpose && (<div className="text-sm"><span className="text-muted-foreground">Purpose: </span>{r.purpose}</div>)}
+                      <div className="space-y-1">
+                        {r.items?.map((it: any, idx: number) => (
+                          <div key={idx} className="text-sm flex items-center justify-between border rounded p-2">
+                            <div>
+                              <div className="font-medium">{it.component_name} {it.model ? `(${it.model})` : ''}</div>
+                              <div className="text-xs text-muted-foreground">{it.category || 'Uncategorized'}</div>
+                            </div>
+                            <div>Qty: <span className="font-medium">{it.quantity_requested}</span></div>
+                          </div>
+                        ))}
+                      </div>
+                      {r.status === 'pending_hod' && (
+                        <div className="space-y-2 pt-2 border-t">
+                          <Textarea placeholder="Remarks (optional for approval, required for rejection)" value={remarks[r.id] || ''} onChange={(e) => setRemarks(prev => ({ ...prev, [r.id]: e.target.value }))} />
+                          <div className="flex gap-2">
+                            <Button className="flex-1" onClick={() => act(r.id, 'approve')}>
+                              <Check className="h-4 w-4 mr-2" /> Approve
+                            </Button>
+                            <Button className="flex-1" variant="destructive" onClick={() => act(r.id, 'reject')}>
+                              <X className="h-4 w-4 mr-2" /> Reject
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="approved">
+            {loading ? (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">Loading...</CardContent></Card>
+            ) : filtered.length === 0 ? (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">No requests found</CardContent></Card>
+            ) : (
+              <div className="space-y-3">
+                {filtered.map((r: any) => (
+                  <Card key={r.id}><CardContent className="p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium">{r.lab_name} • <span className="text-muted-foreground">{r.requester_name}</span></div>
+                      {badge(r.status)}
+                    </div>
+                    <div className="space-y-1">
+                      {r.items?.map((it: any, idx: number) => (
+                        <div key={idx} className="text-sm flex items-center justify-between border rounded p-2">
+                          <div className="font-medium">{it.component_name} {it.model ? `(${it.model})` : ''}</div>
+                          <div>Qty: <span className="font-medium">{it.quantity_requested}</span></div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent></Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="rejected">
+            {loading ? (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">Loading...</CardContent></Card>
+            ) : filtered.length === 0 ? (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">No requests found</CardContent></Card>
+            ) : (
+              <div className="space-y-3">
+                {filtered.map((r: any) => (
+                  <Card key={r.id}><CardContent className="p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium">{r.lab_name} • <span className="text-muted-foreground">{r.requester_name}</span></div>
+                      {badge(r.status)}
+                    </div>
+                    <div className="space-y-1">
+                      {r.items?.map((it: any, idx: number) => (
+                        <div key={idx} className="text-sm flex items-center justify-between border rounded p-2">
+                          <div className="font-medium">{it.component_name} {it.model ? `(${it.model})` : ''}</div>
+                          <div>Qty: <span className="font-medium">{it.quantity_requested}</span></div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent></Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
@@ -503,155 +681,172 @@ export default function HODApprovePage() {
           </Link>
         </Button>
         <div>
-          <h1 className="text-xl font-bold">HOD Lab Request Approvals</h1>
+          <h1 className="text-xl font-bold">Review Requests</h1>
           <p className="text-xs text-muted-foreground">
-            {activeTab === 'pending' ? `${pendingItems.length} requests pending your approval` : 
-             activeTab === 'approved' ? `${approvedItems.length} requests you approved` : 
-             `${rejectedItems.length} requests you rejected`}
+            {activeType === 'lab'
+              ? (activeTab === 'pending' ? `${pendingItems.length} lab requests pending your approval`
+                : activeTab === 'approved' ? `${approvedItems.length} lab requests you approved`
+                : `${rejectedItems.length} lab requests you rejected`)
+              : (activeTab === 'pending' ? `Component requests pending your approval` : activeTab === 'approved' ? `Component requests you approved` : `Component requests you rejected`)}
           </p>
         </div>
       </div>
 
-      <div className="max-w-md mb-2">
-        <input
-          type="text"
-          placeholder="Search by student name, email, or request ID..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full px-3 py-2 border rounded text-xs"
-        />
-      </div>
-
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3">
-        <TabsList className="grid w-full grid-cols-3 max-w-md h-8">
-          <TabsTrigger value="pending" className="flex items-center gap-1 text-xs">
-            Pending
-            {pendingItems.length > 0 && <Badge variant="secondary" className="ml-1 text-xs">{pendingItems.length}</Badge>}
-          </TabsTrigger>
-          <TabsTrigger value="approved" className="flex items-center gap-1 text-xs">
-            Approved
-            {approvedItems.length > 0 && <Badge variant="secondary" className="ml-1 text-xs">{approvedItems.length}</Badge>}
-          </TabsTrigger>
-          <TabsTrigger value="rejected" className="flex items-center gap-1 text-xs">
-            Rejected
-            {rejectedItems.length > 0 && <Badge variant="secondary" className="ml-1 text-xs">{rejectedItems.length}</Badge>}
-          </TabsTrigger>
+      <Tabs value={activeType} onValueChange={(v) => setActiveType(v as 'lab'|'components')} className="space-y-3">
+        <TabsList className="grid w-full grid-cols-2 max-w-md h-8">
+          <TabsTrigger value="lab" className="text-xs">Lab Bookings</TabsTrigger>
+          <TabsTrigger value="components" className="text-xs">Component Requests</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="pending" className="space-y-4">
-          {loading ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <p className="text-gray-500">Loading...</p>
-              </CardContent>
-            </Card>
-          ) : pendingItems.length === 0 ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <p className="text-gray-500">No pending approval requests</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {filteredPendingItems.map((item) => {
-                const remarkText = remarks[item.id] || ''
-                const showTimelineForItem = !!showTimeline[item.id]
+        {/* Lab bookings */}
+        <TabsContent value="lab" className="space-y-3">
+          <div className="max-w-md mb-2">
+            <input
+              type="text"
+              placeholder="Search by student, lab, faculty, purpose, or request ID..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full px-3 py-2 border rounded text-xs"
+            />
+          </div>
 
-                return (
-                  <RequestCard
-                    key={item.id}
-                    item={item}
-                    showActions={true}
-                    remark={remarkText}
-                    showTimelineForItem={showTimelineForItem}
-                    onRemarksChange={(val: string) => handleRemarksChange(item.id, val)}
-                    onToggleTimeline={() => toggleTimeline(item.id)}
-                    onAction={handleAction}
-                    actionLoading={actionLoading}
-                    formatDate={formatDate}
-                    formatTime={formatTime}
-                    getStatusBadge={getStatusBadge}
-                    getStepStatus={getStepStatus}
-                    getFinalApprovalStatus={getFinalApprovalStatus}
-                  />
-                )
-              })}
-            </div>
-          )}
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-3">
+            <TabsList className="grid w-full grid-cols-3 max-w-md h-8">
+              <TabsTrigger value="pending" className="flex items-center gap-1 text-xs">
+                Pending
+                {pendingItems.length > 0 && <Badge variant="secondary" className="ml-1 text-xs bg-orange-100 text-orange-800 animate-pulse">{pendingItems.length}</Badge>}
+              </TabsTrigger>
+              <TabsTrigger value="approved" className="flex items-center gap-1 text-xs">
+                Approved
+                {approvedItems.length > 0 && <Badge variant="secondary" className="ml-1 text-xs bg-green-100 text-green-800">{approvedItems.length}</Badge>}
+              </TabsTrigger>
+              <TabsTrigger value="rejected" className="flex items-center gap-1 text-xs">
+                Rejected
+                {rejectedItems.length > 0 && <Badge variant="destructive" className="ml-1 text-xs">{rejectedItems.length}</Badge>}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="pending" className="space-y-4">
+              {loading ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <p className="text-gray-500">Loading...</p>
+                  </CardContent>
+                </Card>
+              ) : pendingItems.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <p className="text-gray-500">No pending approval requests</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4">
+                  {filteredPendingItems.map((item) => {
+                    const remarkText = remarks[item.id] || ''
+                    const showTimelineForItem = !!showTimeline[item.id]
+
+                    return (
+                      <RequestCard
+                        key={item.id}
+                        item={item}
+                        showActions={true}
+                        remark={remarkText}
+                        showTimelineForItem={showTimelineForItem}
+                        onRemarksChange={(val: string) => handleRemarksChange(item.id, val)}
+                        onToggleTimeline={() => toggleTimeline(item.id)}
+                        onAction={handleAction}
+                        actionLoading={actionLoading}
+                        formatDate={formatDate}
+                        formatTime={formatTime}
+                        getStatusBadge={getStatusBadge}
+                        getStepStatus={getStepStatus}
+                        getFinalApprovalStatus={getFinalApprovalStatus}
+                      />
+                    )
+                  })}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="approved" className="space-y-4">
+              {loading ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <p className="text-gray-500">Loading...</p>
+                  </CardContent>
+                </Card>
+              ) : approvedItems.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <p className="text-gray-500">No approved requests</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4">
+                  {filteredApprovedItems.map((item) => (
+                    <RequestCard
+                      key={item.id}
+                      item={item}
+                      showActions={false}
+                      remark={remarks[item.id] || ''}
+                      showTimelineForItem={!!showTimeline[item.id]}
+                      onRemarksChange={(v: string) => handleRemarksChange(item.id, v)}
+                      onToggleTimeline={() => toggleTimeline(item.id)}
+                      onAction={handleAction}
+                      actionLoading={actionLoading}
+                      formatDate={formatDate}
+                      formatTime={formatTime}
+                      getStatusBadge={getStatusBadge}
+                      getStepStatus={getStepStatus}
+                      getFinalApprovalStatus={getFinalApprovalStatus}
+                    />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="rejected" className="space-y-4">
+              {loading ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <p className="text-gray-500">Loading...</p>
+                  </CardContent>
+                </Card>
+              ) : rejectedItems.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <p className="text-gray-500">No rejected requests</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4">
+                  {filteredRejectedItems.map((item) => (
+                    <RequestCard
+                      key={item.id}
+                      item={item}
+                      showActions={false}
+                      remark={remarks[item.id] || ''}
+                      showTimelineForItem={!!showTimeline[item.id]}
+                      onRemarksChange={(v: string) => handleRemarksChange(item.id, v)}
+                      onToggleTimeline={() => toggleTimeline(item.id)}
+                      onAction={handleAction}
+                      actionLoading={actionLoading}
+                      formatDate={formatDate}
+                      formatTime={formatTime}
+                      getStatusBadge={getStatusBadge}
+                      getStepStatus={getStepStatus}
+                      getFinalApprovalStatus={getFinalApprovalStatus}
+                    />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
-        <TabsContent value="approved" className="space-y-4">
-          {loading ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <p className="text-gray-500">Loading...</p>
-              </CardContent>
-            </Card>
-          ) : approvedItems.length === 0 ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <p className="text-gray-500">No approved requests</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {filteredApprovedItems.map((item) => (
-                <RequestCard
-                  key={item.id}
-                  item={item}
-                  showActions={false}
-                  remark={remarks[item.id] || ''}
-                  showTimelineForItem={!!showTimeline[item.id]}
-                  onRemarksChange={(v: string) => handleRemarksChange(item.id, v)}
-                  onToggleTimeline={() => toggleTimeline(item.id)}
-                  onAction={handleAction}
-                  actionLoading={actionLoading}
-                  formatDate={formatDate}
-                  formatTime={formatTime}
-                  getStatusBadge={getStatusBadge}
-                  getStepStatus={getStepStatus}
-                  getFinalApprovalStatus={getFinalApprovalStatus}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="rejected" className="space-y-4">
-          {loading ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <p className="text-gray-500">Loading...</p>
-              </CardContent>
-            </Card>
-          ) : rejectedItems.length === 0 ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <p className="text-gray-500">No rejected requests</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {filteredRejectedItems.map((item) => (
-                <RequestCard
-                  key={item.id}
-                  item={item}
-                  showActions={false}
-                  remark={remarks[item.id] || ''}
-                  showTimelineForItem={!!showTimeline[item.id]}
-                  onRemarksChange={(v: string) => handleRemarksChange(item.id, v)}
-                  onToggleTimeline={() => toggleTimeline(item.id)}
-                  onAction={handleAction}
-                  actionLoading={actionLoading}
-                  formatDate={formatDate}
-                  formatTime={formatTime}
-                  getStatusBadge={getStatusBadge}
-                  getStepStatus={getStepStatus}
-                  getFinalApprovalStatus={getFinalApprovalStatus}
-                />
-              ))}
-            </div>
-          )}
+        {/* Component requests */}
+        <TabsContent value="components" className="space-y-3">
+          <HODComponentsApprovals />
         </TabsContent>
       </Tabs>
     </div>

@@ -110,19 +110,19 @@ export default function LabStaffDashboardPage() {
 								<Package className="h-4 w-4 mr-2" />
 								Manage Inventory
 							</Link>
-						</Button>
-						<Button asChild variant="outline" className="w-full justify-start">
-							<Link href="/lab-staff/dashboard/issue-return">
-								<ClipboardList className="h-4 w-4 mr-2" />
-								Issue/Return Equipment
-							</Link>
-						</Button>
-						<Button asChild variant="outline" className="w-full justify-start">
-							<Link href="/lab-staff/dashboard/attendance">
-								<UserCheck className="h-4 w-4 mr-2" />
-								Mark Attendance
-							</Link>
-						</Button>
+					</Button>
+					<Button asChild variant="outline" className="w-full justify-start">
+						<Link href="/lab-staff/dashboard/component-requests">
+							<ClipboardList className="h-4 w-4 mr-2" />
+							Review Component Requests
+						</Link>
+					</Button>
+					<Button asChild variant="outline" className="w-full justify-start">
+						<Link href="/lab-staff/dashboard/attendance">
+							<UserCheck className="h-4 w-4 mr-2" />
+							Mark Attendance
+						</Link>
+					</Button>
 						<Button asChild variant="outline" className="w-full justify-start">
 							<Link href="/lab-staff/dashboard/reports">
 								<BarChart3 className="h-4 w-4 mr-2" />

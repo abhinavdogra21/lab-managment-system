@@ -274,6 +274,18 @@ export default function StudentDashboard() {
               </Link>
             </Button>
             <Button asChild variant="outline" className="w-full justify-start">
+              <Link href="/student/dashboard/request-components">
+                <Plus className="h-4 w-4 mr-2" />
+                Request Lab Components
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="w-full justify-start">
+              <Link href="/student/dashboard/my-component-requests">
+                <Eye className="h-4 w-4 mr-2" />
+                View My Component Requests
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="w-full justify-start">
               <Link href="/student/dashboard/my-requests">
                 <Eye className="h-4 w-4 mr-2" />
                 View My Requests

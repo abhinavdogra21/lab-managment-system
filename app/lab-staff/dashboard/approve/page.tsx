@@ -45,54 +45,39 @@ export default function LabStaffApprovePage() {
     setRemarks(prev => ({ ...prev, [requestId]: value }))
   }, [])
 
-  const loadPendingRequests = async () => {
+  const loadAllLabRequests = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/lab-staff/requests?status=pending_lab_staff', { cache: 'no-store' })
-      if (res.ok) {
-        const data = await res.json()
+      const [pendingRes, approvedRes, rejectedRes] = await Promise.all([
+        fetch('/api/lab-staff/requests?status=pending_lab_staff', { cache: 'no-store' }),
+        fetch('/api/lab-staff/requests?status=approved', { cache: 'no-store' }),
+        fetch('/api/lab-staff/requests?status=rejected', { cache: 'no-store' })
+      ])
+
+      if (pendingRes.ok) {
+        const data = await pendingRes.json()
         setPendingItems(data.requests || [])
       } else {
         setPendingItems([])
       }
-    } catch (error) {
-      console.error("Failed to load pending requests:", error)
-      setPendingItems([])
-    } finally {
-      setLoading(false)
-    }
-  }
 
-  const loadApprovedRequests = async () => {
-    setLoading(true)
-    try {
-      const res = await fetch('/api/lab-staff/requests?status=approved', { cache: 'no-store' })
-      if (res.ok) {
-        const data = await res.json()
+      if (approvedRes.ok) {
+        const data = await approvedRes.json()
         setApprovedItems(data.requests || [])
       } else {
         setApprovedItems([])
       }
-    } catch (error) {
-      console.error("Failed to load approved requests:", error)
-      setApprovedItems([])
-    } finally {
-      setLoading(false)
-    }
-  }
 
-  const loadRejectedRequests = async () => {
-    setLoading(true)
-    try {
-      const res = await fetch('/api/lab-staff/requests?status=rejected', { cache: 'no-store' })
-      if (res.ok) {
-        const data = await res.json()
+      if (rejectedRes.ok) {
+        const data = await rejectedRes.json()
         setRejectedItems(data.requests || [])
       } else {
         setRejectedItems([])
       }
     } catch (error) {
-      console.error("Failed to load rejected requests:", error)
+      console.error("Failed to load lab requests:", error)
+      setPendingItems([])
+      setApprovedItems([])
       setRejectedItems([])
     } finally {
       setLoading(false)
@@ -109,7 +94,8 @@ export default function LabStaffApprovePage() {
       item.student_name.toLowerCase().includes(searchLower) ||
       (item.faculty_name && item.faculty_name.toLowerCase().includes(searchLower)) ||
       item.id.toString().includes(searchLower) ||
-      item.lab_name.toLowerCase().includes(searchLower)
+      item.lab_name.toLowerCase().includes(searchLower) ||
+      (item.purpose && item.purpose.toLowerCase().includes(searchLower))
     )
   }
 
@@ -155,16 +141,9 @@ export default function LabStaffApprovePage() {
           return newRemarks
         })
 
-        // Always refresh pending first
-        await loadPendingRequests()
-        // Move the item to the corresponding tab and refresh it
-        if (action === 'approve') {
-          await loadApprovedRequests()
-          setActiveTab('approved')
-        } else if (action === 'reject') {
-          await loadRejectedRequests()
-          setActiveTab('rejected')
-        }
+        // Refresh all data and switch tab
+        await loadAllLabRequests()
+        setActiveTab(action === 'approve' ? 'approved' : 'rejected')
       } else {
         // Robust error parsing to avoid JSON parse crash on HTML/text responses
         let message = "Failed to process request"
@@ -518,14 +497,8 @@ export default function LabStaffApprovePage() {
   })
 
   useEffect(() => {
-    if (activeTab === 'pending') {
-      loadPendingRequests()
-    } else if (activeTab === 'approved') {
-      loadApprovedRequests()
-    } else if (activeTab === 'rejected') {
-      loadRejectedRequests()
-    }
-  }, [activeTab])
+    loadAllLabRequests()
+  }, [])
 
   return (
     <div className="space-y-3">
@@ -566,21 +539,21 @@ export default function LabStaffApprovePage() {
             <AlertCircle className="h-3 w-3" />
             Pending
             {filterItems(pendingItems).length > 0 && (
-              <Badge variant="secondary" className="ml-1 text-xs">{filterItems(pendingItems).length}</Badge>
+              <Badge variant="secondary" className="ml-1 text-xs bg-orange-100 text-orange-800 animate-pulse">{filterItems(pendingItems).length}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="approved" className="flex items-center gap-1 text-xs">
             <CheckCircle2 className="h-3 w-3" />
             Approved
             {filterItems(approvedItems).length > 0 && (
-              <Badge variant="secondary" className="ml-1 text-xs">{filterItems(approvedItems).length}</Badge>
+              <Badge variant="secondary" className="ml-1 text-xs bg-green-100 text-green-800">{filterItems(approvedItems).length}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="rejected" className="flex items-center gap-1 text-xs">
             <XCircle className="h-3 w-3" />
             Rejected
             {filterItems(rejectedItems).length > 0 && (
-              <Badge variant="secondary" className="ml-1 text-xs">{filterItems(rejectedItems).length}</Badge>
+              <Badge variant="destructive" className="ml-1 text-xs">{filterItems(rejectedItems).length}</Badge>
             )}
           </TabsTrigger>
         </TabsList>

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import crypto from "node:crypto"
 import { dbOperations } from "@/lib/database"
-import { sendMail } from "@/lib/mailer"
+// Non-password emails disabled; keep mailer import commented
+// import { sendMail } from "@/lib/mailer"
 
 export async function POST(req: Request) {
   try {
@@ -15,12 +16,8 @@ export async function POST(req: Request) {
       const expiresAt = new Date(Date.now() + 1000 * 60 * 30).toISOString() // 30 min
       await dbOperations.upsertPasswordReset(user.id, token, expiresAt)
 
-      const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/reset-password?token=${token}`
-      await sendMail({
-        to: user.email,
-        subject: "Reset your LNMIIT LMS password",
-        html: `<p>Hello ${user.name || ""},</p><p>Click the link below to reset your password. This link expires in 30 minutes.</p><p><a href="${resetUrl}">${resetUrl}</a></p>`,
-      })
+      // Route retained for backward compatibility, but email sending is disabled here.
+      // Password reset emails are handled via /api/auth/forgot-password which remains enabled.
     }
 
     return NextResponse.json({ success: true })

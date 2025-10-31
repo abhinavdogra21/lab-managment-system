@@ -57,6 +57,8 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
         return [
           ...baseItems,
           { name: "Book Lab", href: withPrefix("/dashboard/book-lab"), icon: Calendar },
+          { name: "Request Components", href: withPrefix("/dashboard/request-components"), icon: Package },
+          { name: "My Component Requests", href: withPrefix("/dashboard/my-component-requests"), icon: ClipboardList },
           { name: "My Requests", href: withPrefix("/dashboard/my-requests"), icon: Package },
         ]
 
@@ -73,8 +75,8 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
         return [
           ...baseItems,
           { name: "Approve Requests", href: withPrefix("/dashboard/approve"), icon: UserCheck },
+          { name: "Component Requests", href: withPrefix("/dashboard/component-requests"), icon: FileText },
           { name: "Inventory", href: withPrefix("/dashboard/inventory"), icon: Package },
-          { name: "Issue/Return", href: withPrefix("/dashboard/issue-return"), icon: ClipboardList },
           { name: "Attendance", href: withPrefix("/dashboard/attendance"), icon: CheckSquare },
           { name: "Reports", href: withPrefix("/dashboard/reports"), icon: BarChart3 },
         ]
