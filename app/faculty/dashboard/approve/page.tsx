@@ -119,6 +119,11 @@ export default function FacultyApprovePage() {
   }, [activeType])
 
   const handleAction = async (requestId: number, action: 'approve' | 'reject', overrideRemarks?: string) => {
+    // Prevent double-click: if already processing this request, ignore
+    if (actionLoading === requestId) {
+      return
+    }
+    
     const requestRemarks = typeof overrideRemarks === 'string' ? overrideRemarks.trim() : (remarks[requestId] || '').trim()
     if (action === 'reject' && !requestRemarks) {
       toast({ title: 'Error', description: 'Please provide remarks for rejection', variant: 'destructive' })
@@ -163,11 +168,11 @@ export default function FacultyApprovePage() {
   }
 
 
-  // Lightweight component approvals block for Faculty
   function FacultyComponentsApprovals() {
     const { toast } = useToast()
     const [activeTab, setActiveTab] = useState<'pending'|'approved'|'rejected'>('pending')
     const [loading, setLoading] = useState(false)
+    const [processingIds, setProcessingIds] = useState<Set<number>>(new Set())
     const [pending, setPending] = useState<any[]>([])
     const [approved, setApproved] = useState<any[]>([])
     const [rejected, setRejected] = useState<any[]>([])
@@ -209,11 +214,19 @@ export default function FacultyApprovePage() {
     useEffect(() => { loadAll() }, [])
 
     const act = async (id: number, action: 'approve'|'reject') => {
+      // Prevent double-click: if already processing this request, ignore
+      if (processingIds.has(id)) {
+        return
+      }
+      
       if (action === 'reject' && !remarks[id]) {
         toast({ title: 'Remarks required', description: 'Please add remarks for rejection.', variant: 'destructive' })
         return
       }
       try {
+        // Mark as processing
+        setProcessingIds(prev => new Set(prev).add(id))
+        
         const res = await fetch(`/api/faculty/component-requests/${id}/action`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -227,6 +240,13 @@ export default function FacultyApprovePage() {
         setActiveTab(action === 'approve' ? 'approved' : 'rejected')
       } catch (e: any) {
         toast({ title: 'Action failed', description: e?.message || 'Could not update request', variant: 'destructive' })
+      } finally {
+        // Remove from processing
+        setProcessingIds(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(id)
+          return newSet
+        })
       }
     }
 
@@ -297,11 +317,28 @@ export default function FacultyApprovePage() {
                         <div className="space-y-2 pt-2 border-t">
                           <Textarea placeholder="Remarks (optional for approval, required for rejection)" value={remarks[r.id] || ''} onChange={(e) => setRemarks(prev => ({ ...prev, [r.id]: e.target.value }))} />
                           <div className="flex gap-2">
-                            <Button className="flex-1" onClick={() => act(r.id, 'approve')}>
-                              <Check className="h-4 w-4 mr-2" /> Approve
+                            <Button 
+                              className="flex-1" 
+                              onClick={() => act(r.id, 'approve')}
+                              disabled={processingIds.has(r.id)}
+                            >
+                              {processingIds.has(r.id) ? (
+                                <>Processing...</>
+                              ) : (
+                                <><Check className="h-4 w-4 mr-2" /> Approve</>
+                              )}
                             </Button>
-                            <Button className="flex-1" variant="destructive" onClick={() => act(r.id, 'reject')}>
-                              <X className="h-4 w-4 mr-2" /> Reject
+                            <Button 
+                              className="flex-1" 
+                              variant="destructive" 
+                              onClick={() => act(r.id, 'reject')}
+                              disabled={processingIds.has(r.id)}
+                            >
+                              {processingIds.has(r.id) ? (
+                                <>Processing...</>
+                              ) : (
+                                <><X className="h-4 w-4 mr-2" /> Reject</>
+                              )}
                             </Button>
                           </div>
                         </div>

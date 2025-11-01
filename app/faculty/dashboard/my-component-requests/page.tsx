@@ -5,12 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { ChevronLeft, Clock, Package, AlertCircle, CheckCircle, XCircle } from "lucide-react"
+import { ChevronLeft, Clock, Package, AlertCircle, CheckCircle, XCircle, Eye, Users, Building, RotateCcw } from "lucide-react"
 import Link from "next/link"
 
 interface ComponentRequestItem {
@@ -164,9 +164,40 @@ export default function FacultyMyComponentRequestsPage() {
     if (r.issued_at) return <Badge className="bg-blue-600 animate-pulse">Issued</Badge>
     if (r.status === 'approved') return <Badge className="bg-green-600">Approved</Badge>
     if (r.status === 'rejected') return <Badge variant="destructive">Rejected</Badge>
-    if (r.status === 'pending_hod') return <Badge className="bg-orange-500 animate-pulse">Pending HOD</Badge>
-    if (r.status === 'pending_lab_staff') return <Badge className="bg-orange-500 animate-pulse">Pending Lab Staff</Badge>
-    return <Badge className="bg-orange-500 animate-pulse">Pending</Badge>
+    if (r.status === 'pending_hod') return <Badge variant="outline">Pending HOD</Badge>
+    if (r.status === 'pending_lab_staff') return <Badge variant="outline">Pending Lab Staff</Badge>
+    return <Badge variant="secondary">Pending</Badge>
+  }
+
+  function StepCircle({ state, children }: { state: 'completed'|'pending'|'waiting'|'rejected', children: React.ReactNode }) {
+    const cls = state === 'completed' ? 'bg-green-100 border-green-300 text-green-700'
+      : state === 'pending' ? 'bg-blue-100 border-blue-300 text-blue-700'
+      : state === 'rejected' ? 'bg-red-100 border-red-300 text-red-700'
+      : 'bg-white border-gray-300 text-gray-500'
+    return (
+      <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center ${cls}`}>{children}</div>
+    )
+  }
+
+  function getStepState(req: ComponentRequest, step: 'labstaff'|'hod'|'final') : 'completed'|'pending'|'waiting'|'rejected' {
+    const status: any = req.status
+    if (status === 'rejected') return 'rejected'
+    if (step === 'labstaff') {
+      if (status === 'pending_lab_staff') return 'pending'
+      if (['pending_hod','approved'].includes(status) || req.issued_at) return 'completed'
+      return 'waiting'
+    }
+    if (step === 'hod') {
+      if (status === 'pending_hod') return 'pending'
+      if (status === 'approved' || req.issued_at) return 'completed'
+      if (status === 'pending_lab_staff') return 'waiting'
+      return 'waiting'
+    }
+    // final
+    if (req.issued_at) return 'completed'
+    if (status === 'approved') return 'completed'
+    if (status === 'rejected') return 'rejected'
+    return 'waiting'
   }
 
   return (
@@ -190,12 +221,24 @@ export default function FacultyMyComponentRequestsPage() {
 
       <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)}>
         <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6">
-          <TabsTrigger value="all">All <Badge variant="secondary" className="ml-1">{counts.all}</Badge></TabsTrigger>
-          <TabsTrigger value="pending">Pending <Badge className="ml-1 bg-orange-500 animate-pulse">{counts.pending}</Badge></TabsTrigger>
-          <TabsTrigger value="approved">Approved <Badge className="ml-1 bg-green-600">{counts.approved}</Badge></TabsTrigger>
-          <TabsTrigger value="issued">Issued <Badge className="ml-1 bg-blue-600 animate-pulse">{counts.issued}</Badge></TabsTrigger>
-          <TabsTrigger value="returned">Returned <Badge className="ml-1 bg-gray-500">{counts.returned}</Badge></TabsTrigger>
-          <TabsTrigger value="rejected">Rejected <Badge variant="destructive" className="ml-1">{counts.rejected}</Badge></TabsTrigger>
+          <TabsTrigger value="all" className="text-xs">
+            All {counts.all > 0 && <Badge variant="secondary" className="ml-1">{counts.all}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="pending" className="text-xs">
+            Pending {counts.pending > 0 && <Badge variant="secondary" className="ml-1 bg-orange-100 text-orange-800 animate-pulse">{counts.pending}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="approved" className="text-xs">
+            Approved {counts.approved > 0 && <Badge variant="secondary" className="ml-1 bg-green-100 text-green-800">{counts.approved}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="issued" className="text-xs">
+            Issued {counts.issued > 0 && <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-800 animate-pulse">{counts.issued}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="returned" className="text-xs">
+            Returned {counts.returned > 0 && <Badge variant="secondary" className="ml-1 bg-gray-100 text-gray-800">{counts.returned}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="rejected" className="text-xs">
+            Rejected {counts.rejected > 0 && <Badge variant="destructive" className="ml-1">{counts.rejected}</Badge>}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value={activeTab} className="space-y-4 mt-4">
@@ -216,71 +259,48 @@ export default function FacultyMyComponentRequestsPage() {
           ) : (
             filteredRequests.map(req => (
               <Card key={req.id}>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="flex items-center gap-2">
-                        {req.lab_name} ({req.lab_code})
-                        {getStatusBadge(req)}
-                      </CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Requested: {new Date(req.created_at).toLocaleString()}
-                      </p>
-                      {req.return_date && (
-                        <p className="text-sm text-muted-foreground">
-                          Expected Return: {new Date(req.return_date).toLocaleDateString()}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 justify-between">
+                    <span className="truncate">{req.lab_name} ({req.lab_code})</span>
+                    {getStatusBadge(req)}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-muted-foreground">
+                    <div><span className="font-medium text-foreground">Submitted:</span> {new Date(req.created_at).toLocaleString()}</div>
+                    {req.return_date && <div><span className="font-medium text-foreground">Return Date:</span> {new Date(req.return_date).toLocaleDateString()}</div>}
+                    {req.purpose && <div className="sm:col-span-2"><span className="font-medium text-foreground">Purpose:</span> {req.purpose}</div>}
+                  </div>
+
                   {/* Items */}
-                  <div>
-                    <h4 className="font-medium mb-2">Requested Components:</h4>
-                    <div className="space-y-1 text-sm">
-                      {req.items.map(item => (
-                        <div key={item.id} className="flex items-center justify-between py-1 px-2 bg-muted rounded">
-                          <span>{item.component_name} {item.component_model ? `(${item.component_model})` : ''}</span>
-                          <span className="font-medium">×{item.quantity_requested}</span>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Requested Items</p>
+                    <div className="rounded border divide-y">
+                      {req.items.map((item) => (
+                        <div key={item.id} className="p-3 text-sm flex items-center justify-between">
+                          <div>
+                            <div className="font-medium">{item.component_name} {item.component_model ? `(${item.component_model})` : ''}</div>
+                            <div className="text-xs text-muted-foreground">{item.component_category || 'Uncategorized'}</div>
+                          </div>
+                          <div className="text-sm">Qty: <span className="font-medium">{item.quantity_requested}</span></div>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* Purpose */}
-                  {req.purpose && (
-                    <div>
-                      <h4 className="font-medium mb-1">Purpose:</h4>
-                      <p className="text-sm text-muted-foreground">{req.purpose}</p>
+                  {/* Issue/Return Status */}
+                  {req.issued_at && !req.return_requested_at && (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded text-sm">
+                      <p className="font-medium text-green-900">✓ Components Issued</p>
+                      <p className="text-green-700 text-xs">Issued on: {new Date(req.issued_at).toLocaleDateString()}</p>
+                      {req.return_date && <p className="text-green-700 text-xs">Expected return: {new Date(req.return_date).toLocaleDateString()}</p>}
                     </div>
                   )}
 
-                  {/* Remarks */}
-                  {req.lab_staff_remarks && (
-                    <div className="p-3 bg-blue-50 border border-blue-200 rounded">
-                      <p className="text-sm font-medium text-blue-900">Lab Staff Remarks:</p>
-                      <p className="text-sm text-blue-700 mt-1">{req.lab_staff_remarks}</p>
-                    </div>
-                  )}
-                  {req.hod_remarks && (
-                    <div className="p-3 bg-green-50 border border-green-200 rounded">
-                      <p className="text-sm font-medium text-green-900">HOD Remarks:</p>
-                      <p className="text-sm text-green-700 mt-1">{req.hod_remarks}</p>
-                    </div>
-                  )}
-
-                  {/* Timeline */}
-                  <div className="text-xs text-muted-foreground space-y-1">
-                    {req.issued_at && <p>✓ Issued: {new Date(req.issued_at).toLocaleString()}</p>}
-                    {req.return_requested_at && <p>⏳ Return Requested: {new Date(req.return_requested_at).toLocaleString()}</p>}
-                    {req.returned_at && <p>✓ Returned: {new Date(req.returned_at).toLocaleString()}</p>}
-                  </div>
-
-                  {/* Return Request Status */}
                   {req.return_requested_at && !req.returned_at && (
                     <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-sm space-y-2">
                       <p className="font-medium text-yellow-900">⏳ Return Requested</p>
+                      <p className="text-yellow-700 text-xs">Requested on: {new Date(req.return_requested_at).toLocaleDateString()}</p>
                       <p className="text-yellow-700 text-xs">Waiting for lab staff to verify and approve return</p>
                       <Button 
                         size="sm" 
@@ -294,18 +314,98 @@ export default function FacultyMyComponentRequestsPage() {
                     </div>
                   )}
 
+                  {req.returned_at && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm">
+                      <p className="font-medium text-blue-900">✓ Components Returned</p>
+                      <p className="text-blue-700 text-xs">Returned on: {new Date(req.returned_at).toLocaleDateString()}</p>
+                    </div>
+                  )}
+
                   {/* Actions */}
-                  <div className="flex gap-2 pt-2 border-t">
-                    {req.issued_at && !req.returned_at && !req.return_requested_at && (
+                  <div className="flex gap-2 flex-wrap">
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="sm"><Eye className="h-4 w-4 mr-2"/>View Timeline</Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-3xl">
+                        <DialogHeader>
+                          <DialogTitle>Request Timeline</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-6">
+                          {/* Horizontal steps */}
+                          <div className="px-4">
+                            <div className="relative flex items-center justify-between">
+                              <div className="absolute top-6 left-6 right-6 h-0.5 bg-gray-200"/>
+                              {/* Submitted */}
+                              <div className="flex flex-col items-center space-y-1 relative z-10">
+                                <StepCircle state="completed"><Clock className="h-5 w-5"/></StepCircle>
+                                <div className="text-xs text-center"><div className="font-medium">Submitted</div><div className="text-gray-500">{new Date(req.created_at).toLocaleDateString()}</div></div>
+                              </div>
+                              {/* Lab Staff */}
+                              <div className="flex flex-col items-center space-y-1 relative z-10">
+                                <StepCircle state={getStepState(req,'labstaff')}><Users className="h-5 w-5"/></StepCircle>
+                                <div className="text-xs text-center"><div className="font-medium">Lab Staff Review</div><div className="text-gray-500">{req.status !== 'pending_lab_staff' && (req.status === 'approved' || req.issued_at) ? 'Approved' : ''}</div></div>
+                              </div>
+                              {/* HOD */}
+                              <div className="flex flex-col items-center space-y-1 relative z-10">
+                                <StepCircle state={getStepState(req,'hod')}><Building className="h-5 w-5"/></StepCircle>
+                                <div className="text-xs text-center"><div className="font-medium">HOD Review</div><div className="text-gray-500">{(req.status === 'approved' || req.issued_at) ? 'Approved' : ''}</div></div>
+                              </div>
+                              {/* Final */}
+                              <div className="flex flex-col items-center space-y-1 relative z-10">
+                                {req.issued_at ? (
+                                  <StepCircle state="completed"><CheckCircle className="h-5 w-5"/></StepCircle>
+                                ) : req.status === 'rejected' ? (
+                                  <StepCircle state="rejected"><XCircle className="h-5 w-5"/></StepCircle>
+                                ) : (
+                                  <StepCircle state="waiting"><Clock className="h-5 w-5"/></StepCircle>
+                                )}
+                                <div className="text-xs text-center"><div className="font-medium">{req.issued_at ? 'Issued' : 'Final'}</div></div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Remarks */}
+                          {(req.lab_staff_remarks || req.hod_remarks) && (
+                            <div className="space-y-2">
+                              <h4 className="text-sm font-medium">Remarks</h4>
+                              {req.lab_staff_remarks && <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300"><span className="font-medium">Lab Staff:</span> {req.lab_staff_remarks}</div>}
+                              {req.hod_remarks && <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300"><span className="font-medium">HOD:</span> {req.hod_remarks}</div>}
+                            </div>
+                          )}
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+
+                    {/* Withdraw Button - Show if pending (any stage) and not yet issued */}
+                    {(req.status === 'pending_lab_staff' || req.status === 'pending_hod') && !req.issued_at && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleWithdraw(req.id)}
+                        className="border-red-200 text-red-600 hover:bg-red-50"
+                      >
+                        <XCircle className="h-4 w-4 mr-2"/>Withdraw Request
+                      </Button>
+                    )}
+
+                    {/* Request Return Button - Show if approved, issued, and not yet requested return */}
+                    {req.status === 'approved' && req.issued_at && !req.return_requested_at && !req.returned_at && (
                       <>
-                        <Button size="sm" variant="outline" onClick={() => handleReturn(req.id)}>
-                          <AlertCircle className="h-4 w-4 mr-2" />
-                          Request Return
+                        <Button 
+                          variant="default" 
+                          size="sm" 
+                          onClick={() => handleReturn(req.id)}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          <RotateCcw className="h-4 w-4 mr-2"/>Request to Return Components
                         </Button>
+                        
+                        {/* Extend Deadline Button */}
                         {!req.extension_requested_at && (
                           <Button
-                            size="sm"
                             variant="outline"
+                            size="sm"
                             onClick={() => {
                               setExtendRequestId(req.id)
                               setNewReturnDate('')
@@ -314,10 +414,10 @@ export default function FacultyMyComponentRequestsPage() {
                             }}
                             className="border-purple-200 text-purple-600 hover:bg-purple-50"
                           >
-                            <Clock className="h-4 w-4 mr-2" />
-                            Extend Deadline
+                            <Clock className="h-4 w-4 mr-2"/>Extend Deadline
                           </Button>
                         )}
+                        
                         {req.extension_requested_at && !req.extension_approved_at && (
                           <Badge className="bg-purple-100 text-purple-800">
                             Extension Pending (until {new Date(req.extension_requested_until!).toLocaleDateString()})
@@ -331,12 +431,6 @@ export default function FacultyMyComponentRequestsPage() {
                           </div>
                         )}
                       </>
-                    )}
-                    {req.status.includes('pending') && (
-                      <Button size="sm" variant="destructive" onClick={() => handleWithdraw(req.id)}>
-                        <XCircle className="h-4 w-4 mr-2" />
-                        Withdraw
-                      </Button>
                     )}
                   </div>
                 </CardContent>

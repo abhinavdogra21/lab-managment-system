@@ -41,6 +41,7 @@ interface RequestItem {
 export default function LabStaffComponentRequestsPage() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
+  const [processingIds, setProcessingIds] = useState<Set<number>>(new Set())
   const [requests, setRequests] = useState<RequestItem[]>([])
   const [remarks, setRemarks] = useState<Record<number, string>>({})
   const [returnRemarks, setReturnRemarks] = useState<Record<number, string>>({})
@@ -63,10 +64,18 @@ export default function LabStaffComponentRequestsPage() {
   useEffect(() => { load() }, [])
 
   const act = async (id: number, action: 'approve'|'reject') => {
+    // Prevent double-click: if already processing this request, ignore
+    if (processingIds.has(id)) {
+      return
+    }
+    
     if (action === 'reject' && !remarks[id]) {
       toast({ title: 'Remarks required', description: 'Please add remarks for rejection.', variant: 'destructive' }); return
     }
     try {
+      // Mark as processing
+      setProcessingIds(prev => new Set(prev).add(id))
+      
       const res = await fetch(`/api/lab-staff/component-requests/${id}/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, remarks: remarks[id] || null }) })
       const text = await res.text()
       if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
@@ -75,14 +84,28 @@ export default function LabStaffComponentRequestsPage() {
       load()
     } catch (e: any) {
       toast({ title: 'Action failed', description: e?.message || 'Could not update request', variant: 'destructive' })
+    } finally {
+      // Remove from processing
+      setProcessingIds(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(id)
+        return newSet
+      })
     }
   }
 
   const issueComponents = async (id: number) => {
+    // Prevent double-click
+    if (processingIds.has(id)) {
+      return
+    }
+    
     const req = requests.find(r => r.id === id)
     const role = req?.initiator_role === 'faculty' ? 'faculty' : 'student'
     if (!confirm(`Mark these components as issued to the ${role}?`)) return
     try {
+      setProcessingIds(prev => new Set(prev).add(id))
+      
       const res = await fetch(`/api/lab-staff/component-requests/${id}/issue`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
@@ -93,12 +116,25 @@ export default function LabStaffComponentRequestsPage() {
       load()
     } catch (e: any) {
       toast({ title: 'Issue failed', description: e?.message || 'Could not issue components', variant: 'destructive' })
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(id)
+        return newSet
+      })
     }
   }
 
   const approveReturn = async (id: number) => {
+    // Prevent double-click
+    if (processingIds.has(id)) {
+      return
+    }
+    
     if (!confirm('Approve the return? Verify components are in good condition first.')) return
     try {
+      setProcessingIds(prev => new Set(prev).add(id))
+      
       const res = await fetch(`/api/lab-staff/component-requests/${id}/approve-return`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -111,10 +147,21 @@ export default function LabStaffComponentRequestsPage() {
       load()
     } catch (e: any) {
       toast({ title: 'Approval failed', description: e?.message || 'Could not approve return', variant: 'destructive' })
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(id)
+        return newSet
+      })
     }
   }
 
   const handleExtension = async (id: number, approved: boolean) => {
+    // Prevent double-click
+    if (processingIds.has(id)) {
+      return
+    }
+    
     const action = approved ? 'approve' : 'reject'
     if (!approved && !extensionRemarks[id]?.trim()) {
       toast({ title: 'Remarks required', description: 'Please provide a reason for rejection', variant: 'destructive' })
@@ -122,6 +169,8 @@ export default function LabStaffComponentRequestsPage() {
     }
     if (!confirm(`${approved ? 'Approve' : 'Reject'} this deadline extension request?`)) return
     try {
+      setProcessingIds(prev => new Set(prev).add(id))
+      
       const res = await fetch(`/api/lab-staff/component-requests/${id}/extend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -134,6 +183,12 @@ export default function LabStaffComponentRequestsPage() {
       load()
     } catch (e: any) {
       toast({ title: 'Failed', description: e?.message || `Could not ${action} extension`, variant: 'destructive' })
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(id)
+        return newSet
+      })
     }
   }
 
@@ -348,11 +403,30 @@ export default function LabStaffComponentRequestsPage() {
                         className="text-xs"
                       />
                       <div className="flex gap-2">
-                        <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700" onClick={() => handleExtension(r.id, true)}>
-                          <Check className="h-4 w-4 mr-1" /> Approve Extension
+                        <Button 
+                          size="sm" 
+                          className="flex-1 bg-green-600 hover:bg-green-700" 
+                          onClick={() => handleExtension(r.id, true)}
+                          disabled={processingIds.has(r.id)}
+                        >
+                          {processingIds.has(r.id) ? (
+                            <>Processing...</>
+                          ) : (
+                            <><Check className="h-4 w-4 mr-1" /> Approve Extension</>
+                          )}
                         </Button>
-                        <Button size="sm" variant="destructive" className="flex-1" onClick={() => handleExtension(r.id, false)}>
-                          <X className="h-4 w-4 mr-1" /> Reject
+                        <Button 
+                          size="sm" 
+                          variant="destructive" 
+                          className="flex-1" 
+                          onClick={() => handleExtension(r.id, false)}
+                          disabled={processingIds.has(r.id)}
+                        >
+                          {processingIds.has(r.id) ? (
+                            <>Processing...</>
+                          ) : (
+                            <><X className="h-4 w-4 mr-1" /> Reject</>
+                          )}
                         </Button>
                       </div>
                     </div>
@@ -364,11 +438,28 @@ export default function LabStaffComponentRequestsPage() {
                   <div className="space-y-2">
                     <Textarea placeholder="Remarks (optional for approval, required for rejection)" value={remarks[r.id] || ''} onChange={(e) => setRemarks(prev => ({ ...prev, [r.id]: e.target.value }))} />
                     <div className="flex gap-2">
-                      <Button className="flex-1" onClick={() => act(r.id, 'approve')}>
-                        <Check className="h-4 w-4 mr-2" /> Approve
+                      <Button 
+                        className="flex-1" 
+                        onClick={() => act(r.id, 'approve')}
+                        disabled={processingIds.has(r.id)}
+                      >
+                        {processingIds.has(r.id) ? (
+                          <>Processing...</>
+                        ) : (
+                          <><Check className="h-4 w-4 mr-2" /> Approve</>
+                        )}
                       </Button>
-                      <Button className="flex-1" variant="destructive" onClick={() => act(r.id, 'reject')}>
-                        <X className="h-4 w-4 mr-2" /> Reject
+                      <Button 
+                        className="flex-1" 
+                        variant="destructive" 
+                        onClick={() => act(r.id, 'reject')}
+                        disabled={processingIds.has(r.id)}
+                      >
+                        {processingIds.has(r.id) ? (
+                          <>Processing...</>
+                        ) : (
+                          <><X className="h-4 w-4 mr-2" /> Reject</>
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -377,8 +468,21 @@ export default function LabStaffComponentRequestsPage() {
                 {/* Issue Components Button - Show for approved but not yet issued */}
                 {r.status === 'approved' && !r.issued_at && (
                   <div>
-                    <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => issueComponents(r.id)}>
-                      <PackageCheck className="h-4 w-4 mr-2" /> Issue Components to {r.initiator_role === 'faculty' ? 'Faculty' : 'Student'}
+                    <Button 
+                      className="w-full bg-green-600 hover:bg-green-700" 
+                      onClick={() => issueComponents(r.id)}
+                      disabled={processingIds.has(r.id)}
+                    >
+                      {processingIds.has(r.id) ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <PackageCheck className="h-4 w-4 mr-2" /> Issue Components to {r.initiator_role === 'faculty' ? 'Faculty' : 'Student'}
+                        </>
+                      )}
                     </Button>
                   </div>
                 )}
@@ -391,9 +495,23 @@ export default function LabStaffComponentRequestsPage() {
                       value={returnRemarks[r.id] || ''}
                       onChange={(e) => setReturnRemarks({ ...returnRemarks, [r.id]: e.target.value })}
                       className="h-20 text-sm"
+                      disabled={processingIds.has(r.id)}
                     />
-                    <Button className="w-full bg-orange-600 hover:bg-orange-700" onClick={() => approveReturn(r.id)}>
-                      <Check className="h-4 w-4 mr-2" /> Approve Return
+                    <Button 
+                      className="w-full bg-orange-600 hover:bg-orange-700" 
+                      onClick={() => approveReturn(r.id)}
+                      disabled={processingIds.has(r.id)}
+                    >
+                      {processingIds.has(r.id) ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-4 w-4 mr-2" /> Approve Return
+                        </>
+                      )}
                     </Button>
                   </div>
                 )}

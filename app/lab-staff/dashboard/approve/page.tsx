@@ -102,6 +102,11 @@ export default function LabStaffApprovePage() {
   }
 
   const handleAction = async (requestId: number, action: 'approve' | 'reject', overrideRemarks?: string) => {
+    // Prevent double-click: if already processing this request, ignore
+    if (actionLoading === requestId) {
+      return
+    }
+    
     const requestRemarks = typeof overrideRemarks === 'string'
       ? overrideRemarks.trim()
       : remarks[requestId]?.trim()
