@@ -164,7 +164,7 @@ export default function FacultyBookLabsPage() {
 									<SelectContent>
 										{labs.map(lab => (
 											<SelectItem key={lab.id} value={lab.id.toString()}>
-												{lab.name} - {lab.location} (Capacity: {lab.capacity})
+												{lab.name} ({lab.code})
 											</SelectItem>
 										))}
 									</SelectContent>

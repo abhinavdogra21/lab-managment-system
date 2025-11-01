@@ -180,7 +180,7 @@ export default function RequestComponentsPage() {
                   <Select value={selectedLab} onValueChange={setSelectedLab}>
                     <SelectTrigger><SelectValue placeholder="Select Lab" /></SelectTrigger>
                     <SelectContent>
-                      {labs.map(l => (<SelectItem key={l.id} value={l.id.toString()}>{l.name} - {l.location}</SelectItem>))}
+                      {labs.map(l => (<SelectItem key={l.id} value={l.id.toString()}>{l.name} ({l.code})</SelectItem>))}
                     </SelectContent>
                   </Select>
                 </div>

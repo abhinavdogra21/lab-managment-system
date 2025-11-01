@@ -282,7 +282,7 @@ export default function UsersPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Department</TableHead>
-                <TableHead className="w-[220px]">Actions</TableHead>
+                <TableHead className="w-[160px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -298,7 +298,6 @@ export default function UsersPage() {
                   </TableCell>
                   <TableCell>{u.department || "-"}</TableCell>
                   <TableCell className="space-x-2">
-                    <Button variant="outline" size="sm" onClick={() => viewDetails(u)}>Details</Button>
                     <Button variant="secondary" size="sm" onClick={() => openEdit(u)}>Edit</Button>
                     <Button variant="destructive" size="sm" disabled={loading} onClick={() => setDeleteTarget(u)}>Delete</Button>
                   </TableCell>
@@ -348,20 +347,17 @@ export default function UsersPage() {
           {editUser && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <Label>First Name <span className="text-red-600">*</span></Label>
-                <Input required value={editUser.first} onChange={(e) => setEditUser((s) => s ? { ...s, first: e.target.value } : s)} />
-              </div>
-              <div>
-                <Label>Middle Name</Label>
-                <Input value={editUser.middle} onChange={(e) => setEditUser((s) => s ? { ...s, middle: e.target.value } : s)} />
-              </div>
-              <div>
-                <Label>Last Name</Label>
-                <Input value={editUser.last} onChange={(e) => setEditUser((s) => s ? { ...s, last: e.target.value } : s)} />
-              </div>
-              <div>
-                <Label>Email <span className="text-red-600">*</span></Label>
-                <Input type="email" required value={editUser.email} onChange={(e) => setEditUser((s) => s ? { ...s, email: e.target.value } : s)} />
+                <Label>Salutation</Label>
+                <Select value={editUser.salutation || 'none'} onValueChange={(v) => setEditUser((s) => s ? { ...s, salutation: v as any } : s)}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="prof">Prof</SelectItem>
+                    <SelectItem value="dr">Dr</SelectItem>
+                    <SelectItem value="mr">Mr</SelectItem>
+                    <SelectItem value="mrs">Mrs</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label>Role <span className="text-red-600">*</span></Label>
@@ -376,17 +372,20 @@ export default function UsersPage() {
                 </Select>
               </div>
               <div>
-                <Label>Salutation</Label>
-                <Select value={editUser.salutation || 'none'} onValueChange={(v) => setEditUser((s) => s ? { ...s, salutation: v as any } : s)}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="None" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="prof">Prof</SelectItem>
-                    <SelectItem value="dr">Dr</SelectItem>
-                    <SelectItem value="mr">Mr</SelectItem>
-                    <SelectItem value="mrs">Mrs</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>First Name <span className="text-red-600">*</span></Label>
+                <Input required value={editUser.first} onChange={(e) => setEditUser((s) => s ? { ...s, first: e.target.value } : s)} />
+              </div>
+              <div>
+                <Label>Middle Name</Label>
+                <Input value={editUser.middle} onChange={(e) => setEditUser((s) => s ? { ...s, middle: e.target.value } : s)} />
+              </div>
+              <div>
+                <Label>Last Name</Label>
+                <Input value={editUser.last} onChange={(e) => setEditUser((s) => s ? { ...s, last: e.target.value } : s)} />
+              </div>
+              <div>
+                <Label>Email <span className="text-red-600">*</span></Label>
+                <Input type="email" required value={editUser.email} onChange={(e) => setEditUser((s) => s ? { ...s, email: e.target.value } : s)} />
               </div>
               <div>
                 <Label>Department</Label>
@@ -417,20 +416,17 @@ export default function UsersPage() {
           </DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <Label>First Name <span className="text-red-600">*</span></Label>
-              <Input required value={addUser.first} onChange={(e) => setAddUser((s) => ({ ...s, first: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Middle Name</Label>
-              <Input value={addUser.middle} onChange={(e) => setAddUser((s) => ({ ...s, middle: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Last Name</Label>
-              <Input value={addUser.last} onChange={(e) => setAddUser((s) => ({ ...s, last: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Email <span className="text-red-600">*</span></Label>
-              <Input type="email" required value={addUser.email} onChange={(e) => setAddUser((s) => ({ ...s, email: e.target.value }))} />
+              <Label>Salutation</Label>
+              <Select value={addUser.salutation || 'none'} onValueChange={(v) => setAddUser((s) => ({ ...s, salutation: v as any }))}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="prof">Prof</SelectItem>
+                  <SelectItem value="dr">Dr</SelectItem>
+                  <SelectItem value="mr">Mr</SelectItem>
+                  <SelectItem value="mrs">Mrs</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>Role <span className="text-red-600">*</span></Label>
@@ -445,17 +441,20 @@ export default function UsersPage() {
               </Select>
             </div>
             <div>
-              <Label>Salutation</Label>
-              <Select value={addUser.salutation || 'none'} onValueChange={(v) => setAddUser((s) => ({ ...s, salutation: v as any }))}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="None" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="prof">Prof</SelectItem>
-                  <SelectItem value="dr">Dr</SelectItem>
-                  <SelectItem value="mr">Mr</SelectItem>
-                  <SelectItem value="mrs">Mrs</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>First Name <span className="text-red-600">*</span></Label>
+              <Input required value={addUser.first} onChange={(e) => setAddUser((s) => ({ ...s, first: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Middle Name</Label>
+              <Input value={addUser.middle} onChange={(e) => setAddUser((s) => ({ ...s, middle: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Last Name</Label>
+              <Input value={addUser.last} onChange={(e) => setAddUser((s) => ({ ...s, last: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Email <span className="text-red-600">*</span></Label>
+              <Input type="email" required value={addUser.email} onChange={(e) => setAddUser((s) => ({ ...s, email: e.target.value }))} />
             </div>
             <div>
               <Label>Department</Label>

@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
-import { CalendarIcon, Plus, Edit, Trash2, Clock, Users, Search, Filter, Upload, Download, Eye, CalendarDays } from "lucide-react"
+import { CalendarIcon, Plus, Edit, Trash2, Clock, Users, Search, Filter, Eye, CalendarDays } from "lucide-react"
 import { format, addDays, startOfWeek } from "date-fns"
 import Link from "next/link"
 
@@ -347,14 +347,6 @@ export default function TimetablePage() {
               <CalendarDays className="h-4 w-4 mr-2" />
               Daily Schedule
             </Link>
-          </Button>
-          <Button variant="outline" size="sm">
-            <Upload className="h-4 w-4 mr-2" />
-            Import Excel
-          </Button>
-          <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Export
           </Button>
           <Button 
             variant="destructive" 

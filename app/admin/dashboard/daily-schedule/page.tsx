@@ -125,9 +125,9 @@ export default function DailySchedulePage() {
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <Button variant="outline" size="sm" asChild>
-          <Link href="/admin/dashboard">
+          <Link href="/admin/dashboard/timetable">
             <ArrowLeft className="h-4 w-4 mr-1" />
-            Back to Dashboard
+            Back to Timetable
           </Link>
         </Button>
         <div>

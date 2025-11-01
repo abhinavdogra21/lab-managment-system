@@ -163,7 +163,7 @@ export default function FacultyRequestComponentsPage() {
                   >
                     <option value="">-- Select a lab --</option>
                     {labs.map(l => (
-                      <option key={l.id} value={l.id}>{l.name} ({l.code}) - {l.location}</option>
+                      <option key={l.id} value={l.id}>{l.name} ({l.code})</option>
                     ))}
                   </select>
                 )}
