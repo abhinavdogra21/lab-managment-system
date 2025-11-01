@@ -40,12 +40,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
     await ensureSchema()
-    const id = Number(params.id)
-    if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 })
+    const { id } = await params
+    const loanId = Number(id)
+    if (!loanId) return NextResponse.json({ error: "Invalid id" }, { status: 400 })
     const body = await req.json().catch(() => ({}))
     const action = String(body?.action || '').toLowerCase()
 
-    const r = await db.query(`SELECT * FROM component_loans WHERE id = ?`, [id])
+    const r = await db.query(`SELECT * FROM component_loans WHERE id = ?`, [loanId])
     const loan = r.rows[0]
     if (!loan) return NextResponse.json({ error: "Loan not found" }, { status: 404 })
     if (Number(loan.requester_id) !== Number(user.userId)) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
 import { verifyToken, hasRole } from "@/lib/auth"
+import { sendEmail, emailTemplates } from "@/lib/notifications"
 
 const db = Database.getInstance()
 
@@ -47,14 +48,15 @@ export async function GET(req: NextRequest) {
     }
     await ensureSchema()
     const rows = await db.query(
-      `SELECT r.*, l.name AS lab_name,
+      `SELECT r.*, 
+              l.name AS lab_name, l.code AS lab_code,
               ul.name AS lab_staff_name,
               uh.name AS hod_name
        FROM component_requests r
        JOIN labs l ON l.id = r.lab_id
        LEFT JOIN users ul ON ul.id = r.lab_staff_approver_id
        LEFT JOIN users uh ON uh.id = r.hod_approver_id
-       WHERE r.requester_id = ?
+       WHERE r.requester_id = ? AND r.initiator_role = 'faculty'
        ORDER BY r.created_at DESC`,
       [Number(user.userId)]
     )
@@ -92,9 +94,12 @@ export async function POST(req: NextRequest) {
     }
     await ensureSchema()
     const body = await req.json().catch(() => ({}))
-    const { lab_id, purpose, items } = body || {}
+    const { lab_id, purpose, items, return_date } = body || {}
     if (!lab_id || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "lab_id and items are required" }, { status: 400 })
+    }
+    if (!return_date) {
+      return NextResponse.json({ error: "return_date is required" }, { status: 400 })
     }
     // Validate items
     const compIds: number[] = items.map((it: any) => Number(it.component_id)).filter(Boolean)
@@ -109,12 +114,12 @@ export async function POST(req: NextRequest) {
     if (comps.rows.some((c: any) => Number(c.lab_id) !== Number(lab_id))) {
       return NextResponse.json({ error: "All components must belong to the selected lab" }, { status: 400 })
     }
-    // Create request skipping faculty stage
+    // Create request skipping faculty stage (faculty is requester, goes to lab staff first)
     const created = await db.transaction(async (client) => {
       const ins = await client.query(
-        `INSERT INTO component_requests (lab_id, requester_id, initiator_role, purpose, status)
-         VALUES (?, ?, 'faculty', ?, 'pending_lab_staff')`,
-        [Number(lab_id), Number(user.userId), purpose || null]
+        `INSERT INTO component_requests (lab_id, requester_id, initiator_role, purpose, return_date, status)
+         VALUES (?, ?, 'faculty', ?, ?, 'pending_lab_staff')`,
+        [Number(lab_id), Number(user.userId), purpose || null, return_date]
       )
       const reqId = Number(ins.insertId)
       for (const [cid, q] of qtyMap.entries()) {
@@ -125,6 +130,47 @@ export async function POST(req: NextRequest) {
       }
       return reqId
     })
+
+    // Fetch request details for email
+    const requestDetails = await db.query(
+      `SELECT r.*, l.name as lab_name, l.staff_id, u.name as requester_name, u.email as requester_email,
+              ls.email as lab_staff_email, ls.name as lab_staff_name
+       FROM component_requests r
+       JOIN labs l ON l.id = r.lab_id
+       JOIN users u ON u.id = r.requester_id
+       LEFT JOIN users ls ON ls.id = l.staff_id
+       WHERE r.id = ?`,
+      [created]
+    )
+    const request = requestDetails.rows[0]
+
+    // Fetch items for email
+    const itemsDetails = await db.query(
+      `SELECT c.name, cri.quantity_requested as quantity
+       FROM component_request_items cri
+       JOIN components c ON c.id = cri.component_id
+       WHERE cri.request_id = ?`,
+      [created]
+    )
+
+    // Send email to lab staff
+    if (request && request.lab_staff_email) {
+      const emailData = emailTemplates.componentRequestCreated({
+        requesterName: request.requester_name,
+        requesterRole: 'Faculty',
+        labName: request.lab_name,
+        purpose: purpose || 'Not specified',
+        items: itemsDetails.rows,
+        returnDate: return_date,
+        requestId: created
+      })
+      
+      await sendEmail({
+        to: request.lab_staff_email,
+        ...emailData
+      }).catch(err => console.error('Failed to send email:', err))
+    }
+
     const sel = await db.query(`SELECT * FROM component_requests WHERE id = ?`, [created])
     return NextResponse.json({ request: sel.rows[0] }, { status: 201 })
   } catch (e) {

@@ -7,7 +7,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (!user || !hasRole(user, ["admin"])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
-  const deptId = Number.parseInt(params.id, 10)
+  const { id } = await params
+  const deptId = Number.parseInt(id, 10)
   const body = await request.json().catch(() => ({}))
   const hodIdRaw = body?.hodId
   const hodId = hodIdRaw === null ? null : Number.parseInt(String(hodIdRaw), 10)

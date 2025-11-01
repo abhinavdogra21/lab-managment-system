@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyToken, hasRole } from "@/lib/auth"
 import { db } from "@/lib/database"
+import { sendEmail, emailTemplates } from "@/lib/notifications"
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -9,7 +10,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const requestId = Number(params.id)
+    const { id } = await params
+    const requestId = Number(id)
     if (!requestId) {
       return NextResponse.json({ error: "Invalid request ID" }, { status: 400 })
     }
@@ -62,6 +64,44 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         [requestId]
       )
     })
+
+    // Notify faculty mentor or lab staff depending on status
+    try {
+      const details = await db.query(
+        `SELECT r.*, l.name as lab_name, l.email as lab_email,
+                u.name as requester_name,
+                mentor.email as mentor_email, mentor.name as mentor_name
+         FROM component_requests r
+         JOIN labs l ON l.id = r.lab_id
+         JOIN users u ON u.id = r.requester_id
+         LEFT JOIN users mentor ON mentor.id = r.faculty_mentor_id
+         WHERE r.id = ?`,
+        [requestId]
+      )
+
+      if (details.rows.length > 0) {
+        const req = details.rows[0]
+        const emailData = emailTemplates.requestWithdrawn({
+          requesterName: req.requester_name,
+          requesterRole: 'Student',
+          labName: req.lab_name,
+          requestId: requestId,
+          notifyEmail: req.mentor_email || req.lab_email,
+          notifyRole: req.mentor_email ? 'Faculty Mentor' : 'Lab Staff'
+        })
+
+        // Notify the appropriate person based on request status
+        const notifyEmail = req.mentor_email || req.lab_email
+        if (notifyEmail) {
+          await sendEmail({
+            to: [notifyEmail],
+            ...emailData
+          }).catch(err => console.error('Email send failed:', err))
+        }
+      }
+    } catch (emailError) {
+      console.error('Failed to send withdrawal notification:', emailError)
+    }
 
     return NextResponse.json({ 
       message: "Request withdrawn successfully" 

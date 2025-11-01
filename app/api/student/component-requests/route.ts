@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
 import { verifyToken, hasRole } from "@/lib/auth"
+import { sendEmail, emailTemplates } from "@/lib/notifications"
 
 const db = Database.getInstance()
 
@@ -144,6 +145,47 @@ export async function POST(req: NextRequest) {
       }
       return reqId
     })
+
+    // Fetch request details for email
+    const requestDetails = await db.query(
+      `SELECT r.*, l.name as lab_name, u.name as requester_name, u.email as requester_email,
+              f.name as faculty_name, f.email as faculty_email
+       FROM component_requests r
+       JOIN labs l ON l.id = r.lab_id
+       JOIN users u ON u.id = r.requester_id
+       LEFT JOIN users f ON f.id = r.mentor_faculty_id
+       WHERE r.id = ?`,
+      [created]
+    )
+    const request = requestDetails.rows[0]
+
+    // Fetch items for email
+    const itemsDetails = await db.query(
+      `SELECT c.name, cri.quantity_requested as quantity
+       FROM component_request_items cri
+       JOIN components c ON c.id = cri.component_id
+       WHERE cri.request_id = ?`,
+      [created]
+    )
+
+    // Send email to mentor faculty
+    if (request && request.faculty_email) {
+      const emailData = emailTemplates.componentRequestCreated({
+        requesterName: request.requester_name,
+        requesterRole: 'Student',
+        labName: request.lab_name,
+        purpose: purpose || 'Not specified',
+        items: itemsDetails.rows,
+        returnDate: return_date,
+        requestId: created
+      })
+      
+      await sendEmail({
+        to: request.faculty_email,
+        ...emailData
+      }).catch(err => console.error('Failed to send email:', err))
+    }
+
     const sel = await db.query(`SELECT * FROM component_requests WHERE id = ?`, [created])
     return NextResponse.json({ request: sel.rows[0] }, { status: 201 })
   } catch (e) {

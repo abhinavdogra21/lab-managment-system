@@ -40,8 +40,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
     await ensureSchema()
-    const id = Number(params.id)
-    if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 })
+    const { id } = await params
+    const loanId = Number(id)
+    if (!loanId) return NextResponse.json({ error: "Invalid id" }, { status: 400 })
     const body = await req.json().catch(() => ({}))
     const action = String(body?.action || '').toLowerCase()
     const remarks = body?.remarks || null
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       `SELECT l.*, lb.staff_id AS head_staff_id
        FROM component_loans l JOIN labs lb ON lb.id = l.lab_id
        WHERE l.id = ?`,
-      [id]
+      [loanId]
     )
     const loan = r.rows[0]
     if (!loan) return NextResponse.json({ error: "Loan not found" }, { status: 404 })

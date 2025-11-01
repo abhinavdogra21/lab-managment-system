@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { Clock, CheckCircle, XCircle, User, Calendar, Eye, Plus } from "lucide-react"
+import { Clock, CheckCircle, XCircle, User, Calendar, Eye, Plus, Package } from "lucide-react"
 import Link from "next/link"
 
 interface PendingRequest {
@@ -233,6 +233,18 @@ export default function FacultyDashboardPage() {
               <Link href="/faculty/dashboard/approve">
                 <CheckCircle className="h-4 w-4 mr-2" />
                 Review Pending Requests
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="w-full justify-start">
+              <Link href="/faculty/dashboard/request-components">
+                <Plus className="h-4 w-4 mr-2" />
+                Request Lab Components
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="w-full justify-start">
+              <Link href="/faculty/dashboard/my-component-requests">
+                <Package className="h-4 w-4 mr-2" />
+                My Component Requests
               </Link>
             </Button>
             <Button asChild variant="outline" className="w-full justify-start">

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { dbOperations } from "@/lib/database"
 import crypto from "crypto"
+import { sendEmail, emailTemplates } from "@/lib/notifications"
 
 function hashPassword(password: string) {
   // For demo: use scrypt. In production, prefer bcrypt/argon2.
@@ -38,6 +39,24 @@ export async function POST(req: Request) {
     const passwordHash = hashPassword(password)
     await dbOperations.updateUserPassword(pr.user_id, passwordHash)
     await dbOperations.markPasswordResetUsed(pr.id)
+
+    // Send confirmation email
+    try {
+      const user = await dbOperations.getUserById(pr.user_id)
+      if (user) {
+        const emailData = emailTemplates.passwordResetSuccess({
+          userName: user.name || 'User',
+          userEmail: user.email
+        })
+
+        await sendEmail({
+          to: [user.email],
+          ...emailData
+        }).catch(err => console.error('Confirmation email failed:', err))
+      }
+    } catch (emailError) {
+      console.error('Failed to send password reset confirmation:', emailError)
+    }
 
     return NextResponse.json({ ok: true })
   } catch (e) {

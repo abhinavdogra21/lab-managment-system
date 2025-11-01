@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyToken, hasRole } from "@/lib/auth"
 import { db } from "@/lib/database"
+import { sendEmail, emailTemplates } from "@/lib/notifications"
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -12,7 +13,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const body = await req.json().catch(() => ({}))
     const { remarks } = body || {}
 
-    const requestId = Number(params.id)
+    const { id } = await params
+    const requestId = Number(id)
     if (!requestId) {
       return NextResponse.json({ error: "Invalid request ID" }, { status: 400 })
     }
@@ -95,6 +97,35 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     })
 
     console.log(`Approve return #${requestId}: Transaction completed successfully`)
+
+    // Send email to requester
+    try {
+      const details = await db.query(
+        `SELECT r.*, l.name as lab_name,
+                u.name as requester_name, u.email as requester_email
+         FROM component_requests r
+         JOIN labs l ON l.id = r.lab_id
+         JOIN users u ON u.id = r.requester_id
+         WHERE r.id = ?`,
+        [requestId]
+      )
+
+      if (details.rows.length > 0) {
+        const req = details.rows[0]
+        const emailData = emailTemplates.returnApproved({
+          requesterName: req.requester_name,
+          labName: req.lab_name,
+          requestId: requestId
+        })
+
+        await sendEmail({
+          to: [req.requester_email],
+          ...emailData
+        }).catch(err => console.error('Email send failed:', err))
+      }
+    } catch (emailError) {
+      console.error('Failed to send return approval notification:', emailError)
+    }
 
     return NextResponse.json({ 
       message: "Return approved. Components marked as returned and quantities restored." 

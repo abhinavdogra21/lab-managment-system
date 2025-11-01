@@ -11,7 +11,8 @@ export async function POST(request: NextRequest, context: { params: { id: string
     if (!user || user.role !== "student") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
-    const requestId = Number(params.id)
+    const { id } = await params
+    const requestId = Number(id)
     // Only allow deleting if the booking request belongs to the student and is still pending
     const { rows } = await db.query(
       "SELECT * FROM booking_requests WHERE id = ? AND requested_by = ? AND status IN ('pending_faculty','pending_lab_staff','pending_hod')",

@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer"
+import { sendEmail } from "./notifications"
 
 type MailOptions = {
   to: string | string[]
@@ -109,11 +110,20 @@ export async function sendPasswordResetEmail(email: string, token: string, baseU
     </table>
   </body>
 </html>`
-  const res = await sendMail({ to: email, subject: "Reset your password", html })
-  if ((res as any).skipped) {
-    console.info("Password reset URL (SMTP disabled):", url)
+  
+  // Use new Gmail-based notification system
+  try {
+    await sendEmail({
+      to: [email],
+      subject: "Reset your password - LNMIIT Lab Management",
+      html
+    })
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to send password reset email:', error)
+    console.info("Password reset URL (email failed):", url)
+    throw error
   }
-  return res
 }
 
 export async function sendDigestEmail(recipients: string[], subject: string, html: string) {

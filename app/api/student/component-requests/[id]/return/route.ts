@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyToken, hasRole } from "@/lib/auth"
 import { db } from "@/lib/database"
+import { sendEmail, emailTemplates } from "@/lib/notifications"
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -9,7 +10,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const requestId = Number(params.id)
+    const { id } = await params
+    const requestId = Number(id)
     if (!requestId) {
       return NextResponse.json({ error: "Invalid request ID" }, { status: 400 })
     }
@@ -55,6 +57,36 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
        WHERE id = ?`,
       [requestId]
     )
+
+    // Send email to lab staff
+    try {
+      const details = await db.query(
+        `SELECT r.*, l.name as lab_name, l.email as lab_email,
+                u.name as requester_name
+         FROM component_requests r
+         JOIN labs l ON l.id = r.lab_id
+         JOIN users u ON u.id = r.requester_id
+         WHERE r.id = ?`,
+        [requestId]
+      )
+
+      if (details.rows.length > 0) {
+        const req = details.rows[0]
+        const emailData = emailTemplates.returnRequested({
+          requesterName: req.requester_name,
+          requesterRole: 'Student',
+          labName: req.lab_name,
+          requestId: requestId
+        })
+
+        await sendEmail({
+          to: [req.lab_email],
+          ...emailData
+        }).catch(err => console.error('Email send failed:', err))
+      }
+    } catch (emailError) {
+      console.error('Failed to send return notification:', emailError)
+    }
 
     return NextResponse.json({ 
       message: "Return request submitted. Lab staff will verify and approve the return." 

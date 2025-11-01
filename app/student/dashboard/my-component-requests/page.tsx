@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { Calendar, CheckCircle, Clock, Eye, Package, RotateCcw, User, Users, Building, XCircle, ChevronLeft, X } from "lucide-react"
 import Link from "next/link"
@@ -45,6 +48,11 @@ interface ComponentRequest {
   return_approved_by: number | null
   return_approved_at: string | null
   return_remarks: string | null
+  extension_requested_at: string | null
+  extension_requested_until: string | null
+  extension_approved_by: number | null
+  extension_approved_at: string | null
+  extension_remarks: string | null
   rejected_by_id: number | null
   rejected_at: string | null
   rejection_reason: string | null
@@ -62,6 +70,10 @@ export default function MyComponentRequestsPage() {
   const [loading, setLoading] = useState(false)
   const [requests, setRequests] = useState<ComponentRequest[]>([])
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'approved' | 'issued' | 'returned' | 'rejected'>('all')
+  const [extendDialogOpen, setExtendDialogOpen] = useState(false)
+  const [extendRequestId, setExtendRequestId] = useState<number | null>(null)
+  const [newReturnDate, setNewReturnDate] = useState('')
+  const [extensionReason, setExtensionReason] = useState('')
 
   useEffect(() => { loadRequests() }, [])
 
@@ -98,13 +110,31 @@ export default function MyComponentRequestsPage() {
     }
   }
 
+  async function handleCancelReturn(requestId: number) {
+    if (!confirm('Cancel the return request? You can request to return again later.')) return
+    
+    try {
+      const res = await fetch(`/api/student/component-requests/${requestId}/cancel-return`, {
+        method: 'POST'
+      })
+      const text = await res.text()
+      if (!res.ok) {
+        const errorMsg = (() => { try { return JSON.parse(text)?.error } catch { return text } })()
+        throw new Error(errorMsg || 'Failed to cancel return request')
+      }
+      toast({ title: 'Success', description: 'Return request canceled.' })
+      loadRequests()
+    } catch (e: any) {
+      toast({ title: 'Failed', description: e?.message || 'Could not cancel return request', variant: 'destructive' })
+    }
+  }
+
   async function handleWithdraw(requestId: number) {
     if (!confirm('Withdraw this request? This action cannot be undone.')) return
-    
+    setLoading(true)
     try {
       const res = await fetch(`/api/student/component-requests/${requestId}/withdraw`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
       })
       const text = await res.text()
       if (!res.ok) {
@@ -115,6 +145,38 @@ export default function MyComponentRequestsPage() {
       loadRequests()
     } catch (e: any) {
       toast({ title: 'Withdraw failed', description: e?.message || 'Could not withdraw request', variant: 'destructive' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleExtendDeadline() {
+    if (!extendRequestId || !newReturnDate) {
+      toast({ title: 'Invalid input', description: 'Please select a new return date', variant: 'destructive' })
+      return
+    }
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/student/component-requests/${extendRequestId}/extend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_return_date: newReturnDate, reason: extensionReason })
+      })
+      const text = await res.text()
+      if (!res.ok) {
+        const errorMsg = (() => { try { return JSON.parse(text)?.error } catch { return text } })()
+        throw new Error(errorMsg || 'Failed to request extension')
+      }
+      toast({ title: 'Extension requested', description: 'Lab staff will review your extension request' })
+      setExtendDialogOpen(false)
+      setExtendRequestId(null)
+      setNewReturnDate('')
+      setExtensionReason('')
+      loadRequests()
+    } catch (e: any) {
+      toast({ title: 'Extension request failed', description: e?.message || 'Could not request extension', variant: 'destructive' })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -294,10 +356,19 @@ export default function MyComponentRequestsPage() {
                 )}
 
                 {req.return_requested_at && !req.returned_at && (
-                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-sm">
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-sm space-y-2">
                     <p className="font-medium text-yellow-900">⏳ Return Requested</p>
                     <p className="text-yellow-700 text-xs">Requested on: {new Date(req.return_requested_at).toLocaleDateString()}</p>
                     <p className="text-yellow-700 text-xs">Waiting for lab staff to verify and approve return</p>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => handleCancelReturn(req.id)}
+                      className="mt-2 border-red-200 text-red-600 hover:bg-red-50"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Cancel Return Request
+                    </Button>
                   </div>
                 )}
 
@@ -387,14 +458,46 @@ export default function MyComponentRequestsPage() {
 
                 {/* Request Return Button - Show if approved, issued, and not yet requested return */}
                 {req.status === 'approved' && req.issued_at && !req.return_requested_at && !req.returned_at && (
-                  <Button 
-                    variant="default" 
-                    size="sm" 
-                    onClick={() => handleReturn(req.id)}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    <RotateCcw className="h-4 w-4 mr-2"/>Request to Return Components
-                  </Button>
+                  <>
+                    <Button 
+                      variant="default" 
+                      size="sm" 
+                      onClick={() => handleReturn(req.id)}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      <RotateCcw className="h-4 w-4 mr-2"/>Request to Return Components
+                    </Button>
+                    
+                    {/* Extend Deadline Button */}
+                    {!req.extension_requested_at && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setExtendRequestId(req.id)
+                          setNewReturnDate('')
+                          setExtensionReason('')
+                          setExtendDialogOpen(true)
+                        }}
+                        className="border-purple-200 text-purple-600 hover:bg-purple-50"
+                      >
+                        <Clock className="h-4 w-4 mr-2"/>Extend Deadline
+                      </Button>
+                    )}
+                    
+                    {req.extension_requested_at && !req.extension_approved_at && (
+                      <Badge className="bg-purple-100 text-purple-800">
+                        Extension Pending (until {new Date(req.extension_requested_until!).toLocaleDateString()})
+                      </Badge>
+                    )}
+
+                    {!req.extension_requested_at && req.extension_remarks && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded text-sm">
+                        <p className="font-medium text-red-900">❌ Extension Request Rejected</p>
+                        <p className="text-red-700 text-xs italic mt-1">{req.extension_remarks}</p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
               </CardContent>
@@ -404,6 +507,45 @@ export default function MyComponentRequestsPage() {
           </TabsContent>
         </Tabs>
       )}
+
+      {/* Extend Deadline Dialog */}
+      <Dialog open={extendDialogOpen} onOpenChange={setExtendDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request Deadline Extension</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="newReturnDate">New Return Date</Label>
+              <Input
+                id="newReturnDate"
+                type="date"
+                value={newReturnDate}
+                onChange={(e) => setNewReturnDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+              />
+            </div>
+            <div>
+              <Label htmlFor="extensionReason">Reason for Extension (Optional)</Label>
+              <Textarea
+                id="extensionReason"
+                value={extensionReason}
+                onChange={(e) => setExtensionReason(e.target.value)}
+                placeholder="Explain why you need more time..."
+                rows={3}
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setExtendDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleExtendDeadline} disabled={!newReturnDate || loading}>
+                {loading ? 'Requesting...' : 'Request Extension'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

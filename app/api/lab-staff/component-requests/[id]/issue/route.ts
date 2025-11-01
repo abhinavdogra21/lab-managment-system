@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyToken, hasRole } from "@/lib/auth"
 import { db } from "@/lib/database"
+import { sendEmail, emailTemplates } from "@/lib/notifications"
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -9,7 +10,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const requestId = Number(params.id)
+    const { id } = await params
+    const requestId = Number(id)
     if (!requestId) {
       return NextResponse.json({ error: "Invalid request ID" }, { status: 400 })
     }
@@ -82,6 +84,38 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     })
 
     console.log(`Issue request #${requestId}: Transaction completed successfully`)
+
+    // Send email to requester
+    const details = await db.query(
+      `SELECT r.*, l.name as lab_name,
+              u.name as requester_name, u.email as requester_email
+       FROM component_requests r
+       JOIN labs l ON l.id = r.lab_id
+       JOIN users u ON u.id = r.requester_id
+       WHERE r.id = ?`,
+      [requestId]
+    )
+    const req = details.rows[0]
+    
+    if (req && req.requester_email) {
+      const itemsDetails = await db.query(
+        `SELECT c.name, cri.quantity_requested as quantity
+         FROM component_request_items cri
+         JOIN components c ON c.id = cri.component_id
+         WHERE cri.request_id = ?`,
+        [requestId]
+      )
+      
+      const emailData = emailTemplates.componentIssued({
+        requesterName: req.requester_name,
+        requesterRole: req.initiator_role === 'faculty' ? 'Faculty' : 'Student',
+        labName: req.lab_name,
+        requestId: requestId,
+        items: itemsDetails.rows,
+        returnDate: req.return_date || 'Not specified'
+      })
+      await sendEmail({ to: req.requester_email, ...emailData }).catch(err => console.error('Email failed:', err))
+    }
 
     return NextResponse.json({ 
       message: "Components marked as issued to student and quantities updated" 

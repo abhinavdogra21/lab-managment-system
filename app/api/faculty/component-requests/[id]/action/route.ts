@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
 import { verifyToken, hasRole } from "@/lib/auth"
+import { sendEmail, emailTemplates } from "@/lib/notifications"
 
 const db = Database.getInstance()
 
@@ -38,13 +39,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
     await ensureSchema()
-    const id = Number(params.id)
-    if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 })
+    const { id } = await params
+    const requestId = Number(id)
+    if (!requestId) return NextResponse.json({ error: "Invalid id" }, { status: 400 })
     const body = await req.json().catch(() => ({}))
     const action = String(body?.action || '').toLowerCase()
     const remarks = String(body?.remarks || '') || null
 
-    const r = await db.query(`SELECT * FROM component_requests WHERE id = ?`, [id])
+    const r = await db.query(`SELECT * FROM component_requests WHERE id = ?`, [requestId])
     const request = r.rows[0]
     if (!request) return NextResponse.json({ error: "Request not found" }, { status: 404 })
     // Only requests in pending_faculty and where mentor_faculty_id matches can be approved by faculty
@@ -55,17 +57,95 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (action === 'approve') {
       await db.query(
         `UPDATE component_requests SET status = 'pending_lab_staff', faculty_approver_id = ?, faculty_approved_at = NOW(), faculty_remarks = ? WHERE id = ? AND status = 'pending_faculty'`,
-        [Number(user.userId), remarks, id]
+        [Number(user.userId), remarks, requestId]
       )
-      const sel = await db.query(`SELECT * FROM component_requests WHERE id = ?`, [id])
+      
+      // Send email to student and lab staff
+      const details = await db.query(
+        `SELECT r.*, l.name as lab_name, l.staff_id,
+                u.name as requester_name, u.email as requester_email,
+                f.name as faculty_name,
+                ls.email as lab_staff_email
+         FROM component_requests r
+         JOIN labs l ON l.id = r.lab_id
+         JOIN users u ON u.id = r.requester_id
+         LEFT JOIN users f ON f.id = ?
+         LEFT JOIN users ls ON ls.id = l.staff_id
+         WHERE r.id = ?`,
+        [Number(user.userId), requestId]
+      )
+      const req = details.rows[0]
+      
+      // Email to student
+      if (req && req.requester_email) {
+        const emailData = emailTemplates.componentRequestApproved({
+          requesterName: req.requester_name,
+          approverName: req.faculty_name || 'Faculty',
+          approverRole: 'Faculty Mentor',
+          labName: req.lab_name,
+          requestId: requestId,
+          remarks: remarks || undefined
+        })
+        await sendEmail({ to: req.requester_email, ...emailData }).catch(err => console.error('Email failed:', err))
+      }
+      
+      // Email to lab staff
+      if (req && req.lab_staff_email) {
+        const itemsDetails = await db.query(
+          `SELECT c.name, cri.quantity_requested as quantity
+           FROM component_request_items cri
+           JOIN components c ON c.id = cri.component_id
+           WHERE cri.request_id = ?`,
+          [requestId]
+        )
+        const emailData = emailTemplates.componentRequestCreated({
+          requesterName: req.requester_name,
+          requesterRole: 'Student',
+          labName: req.lab_name,
+          purpose: req.purpose || 'Not specified',
+          items: itemsDetails.rows,
+          returnDate: req.return_date,
+          requestId: requestId
+        })
+        await sendEmail({ to: req.lab_staff_email, ...emailData }).catch(err => console.error('Email failed:', err))
+      }
+      
+      const sel = await db.query(`SELECT * FROM component_requests WHERE id = ?`, [requestId])
       return NextResponse.json({ request: sel.rows[0] })
     }
     if (action === 'reject') {
       await db.query(
         `UPDATE component_requests SET status = 'rejected', rejected_by_id = ?, rejected_at = NOW(), rejection_reason = ?, faculty_remarks = COALESCE(faculty_remarks, ?) WHERE id = ? AND status = 'pending_faculty'`,
-        [Number(user.userId), remarks, remarks, id]
+        [Number(user.userId), remarks, remarks, requestId]
       )
-      const sel = await db.query(`SELECT * FROM component_requests WHERE id = ?`, [id])
+      
+      // Send rejection email to student
+      const details = await db.query(
+        `SELECT r.*, l.name as lab_name,
+                u.name as requester_name, u.email as requester_email,
+                f.name as faculty_name
+         FROM component_requests r
+         JOIN labs l ON l.id = r.lab_id
+         JOIN users u ON u.id = r.requester_id
+         LEFT JOIN users f ON f.id = ?
+         WHERE r.id = ?`,
+        [Number(user.userId), requestId]
+      )
+      const req = details.rows[0]
+      
+      if (req && req.requester_email) {
+        const emailData = emailTemplates.componentRequestRejected({
+          requesterName: req.requester_name,
+          rejecterName: req.faculty_name || 'Faculty',
+          rejecterRole: 'Faculty Mentor',
+          labName: req.lab_name,
+          requestId: requestId,
+          reason: remarks || undefined
+        })
+        await sendEmail({ to: req.requester_email, ...emailData }).catch(err => console.error('Email failed:', err))
+      }
+      
+      const sel = await db.query(`SELECT * FROM component_requests WHERE id = ?`, [requestId])
       return NextResponse.json({ request: sel.rows[0] })
     }
     return NextResponse.json({ error: "Unsupported action" }, { status: 400 })

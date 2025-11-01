@@ -66,6 +66,8 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
         return [
           ...baseItems,
           { name: "Book Labs", href: withPrefix("/dashboard/book-labs"), icon: Calendar },
+          { name: "Request Components", href: withPrefix("/dashboard/request-components"), icon: Package },
+          { name: "My Component Requests", href: withPrefix("/dashboard/my-component-requests"), icon: ClipboardList },
           { name: "Approve Requests", href: withPrefix("/dashboard/approve"), icon: UserCheck },
           { name: "My Bookings", href: withPrefix("/dashboard/bookings"), icon: BookOpen },
           { name: "Reports", href: withPrefix("/dashboard/reports"), icon: BarChart3 },

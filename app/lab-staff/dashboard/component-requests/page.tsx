@@ -16,11 +16,17 @@ interface RequestItem {
   lab_name: string
   requester_id: number
   requester_name: string
+  initiator_role: 'student' | 'faculty'
   status: string
   issued_at?: string | null
   return_requested_at?: string | null
   returned_at?: string | null
   return_date?: string | null
+  extension_requested_at?: string | null
+  extension_requested_until?: string | null
+  extension_approved_by?: number | null
+  extension_approved_at?: string | null
+  extension_remarks?: string | null
   mentor_faculty_name?: string
   items: Array<{ 
     id: number
@@ -38,6 +44,7 @@ export default function LabStaffComponentRequestsPage() {
   const [requests, setRequests] = useState<RequestItem[]>([])
   const [remarks, setRemarks] = useState<Record<number, string>>({})
   const [returnRemarks, setReturnRemarks] = useState<Record<number, string>>({})
+  const [extensionRemarks, setExtensionRemarks] = useState<Record<number, string>>({})
   const [searchQuery, setSearchQuery] = useState("")
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'issued' | 'return-pending' | 'returned' | 'rejected'>('all')
 
@@ -72,7 +79,9 @@ export default function LabStaffComponentRequestsPage() {
   }
 
   const issueComponents = async (id: number) => {
-    if (!confirm('Mark these components as issued to the student?')) return
+    const req = requests.find(r => r.id === id)
+    const role = req?.initiator_role === 'faculty' ? 'faculty' : 'student'
+    if (!confirm(`Mark these components as issued to the ${role}?`)) return
     try {
       const res = await fetch(`/api/lab-staff/component-requests/${id}/issue`, { 
         method: 'POST',
@@ -80,7 +89,7 @@ export default function LabStaffComponentRequestsPage() {
       })
       const text = await res.text()
       if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
-      toast({ title: 'Success', description: 'Components marked as issued to student' })
+      toast({ title: 'Success', description: `Components marked as issued to ${role}` })
       load()
     } catch (e: any) {
       toast({ title: 'Issue failed', description: e?.message || 'Could not issue components', variant: 'destructive' })
@@ -102,6 +111,29 @@ export default function LabStaffComponentRequestsPage() {
       load()
     } catch (e: any) {
       toast({ title: 'Approval failed', description: e?.message || 'Could not approve return', variant: 'destructive' })
+    }
+  }
+
+  const handleExtension = async (id: number, approved: boolean) => {
+    const action = approved ? 'approve' : 'reject'
+    if (!approved && !extensionRemarks[id]?.trim()) {
+      toast({ title: 'Remarks required', description: 'Please provide a reason for rejection', variant: 'destructive' })
+      return
+    }
+    if (!confirm(`${approved ? 'Approve' : 'Reject'} this deadline extension request?`)) return
+    try {
+      const res = await fetch(`/api/lab-staff/component-requests/${id}/extend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved, remarks: extensionRemarks[id] })
+      })
+      const text = await res.text()
+      if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
+      toast({ title: 'Success', description: `Extension ${action}d successfully` })
+      setExtensionRemarks(prev => ({ ...prev, [id]: '' }))
+      load()
+    } catch (e: any) {
+      toast({ title: 'Failed', description: e?.message || `Could not ${action} extension`, variant: 'destructive' })
     }
   }
 
@@ -273,7 +305,7 @@ export default function LabStaffComponentRequestsPage() {
                 {/* Issue/Return Status */}
                 {r.issued_at && !r.return_requested_at && (
                   <div className="p-2 bg-green-50 border border-green-200 rounded text-sm">
-                    <p className="font-medium text-green-900">✓ Issued to student</p>
+                    <p className="font-medium text-green-900">✓ Issued to {r.initiator_role === 'faculty' ? 'Faculty' : 'Student'}</p>
                     <p className="text-green-700 text-xs">Issued: {new Date(r.issued_at).toLocaleDateString()}</p>
                     {r.return_date && <p className="text-green-700 text-xs">Expected return: {new Date(r.return_date).toLocaleDateString()}</p>}
                   </div>
@@ -281,7 +313,7 @@ export default function LabStaffComponentRequestsPage() {
 
                 {r.return_requested_at && !r.returned_at && (
                   <div className="p-2 bg-yellow-50 border border-yellow-200 rounded text-sm">
-                    <p className="font-medium text-yellow-900">⏳ Student Requested Return</p>
+                    <p className="font-medium text-yellow-900">⏳ {r.initiator_role === 'faculty' ? 'Faculty' : 'Student'} Requested Return</p>
                     <p className="text-yellow-700 text-xs">Requested: {new Date(r.return_requested_at).toLocaleDateString()}</p>
                     <p className="text-yellow-700 text-xs">Please verify components and approve return</p>
                   </div>
@@ -289,8 +321,41 @@ export default function LabStaffComponentRequestsPage() {
 
                 {r.returned_at && (
                   <div className="p-2 bg-blue-50 border border-blue-200 rounded text-sm">
-                    <p className="font-medium text-blue-900">✓ Returned by student</p>
+                    <p className="font-medium text-blue-900">✓ Returned by {r.initiator_role === 'faculty' ? 'Faculty' : 'Student'}</p>
                     <p className="text-blue-700 text-xs">Returned: {new Date(r.returned_at).toLocaleDateString()}</p>
+                  </div>
+                )}
+
+                {/* Extension Request */}
+                {r.extension_requested_at && !r.extension_approved_at && r.issued_at && !r.returned_at && (
+                  <div className="p-3 bg-purple-50 border border-purple-200 rounded text-sm space-y-2">
+                    <p className="font-medium text-purple-900">⏰ Deadline Extension Requested</p>
+                    <p className="text-purple-700 text-xs">
+                      Current deadline: {r.return_date ? new Date(r.return_date).toLocaleDateString() : 'Not set'}
+                    </p>
+                    <p className="text-purple-700 text-xs">
+                      Requested until: {new Date(r.extension_requested_until!).toLocaleDateString()}
+                    </p>
+                    {r.extension_remarks && (
+                      <p className="text-purple-700 text-xs italic">Reason: {r.extension_remarks}</p>
+                    )}
+                    <div className="space-y-2">
+                      <Textarea
+                        placeholder="Remarks for rejection (optional for approval)"
+                        value={extensionRemarks[r.id] || ''}
+                        onChange={(e) => setExtensionRemarks(prev => ({ ...prev, [r.id]: e.target.value }))}
+                        rows={2}
+                        className="text-xs"
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700" onClick={() => handleExtension(r.id, true)}>
+                          <Check className="h-4 w-4 mr-1" /> Approve Extension
+                        </Button>
+                        <Button size="sm" variant="destructive" className="flex-1" onClick={() => handleExtension(r.id, false)}>
+                          <X className="h-4 w-4 mr-1" /> Reject
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -313,7 +378,7 @@ export default function LabStaffComponentRequestsPage() {
                 {r.status === 'approved' && !r.issued_at && (
                   <div>
                     <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => issueComponents(r.id)}>
-                      <PackageCheck className="h-4 w-4 mr-2" /> Issue Components to Student
+                      <PackageCheck className="h-4 w-4 mr-2" /> Issue Components to {r.initiator_role === 'faculty' ? 'Faculty' : 'Student'}
                     </Button>
                   </div>
                 )}

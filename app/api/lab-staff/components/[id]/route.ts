@@ -46,9 +46,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
     await ensureSchema()
-    const id = Number(params.id)
-    if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 })
-    const current = await db.query(`SELECT * FROM components WHERE id = ?`, [id])
+    const { id } = await params
+    const componentId = Number(id)
+    if (!componentId) return NextResponse.json({ error: "Invalid id" }, { status: 400 })
+    const current = await db.query(`SELECT * FROM components WHERE id = ?`, [componentId])
     const comp = current.rows[0]
     if (!comp) return NextResponse.json({ error: "Not found" }, { status: 404 })
     const allowed = await canManage(Number(user.userId), Number(comp.lab_id))
@@ -88,15 +89,16 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
     await ensureSchema()
-    const id = Number(params.id)
-    if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 })
-    const current = await db.query(`SELECT * FROM components WHERE id = ?`, [id])
+    const { id } = await params
+    const componentId = Number(id)
+    if (!componentId) return NextResponse.json({ error: "Invalid id" }, { status: 400 })
+    const current = await db.query(`SELECT * FROM components WHERE id = ?`, [componentId])
     const comp = current.rows[0]
     if (!comp) return NextResponse.json({ error: "Not found" }, { status: 404 })
     const allowed = await canManage(Number(user.userId), Number(comp.lab_id))
     if (!allowed) return NextResponse.json({ error: "Only Head (or assigned when no head) can manage components" }, { status: 403 })
 
-    await db.query(`DELETE FROM components WHERE id = ?`, [id])
+    await db.query(`DELETE FROM components WHERE id = ?`, [componentId])
     return NextResponse.json({ success: true })
   } catch (e) {
     console.error("components DELETE error:", e)
