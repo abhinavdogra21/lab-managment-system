@@ -89,7 +89,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         await sendEmail({ to: req.requester_email, ...emailData }).catch(err => console.error('Email failed:', err))
       }
       
-      // Email to lab staff
+      // Email to lab staff (forwarding the approved request)
       if (req && req.lab_staff_email) {
         const itemsDetails = await db.query(
           `SELECT c.name, cri.quantity_requested as quantity
@@ -98,9 +98,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
            WHERE cri.request_id = ?`,
           [requestId]
         )
-        const emailData = emailTemplates.componentRequestCreated({
+        const emailData = emailTemplates.componentRequestForwarded({
+          recipientRole: 'Lab Staff',
           requesterName: req.requester_name,
           requesterRole: 'Student',
+          approverName: req.faculty_name || 'Faculty',
+          approverRole: 'Faculty',
           labName: req.lab_name,
           purpose: req.purpose || 'Not specified',
           items: itemsDetails.rows,

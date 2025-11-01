@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Menu, Bell, Settings, LogOut } from "lucide-react"
+import { Menu, Settings, LogOut } from "lucide-react"
 
 interface DashboardHeaderProps {
   user: {
@@ -89,16 +89,8 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
         </div>
       </div>
 
-      {/* Right Section - Notifications and User Menu */}
+      {/* Right Section - User Menu */}
       <div className="flex items-center gap-4">
-        {/* Notifications */}
-        <Button variant="ghost" size="sm" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-secondary text-xs text-secondary-foreground">
-            3
-          </span>
-        </Button>
-
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

@@ -68,13 +68,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // Notify faculty mentor or lab staff depending on status
     try {
       const details = await db.query(
-        `SELECT r.*, l.name as lab_name, l.email as lab_email,
+        `SELECT r.*, l.name as lab_name,
                 u.name as requester_name,
-                mentor.email as mentor_email, mentor.name as mentor_name
+                mentor.email as mentor_email, mentor.name as mentor_name,
+                ls.email as lab_staff_email
          FROM component_requests r
          JOIN labs l ON l.id = r.lab_id
          JOIN users u ON u.id = r.requester_id
-         LEFT JOIN users mentor ON mentor.id = r.faculty_mentor_id
+         LEFT JOIN users mentor ON mentor.id = r.mentor_faculty_id
+         LEFT JOIN users ls ON ls.id = l.staff_id
          WHERE r.id = ?`,
         [requestId]
       )
@@ -86,12 +88,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           requesterRole: 'Student',
           labName: req.lab_name,
           requestId: requestId,
-          notifyEmail: req.mentor_email || req.lab_email,
+          notifyEmail: req.mentor_email || req.lab_staff_email,
           notifyRole: req.mentor_email ? 'Faculty Mentor' : 'Lab Staff'
         })
 
         // Notify the appropriate person based on request status
-        const notifyEmail = req.mentor_email || req.lab_email
+        const notifyEmail = req.mentor_email || req.lab_staff_email
         if (notifyEmail) {
           await sendEmail({
             to: [notifyEmail],

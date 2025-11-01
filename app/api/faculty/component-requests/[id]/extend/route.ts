@@ -68,11 +68,13 @@ export async function POST(
     // Send email to lab staff
     try {
       const details = await db.query(
-        `SELECT r.*, l.name as lab_name, l.email as lab_email,
-                u.name as requester_name
+        `SELECT r.*, l.name as lab_name,
+                u.name as requester_name,
+                ls.email as lab_staff_email
          FROM component_requests r
          JOIN labs l ON l.id = r.lab_id
          JOIN users u ON u.id = r.requester_id
+         LEFT JOIN users ls ON ls.id = l.staff_id
          WHERE r.id = ?`,
         [requestId]
       )
@@ -90,7 +92,7 @@ export async function POST(
         })
 
         await sendEmail({
-          to: [req.lab_email],
+          to: [req.lab_staff_email],
           ...emailData
         }).catch(err => console.error('Email send failed:', err))
       }

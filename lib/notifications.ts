@@ -34,17 +34,13 @@ const transporter = nodemailer.createTransport({
   }
 })
 
-// Helper function to create professional LNMIIT email template
+// Helper function to create professional email template
 function createEmailTemplate(content: string, baseUrl?: string): string {
-  // Use a publicly accessible logo URL or data URI for email compatibility
-  // For production, host the logo on your domain or use a CDN
-  const logoUrl = 'https://www.lnmiit.ac.in/images/Lnmiit-logo.png'
-  
   return `<!DOCTYPE html>
 <html>
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>The LNM Institute of Information Technology, Jaipur</title>
+    <title>LNMIIT Lab Management System</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto" rel="stylesheet">
   </head>
   <body style="margin:0; padding:0; background:#eee; font-family: 'Roboto', Arial, sans-serif;">
@@ -54,11 +50,9 @@ function createEmailTemplate(content: string, baseUrl?: string): string {
           <td>
             <table role="presentation" width="550" cellspacing="0" cellpadding="0" style="background:#fff; width:100%; max-width:550px; border:1px solid #ccc; padding:0; margin:0; border-collapse:collapse; border-radius:10px; overflow:hidden">
               <tbody style="border: solid 1px #034da2;">
-                <tr style="background: #EEEEEE;">
-                  <td style="text-align:center; padding:10px;">
-                    <a href="https://lnmiit.ac.in" target="_blank" rel="noopener noreferrer">
-                      <img src="${logoUrl}" alt="LNMIIT" style="width:200px; margin:auto; display:block; padding:10px;" />
-                    </a>
+                <tr style="background: #034da2;">
+                  <td style="text-align:center; padding:20px;">
+                    <h1 style="color: white; margin: 0; font-size: 24px;">LNMIIT Lab Management System</h1>
                   </td>
                 </tr>
                 <tr>
@@ -138,21 +132,24 @@ export const emailTemplates = {
     items: Array<{ name: string; quantity: number }>
     returnDate: string
     requestId: number
+    recipientRole?: string  // Optional: 'Faculty', 'Lab Staff', or leave blank for generic
   }) => {
     // Format the return date properly
-    const formattedDate = new Date(data.returnDate).toLocaleDateString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    })
+    const formattedDate = formatDate(data.returnDate)
+    
+    // Personalized greeting based on recipient role
+    const greeting = data.recipientRole === 'Faculty' 
+      ? 'Dear Faculty Member'
+      : data.recipientRole === 'Lab Staff'
+      ? 'Dear Lab Staff'
+      : 'Dear Team'
     
     return {
     subject: `New Component Request #${data.requestId} - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
-          <p>Dear Team,</p>
+          <p>${greeting},</p>
           <p>A new component request has been submitted and requires your attention.</p>
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
@@ -202,6 +199,89 @@ export const emailTemplates = {
         </td>
       </tr>
     `)
+    }
+  },
+
+  componentRequestForwarded: (data: {
+    recipientRole: string  // 'Lab Staff', 'HOD', or 'Faculty'
+    requesterName: string
+    requesterRole: string  // 'Student' or 'Faculty'
+    approverName: string   // Who approved and forwarded it
+    approverRole: string   // Their role
+    labName: string
+    purpose: string
+    items: Array<{ name: string; quantity: number }>
+    returnDate: string
+    requestId: number
+  }) => {
+    const formattedDate = formatDate(data.returnDate)
+    
+    // Personalized greeting based on recipient role
+    const greeting = data.recipientRole === 'Faculty' 
+      ? `Dear Faculty Member`
+      : data.recipientRole === 'HOD'
+      ? `Dear HOD`
+      : `Dear Lab Staff`
+    
+    return {
+      subject: `Component Request #${data.requestId} - Awaiting Your Approval - LNMIIT Lab Management`,
+      html: createEmailTemplate(`
+        <tr>
+          <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+            <p>${greeting},</p>
+            <p>A component request has been <b>approved by ${data.approverName} (${data.approverRole})</b> and is now forwarded to you for review and approval.</p>
+            
+            <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+              <tr style="background: #f0f9ff;">
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${data.requesterName} (${data.requesterRole})</td>
+              </tr>
+              <tr style="background: #f0f9ff;">
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Purpose:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${data.purpose || 'Not specified'}</td>
+              </tr>
+              <tr style="background: #f0f9ff;">
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Expected Return Date:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${formattedDate}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Previously Approved by:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${data.approverName} (${data.approverRole})</td>
+              </tr>
+            </table>
+
+            <p><strong>Requested Components:</strong></p>
+            <table style="width:100%; border-collapse: collapse; margin: 10px 0;">
+              <thead>
+                <tr style="background: #034da2; color: white;">
+                  <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Component Name</th>
+                  <th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Quantity</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.items.map((item, idx) => `
+                  <tr style="background: ${idx % 2 === 0 ? '#f9f9f9' : 'white'};">
+                    <td style="padding: 10px; border: 1px solid #ddd;">${item.name}</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${item.quantity}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+
+            <p style="margin-top: 20px; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107;">
+              <strong>⚡ Action Required:</strong> Please review and approve or reject this request at your earliest convenience.
+            </p>
+          </td>
+        </tr>
+      `)
     }
   },
 

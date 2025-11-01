@@ -116,7 +116,7 @@ export async function POST(
         await sendEmail({ to: req.requester_email, ...emailData }).catch(err => console.error('Email failed:', err))
       }
       
-      // Email to HOD
+      // Email to HOD (forwarding the approved request)
       if (req && req.hod_email) {
         const itemsDetails = await db.query(
           `SELECT c.name, cri.quantity_requested as quantity
@@ -125,9 +125,12 @@ export async function POST(
            WHERE cri.request_id = ?`,
           [requestId]
         )
-        const emailData = emailTemplates.componentRequestCreated({
+        const emailData = emailTemplates.componentRequestForwarded({
+          recipientRole: 'HOD',
           requesterName: req.requester_name,
           requesterRole: req.initiator_role === 'faculty' ? 'Faculty' : 'Student',
+          approverName: req.lab_staff_name || 'Lab Staff',
+          approverRole: 'Lab Staff',
           labName: req.lab_name,
           purpose: req.purpose || 'Not specified',
           items: itemsDetails.rows,

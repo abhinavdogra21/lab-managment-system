@@ -162,7 +162,8 @@ export async function POST(req: NextRequest) {
         purpose: purpose || 'Not specified',
         items: itemsDetails.rows,
         returnDate: return_date,
-        requestId: created
+        requestId: created,
+        recipientRole: 'Lab Staff'
       })
       
       await sendEmail({

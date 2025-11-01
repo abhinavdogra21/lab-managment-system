@@ -46,11 +46,13 @@ export async function POST(
 
     // Get request details before deletion for email
     const details = await db.query(
-      `SELECT r.*, l.name as lab_name, l.email as lab_email,
-              u.name as requester_name
+      `SELECT r.*, l.name as lab_name,
+              u.name as requester_name,
+              ls.email as lab_staff_email
        FROM component_requests r
        JOIN labs l ON l.id = r.lab_id
        JOIN users u ON u.id = r.requester_id
+       LEFT JOIN users ls ON ls.id = l.staff_id
        WHERE r.id = ?`,
       [requestId]
     )
@@ -68,12 +70,12 @@ export async function POST(
           requesterRole: 'Faculty',
           labName: req.lab_name,
           requestId: requestId,
-          notifyEmail: req.lab_email,
+          notifyEmail: req.lab_staff_email,
           notifyRole: 'Lab Staff'
         })
 
         await sendEmail({
-          to: [req.lab_email],
+          to: [req.lab_staff_email],
           ...emailData
         }).catch(err => console.error('Email send failed:', err))
       }
