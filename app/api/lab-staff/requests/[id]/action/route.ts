@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
 import { verifyToken, hasRole } from "@/lib/auth"
+import { sendEmail, emailTemplates } from "@/lib/notifications"
 
 export async function POST(
   request: NextRequest,
@@ -99,23 +100,89 @@ export async function POST(
 
     await db.query(updateQuery, updateParams)
 
-    // Get updated request details for response
+    // Get updated request details for response and emails
     const updatedResult = await db.query(
       `SELECT 
         br.*,
         u.name as student_name,
         u.email as student_email,
         l.name as lab_name,
-        f.name as faculty_name
+        f.name as faculty_name,
+        staff.name as staff_name
       FROM booking_requests br
       JOIN users u ON br.requested_by = u.id
       JOIN labs l ON br.lab_id = l.id
       LEFT JOIN users f ON br.faculty_supervisor_id = f.id
+      LEFT JOIN users staff ON staff.id = ?
       WHERE br.id = ?`,
-      [id]
+      [userId, id]
     )
 
     const updatedRequest = updatedResult.rows[0]
+
+    // Send email notifications
+    try {
+      if (action === 'approve') {
+        // Email to student
+        const studentEmailData = emailTemplates.labBookingApproved({
+          requesterName: updatedRequest.student_name,
+          labName: updatedRequest.lab_name,
+          bookingDate: updatedRequest.booking_date,
+          startTime: updatedRequest.start_time,
+          endTime: updatedRequest.end_time,
+          requestId: Number(id),
+          approverRole: 'Lab Staff',
+          nextStep: 'Your request is now pending HOD approval'
+        })
+
+        await sendEmail({
+          to: updatedRequest.student_email,
+          ...studentEmailData
+        }).catch(err => console.error('Email send failed:', err))
+
+        // Email to HOD
+        const hod = await db.query(
+          `SELECT email FROM users WHERE role = 'hod' LIMIT 1`
+        )
+        
+        if (hod.rows.length > 0) {
+          const hodEmailData = emailTemplates.labBookingCreated({
+            requesterName: updatedRequest.student_name,
+            requesterRole: 'Student',
+            labName: updatedRequest.lab_name,
+            bookingDate: updatedRequest.booking_date,
+            startTime: updatedRequest.start_time,
+            endTime: updatedRequest.end_time,
+            purpose: updatedRequest.purpose || 'Not specified',
+            requestId: Number(id)
+          })
+
+          await sendEmail({
+            to: hod.rows[0].email,
+            ...hodEmailData
+          }).catch(err => console.error('Email send failed:', err))
+        }
+      } else {
+        // Email to student for rejection
+        const emailData = emailTemplates.labBookingRejected({
+          requesterName: updatedRequest.student_name,
+          labName: updatedRequest.lab_name,
+          bookingDate: updatedRequest.booking_date,
+          startTime: updatedRequest.start_time,
+          endTime: updatedRequest.end_time,
+          requestId: Number(id),
+          reason: remarks || 'No reason provided',
+          rejectedBy: updatedRequest.staff_name || 'Lab Staff'
+        })
+
+        await sendEmail({
+          to: updatedRequest.student_email,
+          ...emailData
+        }).catch(err => console.error('Email send failed:', err))
+      }
+    } catch (emailError) {
+      console.error('Failed to send email notification:', emailError)
+    }
 
     return NextResponse.json({
       success: true,

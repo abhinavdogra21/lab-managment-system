@@ -61,7 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // Send email to lab staff
     try {
       const details = await db.query(
-        `SELECT r.*, l.name as lab_name, l.email as lab_email,
+        `SELECT r.*, l.name as lab_name,
                 u.name as requester_name
          FROM component_requests r
          JOIN labs l ON l.id = r.lab_id
@@ -72,17 +72,31 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
       if (details.rows.length > 0) {
         const req = details.rows[0]
-        const emailData = emailTemplates.returnRequested({
-          requesterName: req.requester_name,
-          requesterRole: 'Student',
-          labName: req.lab_name,
-          requestId: requestId
-        })
+        
+        // Get lab staff emails for this lab
+        const labStaff = await db.query(
+          `SELECT DISTINCT u.email 
+           FROM users u
+           JOIN lab_staff_assignments lsa ON lsa.staff_id = u.id
+           WHERE u.role = 'lab-staff' AND lsa.lab_id = ?`,
+          [req.lab_id]
+        )
+        
+        const labStaffEmails = labStaff.rows.map(staff => staff.email)
+        
+        if (labStaffEmails.length > 0) {
+          const emailData = emailTemplates.returnRequested({
+            requesterName: req.requester_name,
+            requesterRole: 'Student',
+            labName: req.lab_name,
+            requestId: requestId
+          })
 
-        await sendEmail({
-          to: [req.lab_email],
-          ...emailData
-        }).catch(err => console.error('Email send failed:', err))
+          await sendEmail({
+            to: labStaffEmails,
+            ...emailData
+          }).catch(err => console.error('Email send failed:', err))
+        }
       }
     } catch (emailError) {
       console.error('Failed to send return notification:', emailError)

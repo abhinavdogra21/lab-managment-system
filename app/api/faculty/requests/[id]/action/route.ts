@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
 import { verifyToken } from "@/lib/auth"
-import { isSmtpConfigured, sendMail } from "@/lib/email"
+import { sendEmail, emailTemplates } from "@/lib/notifications"
 
 const db = Database.getInstance()
 
@@ -30,25 +30,71 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         [remarks || null, user.userId, id]
       )
 
-      // Email notifications disabled during testing
-      // (kept for reference; uncomment when enabling emails site-wide)
-      // try {
-      //   const smtp = isSmtpConfigured()
-      //   if (smtp.configured) {
-      //     const stu = await db.query(`SELECT email, name FROM users WHERE id = ?`, [req.requested_by])
-      //     const lab = await db.query(`SELECT name FROM labs WHERE id = ?`, [req.lab_id])
-      //     const to = stu.rows?.[0]?.email
-      //     if (to) {
-      //       await sendMail({
-      //         to,
-      //         subject: 'Your lab booking request progressed to Lab Staff',
-      //         html: `<p>Hi ${stu.rows?.[0]?.name || 'Student'},</p><p>Your request for ${lab.rows?.[0]?.name || 'Lab'} on ${req.booking_date} ${req.start_time}-${req.end_time} has been approved by faculty and moved to Lab Staff for review.</p>`
-      //       })
-      //     }
-      //   }
-      // } catch (e) {
-      //   console.warn('Email notify skipped:', (e as any)?.message || e)
-      // }
+      // Send email notification to student and lab staff
+      try {
+        const details = await db.query(
+          `SELECT u.name as student_name, u.email as student_email,
+                  l.name as lab_name, l.id as lab_id,
+                  br.booking_date, br.start_time, br.end_time
+           FROM booking_requests br
+           JOIN users u ON u.id = br.requested_by
+           JOIN labs l ON l.id = br.lab_id
+           WHERE br.id = ?`,
+          [id]
+        )
+
+        if (details.rows.length > 0) {
+          const booking = details.rows[0]
+          
+          // Email to student
+          const studentEmailData = emailTemplates.labBookingApproved({
+            requesterName: booking.student_name,
+            labName: booking.lab_name,
+            bookingDate: booking.booking_date,
+            startTime: booking.start_time,
+            endTime: booking.end_time,
+            requestId: id,
+            approverRole: 'Faculty',
+            nextStep: 'Your request is now pending Lab Staff approval'
+          })
+
+          await sendEmail({
+            to: booking.student_email,
+            ...studentEmailData
+          }).catch(err => console.error('Email send failed:', err))
+
+          // Email to lab staff
+          const labStaff = await db.query(
+            `SELECT DISTINCT u.email 
+             FROM users u
+             JOIN lab_staff_assignments lsa ON lsa.staff_id = u.id
+             WHERE u.role = 'lab-staff' AND lsa.lab_id = ?`,
+            [booking.lab_id]
+          )
+          
+          const labStaffEmails = labStaff.rows.map(staff => staff.email)
+          
+          if (labStaffEmails.length > 0) {
+            const labStaffEmailData = emailTemplates.labBookingCreated({
+              requesterName: booking.student_name,
+              requesterRole: 'Student',
+              labName: booking.lab_name,
+              bookingDate: booking.booking_date,
+              startTime: booking.start_time,
+              endTime: booking.end_time,
+              purpose: req.purpose || 'Not specified',
+              requestId: id
+            })
+
+            await sendEmail({
+              to: labStaffEmails,
+              ...labStaffEmailData
+            }).catch(err => console.error('Email send failed:', err))
+          }
+        }
+      } catch (emailError) {
+        console.error('Failed to send approval notification:', emailError)
+      }
 
     } else if (action === 'reject') {
       await db.query(
@@ -56,23 +102,42 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         [remarks || 'Rejected by faculty', user.userId, remarks || null, id]
       )
 
-      // Email notifications disabled during testing
-      // try {
-      //   const smtp = isSmtpConfigured()
-      //   if (smtp.configured) {
-      //     const stu = await db.query(`SELECT email, name FROM users WHERE id = ?`, [req.requested_by])
-      //     const to = stu.rows?.[0]?.email
-      //     if (to) {
-      //       await sendMail({
-      //         to,
-      //         subject: 'Your lab booking request was rejected',
-      //         html: `<p>Hi ${stu.rows?.[0]?.name || 'Student'},</p><p>Your request was rejected by faculty.</p><p>Remarks: ${remarks || 'No remarks provided'}</p>`
-      //       })
-      //     }
-      //   }
-      // } catch (e) {
-      //   console.warn('Email notify skipped:', (e as any)?.message || e)
-      // }
+      // Send email notification to student
+      try {
+        const details = await db.query(
+          `SELECT u.name as student_name, u.email as student_email,
+                  l.name as lab_name,
+                  br.booking_date, br.start_time, br.end_time,
+                  f.name as faculty_name
+           FROM booking_requests br
+           JOIN users u ON u.id = br.requested_by
+           JOIN labs l ON l.id = br.lab_id
+           JOIN users f ON f.id = br.faculty_supervisor_id
+           WHERE br.id = ?`,
+          [id]
+        )
+
+        if (details.rows.length > 0) {
+          const booking = details.rows[0]
+          const emailData = emailTemplates.labBookingRejected({
+            requesterName: booking.student_name,
+            labName: booking.lab_name,
+            bookingDate: booking.booking_date,
+            startTime: booking.start_time,
+            endTime: booking.end_time,
+            requestId: id,
+            reason: remarks || 'No reason provided',
+            rejectedBy: booking.faculty_name
+          })
+
+          await sendEmail({
+            to: booking.student_email,
+            ...emailData
+          }).catch(err => console.error('Email send failed:', err))
+        }
+      } catch (emailError) {
+        console.error('Failed to send rejection notification:', emailError)
+      }
     }
 
     return NextResponse.json({ success: true })

@@ -264,11 +264,6 @@ export default function FacultyBookLabsPage() {
 											)}
 										</div>
 									)}
-
-									<div className="p-3 border border-blue-200 bg-blue-50 text-sm text-blue-700 rounded">
-										<div className="flex items-center gap-2 mb-1"><Clock className="h-4 w-4" /><strong>Lab Booking Hours</strong></div>
-										Labs are available for booking between 8:00 AM and 8:00 PM only.
-									</div>
 								</div>
 							)}
 

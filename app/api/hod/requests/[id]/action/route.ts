@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
 import { verifyToken, hasRole } from "@/lib/auth"
+import { sendEmail, emailTemplates } from "@/lib/notifications"
 
 export async function POST(
   request: NextRequest,
@@ -54,6 +55,62 @@ export async function POST(
     `
     
     await db.query(updateQuery, [newStatus, user.userId, remarks || null, requestId])
+
+    // Send email notification to student
+    try {
+      const studentDetails = await db.query(
+        `SELECT u.name as student_name, u.email as student_email,
+                l.name as lab_name,
+                br.booking_date, br.start_time, br.end_time,
+                hod.name as hod_name
+         FROM booking_requests br
+         JOIN users u ON u.id = br.requested_by
+         JOIN labs l ON l.id = br.lab_id
+         JOIN users hod ON hod.id = ?
+         WHERE br.id = ?`,
+        [user.userId, requestId]
+      )
+
+      if (studentDetails.rows.length > 0) {
+        const student = studentDetails.rows[0]
+        
+        if (action === 'approve') {
+          const emailData = emailTemplates.labBookingApproved({
+            requesterName: student.student_name,
+            labName: student.lab_name,
+            bookingDate: student.booking_date,
+            startTime: student.start_time,
+            endTime: student.end_time,
+            requestId: requestId,
+            approverRole: 'HOD',
+            nextStep: undefined // Final approval
+          })
+
+          await sendEmail({
+            to: student.student_email,
+            ...emailData
+          }).catch(err => console.error('Email send failed:', err))
+        } else {
+          const emailData = emailTemplates.labBookingRejected({
+            requesterName: student.student_name,
+            labName: student.lab_name,
+            bookingDate: student.booking_date,
+            startTime: student.start_time,
+            endTime: student.end_time,
+            requestId: requestId,
+            reason: remarks || 'No reason provided',
+            rejectedBy: student.hod_name || 'HOD'
+          })
+
+          await sendEmail({
+            to: student.student_email,
+            ...emailData
+          }).catch(err => console.error('Email send failed:', err))
+        }
+      }
+    } catch (emailError) {
+      console.error('Failed to send email notification:', emailError)
+    }
 
     const actionText = action === 'approve' ? 'approved' : 'rejected'
     

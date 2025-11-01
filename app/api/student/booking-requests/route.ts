@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
 import { verifyToken } from "@/lib/auth"
-import { isSmtpConfigured, sendMail } from "@/lib/email"
+import { sendEmail, emailTemplates } from "@/lib/notifications"
 
 const db = Database.getInstance()
 
@@ -133,35 +133,40 @@ export async function POST(request: NextRequest) {
       'pending_faculty'
     ])
 
-    // Notify faculty via email if SMTP configured
-    // Email notification code commented out for testing purposes
-    /*
+    // Send email notification to faculty supervisor
     try {
-      const smtp = isSmtpConfigured()
-      if (smtp.configured) {
-        const fac = await db.query(`SELECT email, name FROM users WHERE id = ? LIMIT 1`, [faculty_supervisor_id])
-        const lab = await db.query(`SELECT name FROM labs WHERE id = ? LIMIT 1`, [lab_id])
-        const facultyEmail = fac.rows?.[0]?.email
-        const facultyName = fac.rows?.[0]?.name || 'Faculty'
-        const labName = lab.rows?.[0]?.name || 'Lab'
-        if (facultyEmail) {
-          const subject = `New Lab Booking Request: ${labName} on ${booking_date}`
-          const html = `<p>Dear ${facultyName},</p>
-            <p>You have a new lab booking request awaiting your review.</p>
-            <ul>
-              <li><b>Lab:</b> ${labName}</li>
-              <li><b>Date:</b> ${booking_date}</li>
-              <li><b>Time:</b> ${start_time} - ${end_time}</li>
-              <li><b>Purpose:</b> ${purpose}</li>
-            </ul>
-            <p>Please log in to review and take action.</p>`
-          await sendMail({ to: facultyEmail, subject, html })
-        }
+      const details = await db.query(
+        `SELECT u.name as student_name, u.email as student_email,
+                f.name as faculty_name, f.email as faculty_email,
+                l.name as lab_name
+         FROM users u
+         JOIN users f ON f.id = ?
+         JOIN labs l ON l.id = ?
+         WHERE u.id = ?`,
+        [faculty_supervisor_id, lab_id, studentId]
+      )
+
+      if (details.rows.length > 0) {
+        const req = details.rows[0]
+        const emailData = emailTemplates.labBookingCreated({
+          requesterName: req.student_name,
+          requesterRole: 'Student',
+          labName: req.lab_name,
+          bookingDate: booking_date,
+          startTime: start_time,
+          endTime: end_time,
+          purpose: purpose,
+          requestId: result.insertId!
+        })
+
+        await sendEmail({
+          to: req.faculty_email,
+          ...emailData
+        }).catch(err => console.error('Email send failed:', err))
       }
-    } catch (e) {
-      console.warn('Faculty notification email skipped or failed:', (e as any)?.message || e)
+    } catch (emailError) {
+      console.error('Failed to send booking notification:', emailError)
     }
-    */
 
     return NextResponse.json({ 
       success: true,

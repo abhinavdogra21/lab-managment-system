@@ -8,7 +8,7 @@ const db = Database.getInstance()
 export async function POST(request: NextRequest) {
   try {
     const user = await verifyToken(request)
-    if (!user || !hasRole(user, ["faculty", "admin"])) {
+    if (!user || !hasRole(user, ["tnp", "admin"])) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Lab has scheduled classes during this time" }, { status: 400 })
     }
 
-    // Insert request: faculty requests go directly to lab staff (skip faculty step)
+    // Insert request: TnP requests go directly to lab staff
     const result = await db.query(
       `INSERT INTO booking_requests (request_type, requested_by, lab_id, faculty_supervisor_id, booking_date, start_time, end_time, purpose, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
         'lab_booking',
         user.userId,
         lab_id,
-        user.userId, // faculty acts as own supervisor context
+        user.userId, // TnP acts as own supervisor context
         booking_date,
         start_time,
         end_time,
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     // Send email notification to lab staff
     try {
       const details = await db.query(
-        `SELECT u.name as faculty_name, l.name as lab_name
+        `SELECT u.name as tnp_name, l.name as lab_name
          FROM users u
          JOIN labs l ON l.id = ?
          WHERE u.id = ?`,
@@ -85,8 +85,8 @@ export async function POST(request: NextRequest) {
         
         if (labStaffEmails.length > 0) {
           const emailData = emailTemplates.labBookingCreated({
-            requesterName: req.faculty_name,
-            requesterRole: 'Faculty',
+            requesterName: req.tnp_name,
+            requesterRole: 'TnP Officer',
             labName: req.lab_name,
             bookingDate: booking_date,
             startTime: start_time,
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, message: "Booking request submitted", id: result.insertId })
   } catch (error) {
-    console.error("Faculty booking create error:", error)
+    console.error("TnP booking create error:", error)
     return NextResponse.json({ error: "Failed to create booking" }, { status: 500 })
   }
 }

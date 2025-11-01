@@ -12,7 +12,55 @@ const transporter = nodemailer.createTransport({
   }
 })
 
-interface EmailOptions {
+// Helper function to create professional LNMIIT email template
+function createEmailTemplate(content: string, baseUrl?: string): string {
+  const appUrl = baseUrl || process.env.APP_URL || 'http://localhost:3000'
+  return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>The LNM Institute of Information Technology, Jaipur</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto" rel="stylesheet">
+  </head>
+  <body style="margin:0; padding:0; background:#eee; font-family: 'Roboto', Arial, sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eee; padding:40px; border:1px solid #ddd; margin:0 auto;">
+      <tbody>
+        <tr>
+          <td>
+            <table role="presentation" width="550" cellspacing="0" cellpadding="0" style="background:#fff; width:100%; max-width:550px; border:1px solid #ccc; padding:0; margin:0; border-collapse:collapse; border-radius:10px; overflow:hidden">
+              <tbody style="border: solid 1px #034da2;">
+                <tr style="background: #EEEEEE;">
+                  <td style="text-align:center; padding:10px;">
+                    <a href="https://lnmiit.ac.in" target="_blank" rel="noopener noreferrer">
+                      <img src="${appUrl}/lnmiit-logo.png" alt="LNMIIT" style="width:200px; margin:auto; display:block; padding:10px;" />
+                    </a>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 30px; text-align:center; margin:0">
+                  </td>
+                </tr>
+                ${content}
+                <tr>
+                  <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+                    <p>Thank you for using the Lab Management System.</p>
+                    <br/>
+                    <p>Best regards,</p>
+                    <p><b>Lab Management Team</b></p>
+                    <p><b>The LNM Institute of Information Technology</b></p>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
+</html>`
+}
+
+type EmailOptions = {
   to: string | string[]
   subject: string
   html: string
@@ -66,42 +114,60 @@ export const emailTemplates = {
     returnDate: string
     requestId: number
   }) => ({
-    subject: `New Component Request #${data.requestId} - ${data.labName}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #2563eb;">📋 New Component Request</h2>
-        
-        <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
-          <p><strong>Request ID:</strong> #${data.requestId}</p>
-          <p><strong>Requester:</strong> ${data.requesterName} (${data.requesterRole})</p>
-          <p><strong>Lab:</strong> ${data.labName}</p>
-          <p><strong>Purpose:</strong> ${data.purpose || 'Not specified'}</p>
-          <p><strong>Return Date:</strong> ${data.returnDate}</p>
-        </div>
-
-        <h3>Requested Components:</h3>
-        <table style="width: 100%; border-collapse: collapse;">
-          <thead>
-            <tr style="background: #e5e7eb;">
-              <th style="padding: 8px; text-align: left; border: 1px solid #d1d5db;">Component</th>
-              <th style="padding: 8px; text-align: center; border: 1px solid #d1d5db;">Quantity</th>
+    subject: `New Component Request #${data.requestId} - LNMIIT Lab Management`,
+    html: createEmailTemplate(`
+      <tr>
+        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+          <p>Dear Team,</p>
+          <p>A new component request has been submitted and requires your attention.</p>
+          
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #f0f9ff;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
             </tr>
-          </thead>
-          <tbody>
-            ${data.items.map(item => `
-              <tr>
-                <td style="padding: 8px; border: 1px solid #d1d5db;">${item.name}</td>
-                <td style="padding: 8px; text-align: center; border: 1px solid #d1d5db;">${item.quantity}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.requesterName} (${data.requesterRole})</td>
+            </tr>
+            <tr style="background: #f0f9ff;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Purpose:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.purpose || 'Not specified'}</td>
+            </tr>
+            <tr style="background: #f0f9ff;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Expected Return Date:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.returnDate}</td>
+            </tr>
+          </table>
 
-        <div style="margin-top: 20px; padding: 15px; background: #dbeafe; border-radius: 8px;">
-          <p style="margin: 0;"><strong>⚡ Action Required:</strong> Please review and approve/reject this request.</p>
-        </div>
-      </div>
-    `
+          <p><strong>Requested Components:</strong></p>
+          <table style="width:100%; border-collapse: collapse; margin: 10px 0;">
+            <thead>
+              <tr style="background: #034da2; color: white;">
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Component Name</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Quantity</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.items.map((item, idx) => `
+                <tr style="background: ${idx % 2 === 0 ? '#f9f9f9' : 'white'};">
+                  <td style="padding: 10px; border: 1px solid #ddd;">${item.name}</td>
+                  <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${item.quantity}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <p style="margin-top: 20px; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107;">
+            <strong>⚡ Action Required:</strong> Please review and process this request at your earliest convenience.
+          </p>
+        </td>
+      </tr>
+    `)
   }),
 
   componentRequestApproved: (data: {
@@ -112,21 +178,42 @@ export const emailTemplates = {
     requestId: number
     remarks?: string
   }) => ({
-    subject: `Component Request #${data.requestId} Approved by ${data.approverRole}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #16a34a;">✅ Request Approved</h2>
-        
-        <div style="background: #f0fdf4; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #16a34a;">
-          <p><strong>Request ID:</strong> #${data.requestId}</p>
-          <p><strong>Lab:</strong> ${data.labName}</p>
-          <p><strong>Approved by:</strong> ${data.approverName} (${data.approverRole})</p>
-          ${data.remarks ? `<p><strong>Remarks:</strong> ${data.remarks}</p>` : ''}
-        </div>
+    subject: `Component Request #${data.requestId} Approved - LNMIIT Lab Management`,
+    html: createEmailTemplate(`
+      <tr>
+        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+          <p>Dear <b>${data.requesterName}</b>,</p>
+          <p>We are pleased to inform you that your component request has been <b>approved</b>.</p>
+          
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #f0fdf4;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+            </tr>
+            <tr style="background: #f0fdf4;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Approved by:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.approverName} (${data.approverRole})</td>
+            </tr>
+            ${data.remarks ? `
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Remarks:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.remarks}</td>
+            </tr>
+            ` : ''}
+          </table>
 
-        <p>Your component request has been approved and is moving forward in the approval process.</p>
-      </div>
-    `
+          <p style="padding: 12px; background: #d1fae5; border-left: 4px solid #10b981;">
+            <strong>✅ Status:</strong> Your request is now moving forward in the approval process.
+          </p>
+          
+          <p>You will be notified once the components are ready for collection.</p>
+        </td>
+      </tr>
+    `)
   }),
 
   componentRequestRejected: (data: {
@@ -137,21 +224,42 @@ export const emailTemplates = {
     requestId: number
     reason?: string
   }) => ({
-    subject: `Component Request #${data.requestId} Rejected`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #dc2626;">❌ Request Rejected</h2>
-        
-        <div style="background: #fef2f2; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626;">
-          <p><strong>Request ID:</strong> #${data.requestId}</p>
-          <p><strong>Lab:</strong> ${data.labName}</p>
-          <p><strong>Rejected by:</strong> ${data.rejecterName} (${data.rejecterRole})</p>
-          ${data.reason ? `<p><strong>Reason:</strong> ${data.reason}</p>` : ''}
-        </div>
+    subject: `Component Request #${data.requestId} Rejected - LNMIIT Lab Management`,
+    html: createEmailTemplate(`
+      <tr>
+        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+          <p>Dear <b>${data.requesterName}</b>,</p>
+          <p>We regret to inform you that your component request has been <b>rejected</b>.</p>
+          
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #fee2e2;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+            </tr>
+            <tr style="background: #fee2e2;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Rejected by:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.rejecterName} (${data.rejecterRole})</td>
+            </tr>
+            ${data.reason ? `
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Reason:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.reason}</td>
+            </tr>
+            ` : ''}
+          </table>
 
-        <p>Unfortunately, your component request has been rejected. Please contact the lab staff for more information.</p>
-      </div>
-    `
+          <p style="padding: 12px; background: #fecaca; border-left: 4px solid #ef4444;">
+            <strong>❌ Status:</strong> Your request has been declined.
+          </p>
+          
+          <p>If you have any questions or need clarification, please contact the lab staff or the person who rejected the request.</p>
+        </td>
+      </tr>
+    `)
   }),
 
   componentIssued: (data: {
@@ -162,27 +270,54 @@ export const emailTemplates = {
     items: Array<{ name: string; quantity: number }>
     returnDate: string
   }) => ({
-    subject: `Components Issued - Request #${data.requestId}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #2563eb;">📦 Components Issued</h2>
-        
-        <div style="background: #dbeafe; padding: 15px; border-radius: 8px; margin: 20px 0;">
-          <p><strong>Request ID:</strong> #${data.requestId}</p>
-          <p><strong>Lab:</strong> ${data.labName}</p>
-          <p><strong>Return by:</strong> ${data.returnDate}</p>
-        </div>
+    subject: `Components Issued - Request #${data.requestId} - LNMIIT Lab Management`,
+    html: createEmailTemplate(`
+      <tr>
+        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+          <p>Dear <b>${data.requesterName}</b>,</p>
+          <p>Your requested components have been <b>issued</b> and are ready for collection.</p>
+          
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #dbeafe;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+            </tr>
+            <tr style="background: #dbeafe;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Return Deadline:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.returnDate}</td>
+            </tr>
+          </table>
 
-        <h3>Issued Components:</h3>
-        <ul>
-          ${data.items.map(item => `<li>${item.name} (Qty: ${item.quantity})</li>`).join('')}
-        </ul>
+          <p><strong>Issued Components:</strong></p>
+          <table style="width:100%; border-collapse: collapse; margin: 10px 0;">
+            <thead>
+              <tr style="background: #034da2; color: white;">
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Component Name</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Quantity</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.items.map((item, idx) => `
+                <tr style="background: ${idx % 2 === 0 ? '#f9f9f9' : 'white'};">
+                  <td style="padding: 10px; border: 1px solid #ddd;">${item.name}</td>
+                  <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${item.quantity}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
 
-        <div style="margin-top: 20px; padding: 15px; background: #fef3c7; border-radius: 8px;">
-          <p style="margin: 0;"><strong>⚠️ Remember:</strong> Please return all components by the specified date in good condition.</p>
-        </div>
-      </div>
-    `
+          <p style="padding: 12px; background: #fef3c7; border-left: 4px solid #f59e0b;">
+            <strong>⚠️ Important:</strong> Please ensure all components are returned by <b>${data.returnDate}</b> in good working condition.
+          </p>
+          
+          <p>If you need to extend the return date, please submit an extension request through the system.</p>
+        </td>
+      </tr>
+    `)
   }),
 
   returnRequested: (data: {
@@ -191,20 +326,34 @@ export const emailTemplates = {
     labName: string
     requestId: number
   }) => ({
-    subject: `Return Requested - Request #${data.requestId}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #ea580c;">🔄 Return Requested</h2>
-        
-        <div style="background: #fff7ed; padding: 15px; border-radius: 8px; margin: 20px 0;">
-          <p><strong>Request ID:</strong> #${data.requestId}</p>
-          <p><strong>Requester:</strong> ${data.requesterName} (${data.requesterRole})</p>
-          <p><strong>Lab:</strong> ${data.labName}</p>
-        </div>
+    subject: `Return Request - Request #${data.requestId} - LNMIIT Lab Management`,
+    html: createEmailTemplate(`
+      <tr>
+        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+          <p>Dear Lab Staff,</p>
+          <p>A user has requested to return components for the following request:</p>
+          
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #fff7ed;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.requesterName} (${data.requesterRole})</td>
+            </tr>
+            <tr style="background: #fff7ed;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+            </tr>
+          </table>
 
-        <p>The requester has indicated they are ready to return the components. Please verify and approve the return.</p>
-      </div>
-    `
+          <p style="padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107;">
+            <strong>⚡ Action Required:</strong> Please verify the returned components and approve the return in the system.
+          </p>
+        </td>
+      </tr>
+    `)
   }),
 
   returnApproved: (data: {
@@ -213,19 +362,32 @@ export const emailTemplates = {
     labName: string
     requestId: number
   }) => ({
-    subject: `Return Approved - Request #${data.requestId}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #16a34a;">✅ Return Approved</h2>
-        
-        <div style="background: #f0fdf4; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #16a34a;">
-          <p><strong>Request ID:</strong> #${data.requestId}</p>
-          <p><strong>Lab:</strong> ${data.labName}</p>
-        </div>
+    subject: `Return Approved - Request #${data.requestId} - LNMIIT Lab Management`,
+    html: createEmailTemplate(`
+      <tr>
+        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+          <p>Dear <b>${data.requesterName}</b>,</p>
+          <p>Your component return has been <b>verified and approved</b>.</p>
+          
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #f0fdf4;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+            </tr>
+          </table>
 
-        <p>Your component return has been verified and approved. Thank you for returning the components in good condition.</p>
-      </div>
-    `
+          <p style="padding: 12px; background: #d1fae5; border-left: 4px solid #10b981;">
+            <strong>✅ Status:</strong> Components have been successfully returned and checked.
+          </p>
+          
+          <p>Thank you for returning the components in good condition and on time.</p>
+        </td>
+      </tr>
+    `)
   }),
 
   extensionRequested: (data: {
@@ -237,25 +399,46 @@ export const emailTemplates = {
     requestedReturnDate: string
     reason: string
   }) => ({
-    subject: `Extension Requested - Request #${data.requestId}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #7c3aed;">⏰ Extension Requested</h2>
-        
-        <div style="background: #f5f3ff; padding: 15px; border-radius: 8px; margin: 20px 0;">
-          <p><strong>Request ID:</strong> #${data.requestId}</p>
-          <p><strong>Requester:</strong> ${data.requesterName} (${data.requesterRole})</p>
-          <p><strong>Lab:</strong> ${data.labName}</p>
-          <p><strong>Current Return Date:</strong> ${data.currentReturnDate}</p>
-          <p><strong>Requested Return Date:</strong> ${data.requestedReturnDate}</p>
-          <p><strong>Reason:</strong> ${data.reason}</p>
-        </div>
+    subject: `Extension Request - Request #${data.requestId} - LNMIIT Lab Management`,
+    html: createEmailTemplate(`
+      <tr>
+        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+          <p>Dear Lab Staff,</p>
+          <p>A deadline extension has been requested for the following component request:</p>
+          
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #f5f3ff;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.requesterName} (${data.requesterRole})</td>
+            </tr>
+            <tr style="background: #f5f3ff;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Current Return Date:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.currentReturnDate}</td>
+            </tr>
+            <tr style="background: #f5f3ff;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requested New Date:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.requestedReturnDate}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Reason:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.reason}</td>
+            </tr>
+          </table>
 
-        <div style="margin-top: 20px; padding: 15px; background: #dbeafe; border-radius: 8px;">
-          <p style="margin: 0;"><strong>⚡ Action Required:</strong> Please review and approve/reject this extension request.</p>
-        </div>
-      </div>
-    `
+          <p style="padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107;">
+            <strong>⚡ Action Required:</strong> Please review and approve or reject this extension request.
+          </p>
+        </td>
+      </tr>
+    `)
   }),
 
   extensionApproved: (data: {
@@ -264,20 +447,36 @@ export const emailTemplates = {
     requestId: number
     newReturnDate: string
   }) => ({
-    subject: `Extension Approved - Request #${data.requestId}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #16a34a;">✅ Extension Approved</h2>
-        
-        <div style="background: #f0fdf4; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #16a34a;">
-          <p><strong>Request ID:</strong> #${data.requestId}</p>
-          <p><strong>Lab:</strong> ${data.labName}</p>
-          <p><strong>New Return Date:</strong> ${data.newReturnDate}</p>
-        </div>
+    subject: `Extension Approved - Request #${data.requestId} - LNMIIT Lab Management`,
+    html: createEmailTemplate(`
+      <tr>
+        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+          <p>Dear <b>${data.requesterName}</b>,</p>
+          <p>Your deadline extension request has been <b>approved</b>.</p>
+          
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #f0fdf4;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+            </tr>
+            <tr style="background: #f0fdf4;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>New Return Deadline:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.newReturnDate}</td>
+            </tr>
+          </table>
 
-        <p>Your deadline extension request has been approved. Please ensure you return the components by the new date.</p>
-      </div>
-    `
+          <p style="padding: 12px; background: #d1fae5; border-left: 4px solid #10b981;">
+            <strong>✅ Status:</strong> Your return deadline has been extended.
+          </p>
+          
+          <p>Please ensure you return all components by <b>${data.newReturnDate}</b> in good working condition.</p>
+        </td>
+      </tr>
+    `)
   }),
 
   extensionRejected: (data: {
@@ -286,20 +485,36 @@ export const emailTemplates = {
     requestId: number
     remarks: string
   }) => ({
-    subject: `Extension Rejected - Request #${data.requestId}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #dc2626;">❌ Extension Rejected</h2>
-        
-        <div style="background: #fef2f2; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626;">
-          <p><strong>Request ID:</strong> #${data.requestId}</p>
-          <p><strong>Lab:</strong> ${data.labName}</p>
-          <p><strong>Reason:</strong> ${data.remarks}</p>
-        </div>
+    subject: `Extension Rejected - Request #${data.requestId} - LNMIIT Lab Management`,
+    html: createEmailTemplate(`
+      <tr>
+        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+          <p>Dear <b>${data.requesterName}</b>,</p>
+          <p>We regret to inform you that your deadline extension request has been <b>rejected</b>.</p>
+          
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #fee2e2;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+            </tr>
+            <tr style="background: #fee2e2;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Reason:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.remarks}</td>
+            </tr>
+          </table>
 
-        <p>Your extension request has been rejected. Please return the components by the original deadline.</p>
-      </div>
-    `
+          <p style="padding: 12px; background: #fecaca; border-left: 4px solid #ef4444;">
+            <strong>❌ Status:</strong> Extension request declined.
+          </p>
+          
+          <p>Please ensure you return all components by the <b>original deadline</b>. If you have any concerns, please contact the lab staff.</p>
+        </td>
+      </tr>
+    `)
   }),
 
   passwordResetSuccess: (data: {
@@ -307,24 +522,33 @@ export const emailTemplates = {
     userEmail: string
   }) => ({
     subject: 'Password Successfully Reset - LNMIIT Lab Management',
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #16a34a;">✅ Password Reset Successful</h2>
-        
-        <div style="background: #f0fdf4; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #16a34a;">
-          <p>Dear <strong>${data.userName}</strong>,</p>
+    html: createEmailTemplate(`
+      <tr>
+        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+          <p>Dear <b>${data.userName}</b>,</p>
           <p>Your password has been successfully reset for the LNMIIT Lab Management System.</p>
-          <p><strong>Email:</strong> ${data.userEmail}</p>
-          <p><strong>Reset Time:</strong> ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
-        </div>
+          
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #f0fdf4;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Email:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.userEmail}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Reset Time:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</td>
+            </tr>
+          </table>
 
-        <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
-          <p style="margin: 0;"><strong>⚠️ Security Notice:</strong> If you did not perform this action, please contact the administrator immediately at webmaster@lnmiit.ac.in</p>
-        </div>
+          <p style="padding: 12px; background: #d4edda; border-left: 4px solid #28a745;">
+            <strong>✅ Status:</strong> Password reset successful. You can now log in with your new credentials.
+          </p>
 
-        <p>You can now log in to the system using your new password.</p>
-      </div>
-    `
+          <div style="background: #fff3cd; padding: 12px; border-left: 4px solid #ffc107; margin: 20px 0;">
+            <p style="margin: 0;"><strong>⚠️ Security Notice:</strong> If you did not perform this action, please contact the administrator immediately at <a href="mailto:webmaster@lnmiit.ac.in">webmaster@lnmiit.ac.in</a></p>
+          </div>
+        </td>
+      </tr>
+    `)
   }),
 
   requestWithdrawn: (data: {
@@ -335,20 +559,235 @@ export const emailTemplates = {
     notifyEmail: string
     notifyRole: string
   }) => ({
-    subject: `Request #${data.requestId} Withdrawn`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #f59e0b;">⚠️ Request Withdrawn</h2>
-        
-        <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
-          <p><strong>Request ID:</strong> #${data.requestId}</p>
-          <p><strong>Requester:</strong> ${data.requesterName} (${data.requesterRole})</p>
-          <p><strong>Lab:</strong> ${data.labName}</p>
-          <p><strong>Status:</strong> Withdrawn by requester</p>
-        </div>
+    subject: `Request #${data.requestId} Withdrawn - LNMIIT Lab Management`,
+    html: createEmailTemplate(`
+      <tr>
+        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+          <p>Dear <b>${data.notifyRole}</b>,</p>
+          <p>A component request has been withdrawn by the requester. No further action is required from your end.</p>
+          
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #fef3c7;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.requesterName} (${data.requesterRole})</td>
+            </tr>
+            <tr style="background: #fef3c7;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Status:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;"><b>Withdrawn by requester</b></td>
+            </tr>
+          </table>
 
-        <p>This request has been withdrawn and no further action is required.</p>
-      </div>
-    `
+          <p style="padding: 12px; background: #fef3c7; border-left: 4px solid #f59e0b;">
+            <strong>⚠️ Notice:</strong> This request has been withdrawn. No further action is required.
+          </p>
+          
+          <p>If you have any questions, please contact the requester or lab administration.</p>
+        </td>
+      </tr>
+    `)
+  }),
+
+  // Lab Booking Notifications
+  labBookingCreated: (data: {
+    requesterName: string
+    requesterRole: string
+    labName: string
+    bookingDate: string
+    startTime: string
+    endTime: string
+    purpose: string
+    requestId: number
+  }) => ({
+    subject: `New Lab Booking Request #${data.requestId} - ${data.labName} - LNMIIT Lab Management`,
+    html: createEmailTemplate(`
+      <tr>
+        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+          <p>Dear Faculty/Lab Staff,</p>
+          <p>A new lab booking request has been submitted and requires your review.</p>
+          
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #dbeafe;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.requesterName} (${data.requesterRole})</td>
+            </tr>
+            <tr style="background: #dbeafe;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Date:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.bookingDate}</td>
+            </tr>
+            <tr style="background: #dbeafe;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Time:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.startTime} - ${data.endTime}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Purpose:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.purpose}</td>
+            </tr>
+          </table>
+
+          <p style="padding: 12px; background: #dbeafe; border-left: 4px solid #3b82f6;">
+            <strong>📋 Action Required:</strong> Please log in to the system to review and take action on this request.
+          </p>
+        </td>
+      </tr>
+    `)
+  }),
+
+  labBookingApproved: (data: {
+    requesterName: string
+    labName: string
+    bookingDate: string
+    startTime: string
+    endTime: string
+    requestId: number
+    approverRole: string
+    nextStep?: string
+  }) => ({
+    subject: `Lab Booking Request #${data.requestId} Approved - LNMIIT Lab Management`,
+    html: createEmailTemplate(`
+      <tr>
+        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+          <p>Dear <b>${data.requesterName}</b>,</p>
+          <p>Good news! Your lab booking request has been approved by ${data.approverRole}.</p>
+          
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #d4edda;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+            </tr>
+            <tr style="background: #d4edda;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Date:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.bookingDate}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Time:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.startTime} - ${data.endTime}</td>
+            </tr>
+          </table>
+
+          <p style="padding: 12px; background: #d4edda; border-left: 4px solid #28a745;">
+            <strong>✅ Status:</strong> Approved by ${data.approverRole}${data.nextStep ? `. ${data.nextStep}` : '.'}
+          </p>
+        </td>
+      </tr>
+    `)
+  }),
+
+  labBookingRejected: (data: {
+    requesterName: string
+    labName: string
+    bookingDate: string
+    startTime: string
+    endTime: string
+    requestId: number
+    reason: string
+    rejectedBy: string
+  }) => ({
+    subject: `Lab Booking Request #${data.requestId} Rejected - LNMIIT Lab Management`,
+    html: createEmailTemplate(`
+      <tr>
+        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+          <p>Dear <b>${data.requesterName}</b>,</p>
+          <p>We regret to inform you that your lab booking request has been rejected.</p>
+          
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #fee2e2;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+            </tr>
+            <tr style="background: #fee2e2;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Date:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.bookingDate}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Time:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.startTime} - ${data.endTime}</td>
+            </tr>
+            <tr style="background: #fee2e2;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Rejected By:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.rejectedBy}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Reason:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.reason}</td>
+            </tr>
+          </table>
+
+          <p style="padding: 12px; background: #fecaca; border-left: 4px solid #ef4444;">
+            <strong>❌ Status:</strong> Request rejected. Please contact the faculty or lab staff if you have questions.
+          </p>
+        </td>
+      </tr>
+    `)
+  }),
+
+  labBookingWithdrawn: (data: {
+    labName: string
+    bookingDate: string
+    startTime: string
+    endTime: string
+    requestId: number
+    requesterName: string
+    requesterRole: string
+  }) => ({
+    subject: `Lab Booking Request #${data.requestId} Withdrawn - LNMIIT Lab Management`,
+    html: createEmailTemplate(`
+      <tr>
+        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+          <p>Dear Faculty/Lab Staff,</p>
+          <p>A lab booking request has been withdrawn by the requester.</p>
+          
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #fef3c7;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.requesterName} (${data.requesterRole})</td>
+            </tr>
+            <tr style="background: #fef3c7;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Date:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.bookingDate}</td>
+            </tr>
+            <tr style="background: #fef3c7;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Time:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.startTime} - ${data.endTime}</td>
+            </tr>
+          </table>
+
+          <p style="padding: 12px; background: #fef3c7; border-left: 4px solid #f59e0b;">
+            <strong>⚠️ Notice:</strong> This booking request has been withdrawn. No further action is required.
+          </p>
+        </td>
+      </tr>
+    `)
   })
 }

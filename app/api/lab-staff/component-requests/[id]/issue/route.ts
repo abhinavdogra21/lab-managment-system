@@ -95,9 +95,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
        WHERE r.id = ?`,
       [requestId]
     )
-    const req = details.rows[0]
+    const requestDetails = details.rows[0]
     
-    if (req && req.requester_email) {
+    if (requestDetails && requestDetails.requester_email) {
       const itemsDetails = await db.query(
         `SELECT c.name, cri.quantity_requested as quantity
          FROM component_request_items cri
@@ -107,14 +107,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       )
       
       const emailData = emailTemplates.componentIssued({
-        requesterName: req.requester_name,
-        requesterRole: req.initiator_role === 'faculty' ? 'Faculty' : 'Student',
-        labName: req.lab_name,
+        requesterName: requestDetails.requester_name,
+        requesterRole: requestDetails.initiator_role === 'faculty' ? 'Faculty' : 'Student',
+        labName: requestDetails.lab_name,
         requestId: requestId,
         items: itemsDetails.rows,
-        returnDate: req.return_date || 'Not specified'
+        returnDate: requestDetails.return_date || 'Not specified'
       })
-      await sendEmail({ to: req.requester_email, ...emailData }).catch(err => console.error('Email failed:', err))
+      await sendEmail({ to: requestDetails.requester_email, ...emailData }).catch(err => console.error('Email failed:', err))
     }
 
     return NextResponse.json({ 

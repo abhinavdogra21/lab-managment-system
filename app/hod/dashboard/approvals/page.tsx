@@ -31,9 +31,16 @@ const TimelineView = ({ item, getStepStatus, getFinalApprovalStatus }: {
   getStepStatus: any, 
   getFinalApprovalStatus: any 
 }) => {
-  const allSteps = [
+  // Create timeline steps based on whether there's a faculty supervisor (TnP bookings skip faculty)
+  const hasFaculty = item.faculty_name || item.status === 'pending_faculty'
+  const allSteps = hasFaculty ? [
     { name: 'Submitted', status: 'completed', icon: Clock },
     { name: 'Faculty Review', status: getStepStatus(item, 'Faculty Review'), icon: User },
+    { name: 'Lab Staff Review', status: getStepStatus(item, 'Lab Staff Review'), icon: Users },
+    { name: 'HOD Review', status: getStepStatus(item, 'HOD Review'), icon: Building },
+    { name: 'Approved', status: getFinalApprovalStatus(item), icon: CheckCircle2 }
+  ] : [
+    { name: 'Submitted', status: 'completed', icon: Clock },
     { name: 'Lab Staff Review', status: getStepStatus(item, 'Lab Staff Review'), icon: Users },
     { name: 'HOD Review', status: getStepStatus(item, 'HOD Review'), icon: Building },
     { name: 'Approved', status: getFinalApprovalStatus(item), icon: CheckCircle2 }

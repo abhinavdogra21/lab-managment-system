@@ -1,5 +1,6 @@
 "use client"
 import Image from "next/image"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -30,6 +31,8 @@ interface DashboardHeaderProps {
  * Responsive design with mobile menu toggle
  */
 export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
+  const router = useRouter()
+  
   const getRoleDisplayName = (role: string) => {
     const roleMap: Record<string, string> = {
       student: "Student",
@@ -40,6 +43,21 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
       tnp: "Training & Placement",
     }
     return roleMap[role] || role
+  }
+
+  const getSettingsPath = (role: string) => {
+    const roleMap: Record<string, string> = {
+      student: "/student/dashboard/settings",
+      faculty: "/faculty/dashboard/settings",
+      "lab-staff": "/lab-staff/dashboard/settings",
+      "lab_staff": "/lab-staff/dashboard/settings",
+      hod: "/hod/dashboard/settings",
+      admin: "/admin/dashboard/settings",
+      tnp: "/tnp/dashboard/settings",
+      "non-teaching": "/non-teaching/dashboard/settings",
+      "non_teaching": "/non-teaching/dashboard/settings",
+    }
+    return roleMap[role] || "/dashboard/settings"
   }
 
   const handleLogout = async () => {
@@ -108,11 +126,7 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <Menu className="mr-2 h-4 w-4" />
-              <span>Profile</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push(getSettingsPath(user.role))}>
               <Settings className="mr-2 h-4 w-4" />
               <span>Settings</span>
             </DropdownMenuItem>

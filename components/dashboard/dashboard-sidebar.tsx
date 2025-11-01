@@ -107,8 +107,7 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
         return [
           ...baseItems,
           { name: "Book Labs", href: withPrefix("/dashboard/book-labs"), icon: Calendar },
-          { name: "Placement Events", href: withPrefix("/dashboard/events"), icon: Calendar },
-          { name: "Reports", href: withPrefix("/dashboard/reports"), icon: BarChart3 },
+          { name: "My Requests", href: withPrefix("/dashboard/my-requests"), icon: ClipboardList },
         ]
 
       default:
