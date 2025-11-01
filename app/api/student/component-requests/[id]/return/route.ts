@@ -73,12 +73,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (details.rows.length > 0) {
         const req = details.rows[0]
         
-        // Get lab staff emails for this lab
+        // Get head lab staff email for this lab
         const labStaff = await db.query(
-          `SELECT DISTINCT u.email 
+          `SELECT u.email 
            FROM users u
-           JOIN lab_staff_assignments lsa ON lsa.staff_id = u.id
-           WHERE u.role = 'lab-staff' AND lsa.lab_id = ?`,
+           JOIN labs l ON l.staff_id = u.id
+           WHERE u.role = 'lab_staff' AND l.id = ?`,
           [req.lab_id]
         )
         

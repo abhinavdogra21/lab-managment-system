@@ -119,9 +119,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
            WHERE cri.request_id = ?`,
           [requestId]
         )
-        const emailData = emailTemplates.componentRequestCreated({
+        const emailData = emailTemplates.componentRequestApprovedForLabStaff({
           requesterName: req.requester_name,
           requesterRole: req.initiator_role === 'faculty' ? 'Faculty' : 'Student',
+          approverName: req.hod_name || 'HOD',
           labName: req.lab_name,
           purpose: req.purpose || 'Not specified',
           items: itemsDetails.rows,

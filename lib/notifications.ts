@@ -3,6 +3,28 @@ import nodemailer from 'nodemailer'
 const isTestingMode = process.env.TESTING_MODE === 'true'
 const adminEmail = process.env.ADMIN_EMAIL || 'abhinavdogra1974@gmail.com'
 
+// Helper function to format time to 12-hour format with AM/PM
+function formatTimeTo12Hour(time24: string): string {
+  if (!time24) return ''
+  const [hours, minutes] = time24.split(':')
+  const hour = parseInt(hours, 10)
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const hour12 = hour % 12 || 12
+  return `${hour12}:${minutes} ${ampm}`
+}
+
+// Helper function to format date properly
+function formatDate(dateString: string): string {
+  if (!dateString) return ''
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  })
+}
+
 // Create transporter using Gmail
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -14,7 +36,10 @@ const transporter = nodemailer.createTransport({
 
 // Helper function to create professional LNMIIT email template
 function createEmailTemplate(content: string, baseUrl?: string): string {
-  const appUrl = baseUrl || process.env.APP_URL || 'http://localhost:3000'
+  // Use a publicly accessible logo URL or data URI for email compatibility
+  // For production, host the logo on your domain or use a CDN
+  const logoUrl = 'https://www.lnmiit.ac.in/images/Lnmiit-logo.png'
+  
   return `<!DOCTYPE html>
 <html>
   <head>
@@ -32,7 +57,7 @@ function createEmailTemplate(content: string, baseUrl?: string): string {
                 <tr style="background: #EEEEEE;">
                   <td style="text-align:center; padding:10px;">
                     <a href="https://lnmiit.ac.in" target="_blank" rel="noopener noreferrer">
-                      <img src="${appUrl}/lnmiit-logo.png" alt="LNMIIT" style="width:200px; margin:auto; display:block; padding:10px;" />
+                      <img src="${logoUrl}" alt="LNMIIT" style="width:200px; margin:auto; display:block; padding:10px;" />
                     </a>
                   </td>
                 </tr>
@@ -113,7 +138,16 @@ export const emailTemplates = {
     items: Array<{ name: string; quantity: number }>
     returnDate: string
     requestId: number
-  }) => ({
+  }) => {
+    // Format the return date properly
+    const formattedDate = new Date(data.returnDate).toLocaleDateString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
+    
+    return {
     subject: `New Component Request #${data.requestId} - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
@@ -140,7 +174,7 @@ export const emailTemplates = {
             </tr>
             <tr style="background: #f0f9ff;">
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Expected Return Date:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.returnDate}</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${formattedDate}</td>
             </tr>
           </table>
 
@@ -168,7 +202,8 @@ export const emailTemplates = {
         </td>
       </tr>
     `)
-  }),
+    }
+  },
 
   componentRequestApproved: (data: {
     requesterName: string
@@ -262,6 +297,81 @@ export const emailTemplates = {
     `)
   }),
 
+  componentRequestApprovedForLabStaff: (data: {
+    requesterName: string
+    requesterRole: string
+    approverName: string
+    labName: string
+    purpose: string
+    items: Array<{ name: string; quantity: number }>
+    returnDate: string
+    requestId: number
+  }) => {
+    // Format the return date properly
+    const formattedDate = formatDate(data.returnDate)
+    
+    return {
+    subject: `HOD Approved - Issue Components for Request #${data.requestId} - LNMIIT Lab Management`,
+    html: createEmailTemplate(`
+      <tr>
+        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+          <p>Dear Lab Staff,</p>
+          <p>A component request has been <b>approved by HOD</b> and is ready to be issued to the requester.</p>
+          
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #d1fae5;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.requesterName} (${data.requesterRole})</td>
+            </tr>
+            <tr style="background: #d1fae5;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Approved by:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.approverName} (HOD)</td>
+            </tr>
+            <tr style="background: #d1fae5;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Purpose:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${data.purpose || 'Not specified'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Expected Return Date:</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${formattedDate}</td>
+            </tr>
+          </table>
+
+          <p><strong>Components to Issue:</strong></p>
+          <table style="width:100%; border-collapse: collapse; margin: 10px 0;">
+            <thead>
+              <tr style="background: #034da2; color: white;">
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Component Name</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Quantity</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.items.map((item, idx) => `
+                <tr style="background: ${idx % 2 === 0 ? '#f9f9f9' : 'white'};">
+                  <td style="padding: 10px; border: 1px solid #ddd;">${item.name}</td>
+                  <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${item.quantity}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <p style="margin-top: 20px; padding: 12px; background: #d1fae5; border-left: 4px solid #10b981;">
+            <strong>✅ Action Required:</strong> Please issue these components to ${data.requesterName} and update the system accordingly.
+          </p>
+        </td>
+      </tr>
+    `)
+    }
+  },
+
   componentIssued: (data: {
     requesterName: string
     requesterRole: string
@@ -269,7 +379,11 @@ export const emailTemplates = {
     requestId: number
     items: Array<{ name: string; quantity: number }>
     returnDate: string
-  }) => ({
+  }) => {
+    // Format the return date properly
+    const formattedDate = formatDate(data.returnDate)
+    
+    return {
     subject: `Components Issued - Request #${data.requestId} - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
@@ -288,7 +402,7 @@ export const emailTemplates = {
             </tr>
             <tr style="background: #dbeafe;">
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Return Deadline:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.returnDate}</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${formattedDate}</td>
             </tr>
           </table>
 
@@ -311,14 +425,15 @@ export const emailTemplates = {
           </table>
 
           <p style="padding: 12px; background: #fef3c7; border-left: 4px solid #f59e0b;">
-            <strong>⚠️ Important:</strong> Please ensure all components are returned by <b>${data.returnDate}</b> in good working condition.
+            <strong>⚠️ Important:</strong> Please ensure all components are returned by <b>${formattedDate}</b> in good working condition.
           </p>
           
           <p>If you need to extend the return date, please submit an extension request through the system.</p>
         </td>
       </tr>
     `)
-  }),
+    }
+  },
 
   returnRequested: (data: {
     requesterName: string
@@ -605,7 +720,12 @@ export const emailTemplates = {
     endTime: string
     purpose: string
     requestId: number
-  }) => ({
+  }) => {
+    const formattedDate = formatDate(data.bookingDate)
+    const formattedStartTime = formatTimeTo12Hour(data.startTime)
+    const formattedEndTime = formatTimeTo12Hour(data.endTime)
+    
+    return {
     subject: `New Lab Booking Request #${data.requestId} - ${data.labName} - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
@@ -628,11 +748,11 @@ export const emailTemplates = {
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Date:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.bookingDate}</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${formattedDate}</td>
             </tr>
             <tr style="background: #dbeafe;">
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Time:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.startTime} - ${data.endTime}</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${formattedStartTime} - ${formattedEndTime}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Purpose:</strong></td>
@@ -646,7 +766,8 @@ export const emailTemplates = {
         </td>
       </tr>
     `)
-  }),
+    }
+  },
 
   labBookingApproved: (data: {
     requesterName: string
@@ -657,7 +778,12 @@ export const emailTemplates = {
     requestId: number
     approverRole: string
     nextStep?: string
-  }) => ({
+  }) => {
+    const formattedDate = formatDate(data.bookingDate)
+    const formattedStartTime = formatTimeTo12Hour(data.startTime)
+    const formattedEndTime = formatTimeTo12Hour(data.endTime)
+    
+    return {
     subject: `Lab Booking Request #${data.requestId} Approved - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
@@ -676,11 +802,11 @@ export const emailTemplates = {
             </tr>
             <tr style="background: #d4edda;">
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Date:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.bookingDate}</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${formattedDate}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Time:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.startTime} - ${data.endTime}</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${formattedStartTime} - ${formattedEndTime}</td>
             </tr>
           </table>
 
@@ -690,7 +816,8 @@ export const emailTemplates = {
         </td>
       </tr>
     `)
-  }),
+    }
+  },
 
   labBookingRejected: (data: {
     requesterName: string
@@ -701,7 +828,12 @@ export const emailTemplates = {
     requestId: number
     reason: string
     rejectedBy: string
-  }) => ({
+  }) => {
+    const formattedDate = formatDate(data.bookingDate)
+    const formattedStartTime = formatTimeTo12Hour(data.startTime)
+    const formattedEndTime = formatTimeTo12Hour(data.endTime)
+    
+    return {
     subject: `Lab Booking Request #${data.requestId} Rejected - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
@@ -720,11 +852,11 @@ export const emailTemplates = {
             </tr>
             <tr style="background: #fee2e2;">
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Date:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.bookingDate}</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${formattedDate}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Time:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.startTime} - ${data.endTime}</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${formattedStartTime} - ${formattedEndTime}</td>
             </tr>
             <tr style="background: #fee2e2;">
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Rejected By:</strong></td>
@@ -742,7 +874,8 @@ export const emailTemplates = {
         </td>
       </tr>
     `)
-  }),
+    }
+  },
 
   labBookingWithdrawn: (data: {
     labName: string
@@ -752,7 +885,12 @@ export const emailTemplates = {
     requestId: number
     requesterName: string
     requesterRole: string
-  }) => ({
+  }) => {
+    const formattedDate = formatDate(data.bookingDate)
+    const formattedStartTime = formatTimeTo12Hour(data.startTime)
+    const formattedEndTime = formatTimeTo12Hour(data.endTime)
+    
+    return {
     subject: `Lab Booking Request #${data.requestId} Withdrawn - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
@@ -775,11 +913,11 @@ export const emailTemplates = {
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Date:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.bookingDate}</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${formattedDate}</td>
             </tr>
             <tr style="background: #fef3c7;">
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Time:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.startTime} - ${data.endTime}</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${formattedStartTime} - ${formattedEndTime}</td>
             </tr>
           </table>
 
@@ -789,5 +927,6 @@ export const emailTemplates = {
         </td>
       </tr>
     `)
-  })
+    }
+  }
 }

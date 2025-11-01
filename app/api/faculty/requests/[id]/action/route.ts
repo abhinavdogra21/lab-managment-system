@@ -63,12 +63,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             ...studentEmailData
           }).catch(err => console.error('Email send failed:', err))
 
-          // Email to lab staff
+          // Email to head lab staff only
           const labStaff = await db.query(
-            `SELECT DISTINCT u.email 
+            `SELECT u.email, u.name
              FROM users u
-             JOIN lab_staff_assignments lsa ON lsa.staff_id = u.id
-             WHERE u.role = 'lab-staff' AND lsa.lab_id = ?`,
+             JOIN labs l ON l.staff_id = u.id
+             WHERE u.role = 'lab_staff' ANDs l.id = ?`,
             [booking.lab_id]
           )
           
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             await sendEmail({
               to: labStaffEmails,
               ...labStaffEmailData
-            }).catch(err => console.error('Email send failed:', err))
+            }).catch(err => console.error('Lab staff email send failed:', err))
           }
         }
       } catch (emailError) {

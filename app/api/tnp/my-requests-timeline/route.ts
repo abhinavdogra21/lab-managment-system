@@ -22,6 +22,8 @@ export async function GET(request: NextRequest) {
         br.purpose,
         br.status,
         br.created_at,
+        br.requested_by,
+        br.faculty_supervisor_id,
         br.lab_staff_remarks,
         br.lab_staff_approved_at,
         br.hod_remarks,

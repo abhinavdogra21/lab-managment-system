@@ -26,6 +26,8 @@ interface BookingWithTimeline {
   end_time: string
   purpose: string
   status: string
+  requested_by: number
+  faculty_supervisor_id: number | null
   created_at: string
   timeline: TimelineStep[]
 }
@@ -81,11 +83,21 @@ export default function TNPMyRequestsPage() {
   }
 
   const TimelineView = ({ request }: { request: BookingWithTimeline }) => {
-    // Define all possible steps for TnP workflow
-    const allSteps = [
-      { name: 'Submitted', key: 'submitted' },
-      { name: 'Lab Staff Approval', key: 'lab_staff' },
-      { name: 'HOD Approval', key: 'hod' },
+    // Only student bookings have 5 steps (where requested_by != faculty_supervisor_id)
+    // Faculty and TnP bookings have 4 steps (they book for themselves)
+    const isStudentBooking = request.faculty_supervisor_id && request.requested_by !== request.faculty_supervisor_id
+    
+    const allSteps = isStudentBooking ? [
+      { name: 'Submitted', key: 'submitted', icon: CheckCircle, color: 'green' },
+      { name: 'Faculty Approval', key: 'faculty', icon: Users, color: 'blue' },
+      { name: 'Lab Staff Approval', key: 'lab_staff', icon: Users, color: 'blue' },
+      { name: 'HOD Approval', key: 'hod', icon: Building, color: 'purple' },
+      { name: 'Approved', key: 'approved', icon: CheckCircle, color: 'green' }
+    ] : [
+      { name: 'Submitted', key: 'submitted', icon: CheckCircle, color: 'green' },
+      { name: 'Lab Staff Approval', key: 'lab_staff', icon: Users, color: 'blue' },
+      { name: 'HOD Approval', key: 'hod', icon: Building, color: 'purple' },
+      { name: 'Approved', key: 'approved', icon: CheckCircle, color: 'green' }
     ]
 
     return (
@@ -126,6 +138,8 @@ export default function TNPMyRequestsPage() {
               let timelineStep = null
               if (step.key === 'submitted') {
                 timelineStep = { completed_at: request.created_at, step_status: 'completed' }
+              } else if (step.key === 'faculty') {
+                timelineStep = request.timeline.find(t => t.step_name === 'Faculty Approval')
               } else if (step.key === 'lab_staff') {
                 timelineStep = request.timeline.find(t => t.step_name === 'Lab Staff Approval')
               } else if (step.key === 'hod') {

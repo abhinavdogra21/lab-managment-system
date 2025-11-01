@@ -21,6 +21,8 @@ interface RequestItem {
   end_time: string
   purpose: string
   status: string
+  requested_by: number
+  faculty_supervisor_id: number | null
   faculty_name?: string
   faculty_remarks?: string
   lab_staff_remarks?: string
@@ -214,9 +216,11 @@ export default function LabStaffApprovePage() {
   }
 
   const TimelineView = ({ item }: { item: RequestItem }) => {
-    // Create timeline steps based on whether there's a faculty supervisor (TnP bookings skip faculty)
-    const hasFaculty = item.faculty_name || item.status === 'pending_faculty'
-    const allSteps = hasFaculty ? [
+    // Only student bookings have 5 steps (where requested_by != faculty_supervisor_id)
+    // Faculty and TnP bookings have 4 steps (they book for themselves)
+    const isStudentBooking = item.faculty_supervisor_id && item.requested_by !== item.faculty_supervisor_id
+    
+    const allSteps = isStudentBooking ? [
       { name: 'Submitted', status: 'completed', icon: Clock },
       { name: 'Faculty Review', status: getStepStatus(item, 'Faculty Review'), icon: User },
       { name: 'Lab Staff Review', status: getStepStatus(item, 'Lab Staff Review'), icon: Users },

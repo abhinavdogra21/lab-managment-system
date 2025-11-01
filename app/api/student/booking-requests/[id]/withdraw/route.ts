@@ -59,10 +59,10 @@ export async function POST(request: NextRequest, context: { params: { id: string
           emailRecipients.push(req.faculty_email)
         } else if (req.status === 'pending_lab_staff') {
           const labStaff = await db.query(
-            `SELECT DISTINCT u.email 
+            `SELECT u.email 
              FROM users u
-             JOIN lab_staff_assignments lsa ON lsa.staff_id = u.id
-             WHERE u.role = 'lab-staff' AND lsa.lab_id = ?`,
+             JOIN labs l ON l.staff_id = u.id
+             WHERE u.role = 'lab_staff' AND l.id = ?`,
             [req.lab_id]
           )
           emailRecipients.push(...labStaff.rows.map(s => s.email))
