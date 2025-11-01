@@ -1,101 +1,147 @@
-# Quick Setup Guide
+# Lab Management System - Complete Setup Guide
 
-This guide will help you set up the Lab Management System on your local machine in under 5 minutes.
+This guide will help you set up the Lab Management System on any machine in under 10 minutes.
 
-## Prerequisites
+## 📋 Prerequisites
+
+Before you begin, ensure you have these installed:
 
 - **Node.js** (v18.0.0 or higher) - [Download here](https://nodejs.org/)
 - **MySQL** (v8.0.0 or higher) - [Download here](https://dev.mysql.com/downloads/mysql/)
 - **Git** - [Download here](https://git-scm.com/downloads)
+- **pnpm** (Package Manager) - Install with: `npm install -g pnpm`
 
-## Quick Setup (Automated)
+## 🚀 Quick Setup (Recommended)
 
-### 1. Clone and Navigate
+### Step 1: Clone the Repository
 
 ```bash
 git clone https://github.com/abhinavdogra21/lab-managment-system.git
 cd lab-managment-system
 ```
 
-### 2. Run Automated Setup
+### Step 2: Run Database Setup
 
 ```bash
-# Make the setup script executable
-chmod +x scripts/setup-db.sh
-
-# Run the automated setup
-./scripts/setup-db.sh
+# Run the database setup script
+./scripts/setup-database.sh
 ```
 
-The script will:
-- ✅ Check MySQL connection
-- ✅ Create the database
-- ✅ Set up all tables and indexes
-- ✅ Insert seed data
-- ✅ Create `.env.local` file
-- ✅ Install dependencies
+**For Windows Users:**
+```bash
+# Use Git Bash or WSL
+bash scripts/setup-database.sh
+```
 
-### 3. Start the Application
+The setup script will:
+- ✅ Ask for your MySQL credentials
+- ✅ Let you choose custom database name (default: `lnmiit_lab_management`)
+- ✅ Create the database automatically
+- ✅ Import the exact database structure (35 tables)
+- ✅ Generate `.env.local` with your settings
+
+### Step 2b: Install Dependencies
+
+```bash
+pnpm install
+# or if you don't have pnpm
+npm install -g pnpm
+pnpm install
+```
+
+### Step 3: Start the Application
 
 ```bash
 pnpm run dev
 ```
 
-### 4. Access the Application
+### Step 4: Access the Application
 
-- **URL:** http://localhost:3000
-- **Admin Email:** admin@lnmiit.ac.in
-- **Admin Password:** admin123
+Open your browser and go to: **http://localhost:3000**
 
-## Manual Setup (Alternative)
+**Default Admin Credentials:**
+- **Email:** admin@lnmiit.ac.in
+- **Password:** admin123
 
-If you prefer manual setup or the automated script doesn't work:
+**⚠️ IMPORTANT:** Change the admin password immediately after first login!
+
+---
+
+## 🔧 Manual Setup (Advanced Users)
+
+If the automated script doesn't work or you prefer manual setup:
 
 ### 1. Install Dependencies
 
 ```bash
 pnpm install
+# or
+npm install
 ```
 
-### 2. Create Database
+### 2. Create MySQL Database
 
+Login to MySQL:
+```bash
+mysql -u root -p
+```
+
+Create the database:
 ```sql
 CREATE DATABASE lnmiit_lab_management CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+EXIT;
 ```
 
-### 3. Run SQL Scripts
+### 3. Run SQL Scripts in Order
 
 ```bash
-mysql -u root -p lnmiit_lab_management < scripts/01-create-tables-mysql.sql
-mysql -u root -p lnmiit_lab_management < scripts/02-add-indexes-mysql.sql
-mysql -u root -p lnmiit_lab_management < scripts/02-seed-data.sql
-mysql -u root -p lnmiit_lab_management < scripts/03-archival-tables-mysql.sql
+cd scripts
+
+# Step 1: Create tables
+mysql -u root -p lnmiit_lab_management < 01-create-tables-mysql.sql
+
+# Step 2: Add indexes for performance
+mysql -u root -p lnmiit_lab_management < 02-add-indexes-mysql.sql
+
+# Step 3: Insert initial data (departments, admin user, etc.)
+mysql -u root -p lnmiit_lab_management < 02-seed-data.sql
+
+# Step 4: Create archival tables
+mysql -u root -p lnmiit_lab_management < 03-archival-tables-mysql.sql
 ```
 
-### 4. Create Environment File
+### 4. Create Environment Configuration
 
-Create `.env.local` in the root directory:
+Create a file named `.env.local` in the root directory:
 
 ```env
 # Database Configuration
 DB_HOST=localhost
 DB_PORT=3306
 DB_USER=root
-DB_PASSWORD=your_mysql_password
+DB_PASSWORD=your_mysql_password_here
 DB_NAME=lnmiit_lab_management
 
-# JWT Configuration
-JWT_SECRET=your_super_secret_jwt_key_here_make_it_long_and_random
-JWT_EXPIRES_IN=7d
+# Application URL
+APP_URL=http://localhost:3000
+USE_DB_AUTH=true
 
-# Application Configuration
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-NODE_ENV=development
+# Feature Flags
+NEXT_PUBLIC_MULTI_STAFF_UI=false
+NEXT_PUBLIC_FORGOT_REQUIRE_TYPE=true
 
-# Admin Configuration
-ADMIN_EMAIL=admin@lnmiit.ac.in
-ADMIN_PASSWORD=admin123
+# Email Configuration (for notifications)
+TESTING_MODE=true
+ADMIN_EMAIL=your_email@gmail.com
+GMAIL_USER=your_email@gmail.com
+GMAIL_APP_PASSWORD=your_app_password_here
 ```
+
+**Getting Gmail App Password:**
+1. Go to Google Account Settings
+2. Security → 2-Step Verification
+3. App passwords → Generate new app password
+4. Copy and paste into `GMAIL_APP_PASSWORD`
 
 ### 5. Start Development Server
 
@@ -103,81 +149,239 @@ ADMIN_PASSWORD=admin123
 pnpm run dev
 ```
 
-## Troubleshooting
+---
 
-### Common Issues
+## 🔄 Setting Up on a New Machine
 
-**1. MySQL Connection Error**
+When moving to a different laptop/computer:
+
+### Quick Method (Recommended)
 ```bash
-# Check if MySQL is running
-sudo service mysql start
+# Clone the repository
+git clone https://github.com/abhinavdogra21/lab-managment-system.git
+cd lab-managment-system
 
-# Or on macOS
+# Run the database setup script
+./scripts/setup-database.sh
+
+# Install dependencies
+pnpm install
+
+# Start the app
+pnpm run dev
+```
+
+That's it! The setup script will create the exact same database structure (35 tables) automatically.
+
+### What You'll Need
+- MySQL installed and running
+- Your MySQL root password (or any MySQL user with CREATE DATABASE privileges)
+- Node.js v18+ installed
+- pnpm (will be installed if missing)
+
+---
+
+## 🛠️ Troubleshooting
+
+### MySQL Connection Issues
+
+**Problem:** Cannot connect to MySQL
+```bash
+# Check if MySQL is running (Mac)
+brew services list
+
+# Start MySQL (Mac)
 brew services start mysql
+
+# Check if MySQL is running (Linux)
+sudo systemctl status mysql
+
+# Start MySQL (Linux)
+sudo systemctl start mysql
+
+# Windows - Check Services app
+# Search "Services" → Find "MySQL" → Start
 ```
 
-**2. Permission Denied on Script**
+**Problem:** Access denied for user 'root'
 ```bash
-chmod +x scripts/setup-db.sh
+# Reset MySQL root password (if forgotten)
+sudo mysql
+ALTER USER 'root'@'localhost' IDENTIFIED BY 'new_password';
+FLUSH PRIVILEGES;
+EXIT;
 ```
 
-**3. Port 3000 Already in Use**
-```bash
-# Kill the process using port 3000
-lsof -ti:3000 | xargs kill
-```
+### Port Issues
 
-**4. pnpm Command Not Found**
+**Problem:** Port 3000 already in use
 ```bash
-# Install pnpm globally
-npm install -g pnpm
+# Find and kill process (Mac/Linux)
+lsof -ti:3000 | xargs kill -9
+
+# Windows
+netstat -ano | findstr :3000
+taskkill /PID <PID> /F
 ```
 
 ### Database Issues
 
-**Reset Database (if needed):**
+**Reset Database Completely:**
 ```sql
 DROP DATABASE IF EXISTS lnmiit_lab_management;
 CREATE DATABASE lnmiit_lab_management CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-Then re-run the SQL scripts.
+Then re-run all SQL scripts.
 
-## Next Steps
+### Permission Issues
 
-After successful setup:
+**Script not executable:**
+```bash
+chmod +x scripts/setup-db.sh
+chmod +x scripts/verify-setup.sh
+```
 
-1. **Change Admin Password** - Login and change the default password
-2. **Configure Email** - Update SMTP settings in `.env.local` for notifications
-3. **Add Users** - Create departments and user accounts
-4. **Set Up Labs** - Configure laboratories and equipment
-5. **Create Timetables** - Add regular class schedules
+### Dependency Issues
 
-## Features Overview
+**pnpm not found:**
+```bash
+npm install -g pnpm
+```
 
-- 🔐 **User Management** - Role-based access control
-- 📅 **Lab Booking** - Real-time booking with approval workflow
-- 🏢 **Department Management** - Organize users by departments
-- 📊 **Analytics Dashboard** - Usage statistics and reports
-- 🔧 **Equipment Management** - Track lab equipment and inventory
-- 📧 **Email Notifications** - Automated booking notifications
+**Node version too old:**
+```bash
+# Check version
+node --version
 
-## Default User Roles
-
-- **Admin** - Full system access
-- **HOD** - Department management, final booking approval
-- **Faculty** - Lab booking approval for students
-- **Lab Staff** - Lab and equipment management
-- **TNP** - Training and placement activities
-- **Student** - Lab booking requests
-
-## Support
-
-For issues or questions:
-- 📖 Read the full [README.md](README.md)
-- 🐛 [Create an issue](https://github.com/abhinavdogra21/lab-managment-system/issues)
-- 📧 Contact support
+# Update Node.js
+# Download latest from https://nodejs.org/
+```
 
 ---
 
-**Ready to manage your labs efficiently! 🚀**
+## ✅ Verify Installation
+
+Run the verification script:
+```bash
+chmod +x scripts/verify-setup.sh
+./scripts/verify-setup.sh
+```
+
+This checks:
+- ✅ Database connection
+- ✅ All tables created
+- ✅ Seed data inserted
+- ✅ Environment variables set
+- ✅ Dependencies installed
+
+---
+
+## 📚 Database Schema Overview
+
+The system creates these main tables:
+- **users** - All system users
+- **departments** - Academic departments
+- **labs** - Laboratory information
+- **lab_bookings** - Booking requests and approvals
+- **components** - Lab equipment/components
+- **component_requests** - Component borrowing requests
+- **timetable_entries** - Regular class schedules
+- **audit_logs** - System activity tracking
+
+---
+
+## 🎯 Next Steps After Setup
+
+1. **Login as Admin**
+   - Email: admin@lnmiit.ac.in
+   - Password: admin123
+
+2. **Change Admin Password**
+   - Go to Profile → Change Password
+
+3. **Add Departments**
+   - Admin Dashboard → Departments → Add Department
+
+4. **Create Labs**
+   - Admin Dashboard → Labs → Add Lab
+
+5. **Add Users**
+   - Admin Dashboard → Users → Add User
+   - Import students via Excel (bulk upload)
+
+6. **Set Up Timetable**
+   - Admin Dashboard → Timetable → Add Entries
+
+7. **Configure Email**
+   - Update GMAIL_USER and GMAIL_APP_PASSWORD in `.env.local`
+   - Set TESTING_MODE=false for production
+
+---
+
+## 🔐 Default User Roles
+
+| Role | Access Level | Capabilities |
+|------|-------------|--------------|
+| **Admin** | Full System | User management, system configuration |
+| **HOD** | Department | Final approval for bookings, reports |
+| **Faculty** | Department | Approve student bookings, request components |
+| **Lab Staff** | Labs | Manage bookings, equipment, approve requests |
+| **TNP** | Limited | Book labs for placement activities |
+| **Student** | Basic | Request lab bookings and components |
+
+---
+
+## 📧 Email Configuration
+
+For email notifications to work:
+
+1. **Gmail Setup (Recommended)**
+   ```env
+   GMAIL_USER=your.email@gmail.com
+   GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
+   ```
+
+2. **Testing Mode**
+   - Keep `TESTING_MODE=true` during development
+   - All emails go to `ADMIN_EMAIL`
+   - Set to `false` for production
+
+---
+
+## 🌐 Production Deployment
+
+When deploying to production:
+
+1. **Update .env.local**
+   ```env
+   APP_URL=https://yourdomain.com
+   TESTING_MODE=false
+   ```
+
+2. **Secure Database**
+   - Change MySQL root password
+   - Create dedicated database user
+   - Use strong passwords
+
+3. **Enable Email**
+   - Configure real SMTP settings
+   - Test email delivery
+
+4. **Build for Production**
+   ```bash
+   pnpm run build
+   pnpm start
+   ```
+
+---
+
+## 📞 Support & Help
+
+- 📖 Full Documentation: [README.md](README.md)
+- 🐛 Report Issues: [GitHub Issues](https://github.com/abhinavdogra21/lab-managment-system/issues)
+- 📧 Email Support: Check repository for contact
+
+---
+
+**🎉 You're all set! Happy lab management!**

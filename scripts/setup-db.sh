@@ -14,11 +14,60 @@ DB_PORT="3306"
 DB_USER="root"
 DB_NAME="lnmiit_lab_management"
 
+#!/bin/bash
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
+
+echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║                                                            ║${NC}"
+echo -e "${BLUE}║    Lab Management System - Interactive Setup Wizard       ║${NC}"
+echo -e "${BLUE}║                                                            ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+echo -e "${CYAN}This wizard will help you set up your Lab Management System.${NC}"
+echo -e "${CYAN}Press Enter to use default values shown in [brackets].${NC}"
+echo ""
+
+# Database configuration
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${YELLOW}MySQL Database Configuration${NC}"
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
+
+# Get MySQL host
+echo -e "${CYAN}MySQL Host [localhost]:${NC}"
+read -r input_host
+DB_HOST="${input_host:-localhost}"
+
+# Get MySQL port
+echo -e "${CYAN}MySQL Port [3306]:${NC}"
+read -r input_port
+DB_PORT="${input_port:-3306}"
+
+# Get MySQL user
+echo -e "${CYAN}MySQL User [root]:${NC}"
+read -r input_user
+DB_USER="${input_user:-root}"
+
+# Get MySQL password
+echo -e "${CYAN}MySQL Password:${NC}"
+read -s DB_PASSWORD
+echo ""
+
+# Get database name
+echo -e "${CYAN}Database Name [lnmiit_lab_management]:${NC}"
+read -r input_dbname
+DB_NAME="${input_dbname:-lnmiit_lab_management}"
+
+echo ""
+echo -e "${GREEN}✓ Configuration collected${NC}"
+echo ""
 
 # Function to print colored output
 print_status() {

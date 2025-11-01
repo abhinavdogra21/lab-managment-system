@@ -72,47 +72,69 @@ git clone https://github.com/abhinavdogra21/lab-managment-system.git
 cd lab-managment-system
 ```
 
-### 2. Install Dependencies
+### 2. Database Setup (Automatic - Recommended)
+
+Run the interactive setup wizard:
+
+```bash
+./scripts/setup-database.sh
+```
+
+This will:
+- ✅ Prompt for your MySQL credentials
+- ✅ Let you choose a custom database name
+- ✅ Create the database with the exact same structure (35 tables)
+- ✅ Generate `.env.local` configuration file
+
+### 3. Install Dependencies
 
 ```bash
 pnpm install
 ```
 
-### 3. Database Setup
-
-#### Option A: Automatic Database Setup (Recommended)
-
-Run the automated setup script:
+### 4. Start Development Server
 
 ```bash
-# Make the setup script executable
-chmod +x scripts/setup-db.sh
-
-# Run the setup script
-./scripts/setup-db.sh
+pnpm run dev
 ```
 
-This script will:
-- Create the MySQL database
-- Set up all required tables
-- Add indexes for performance
-- Insert initial seed data
-- Create archival tables
+Visit **http://localhost:3000** and login with:
+- **Email:** admin@lnmiit.ac.in
+- **Password:** admin123
 
-#### Option B: Manual Database Setup
+---
+
+### Alternative: Manual Database Setup
+
+If you prefer manual setup or need more control:
 
 1. **Create Database:**
 ```sql
 CREATE DATABASE lnmiit_lab_management CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-2. **Run SQL Scripts:**
+2. **Import Database Structure:**
 ```bash
-# Connect to MySQL and run the setup scripts
-mysql -u root -p lnmiit_lab_management < scripts/01-create-tables-mysql.sql
-mysql -u root -p lnmiit_lab_management < scripts/02-add-indexes-mysql.sql
-mysql -u root -p lnmiit_lab_management < scripts/02-seed-data.sql
-mysql -u root -p lnmiit_lab_management < scripts/03-archival-tables-mysql.sql
+mysql -u root -p lnmiit_lab_management < scripts/database-schema.sql
+```
+
+3. **Create `.env.local`:**
+```env
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=your_password
+DB_NAME=lnmiit_lab_management
+
+APP_URL=http://localhost:3000
+USE_DB_AUTH=true
+NEXT_PUBLIC_MULTI_STAFF_UI=false
+NEXT_PUBLIC_FORGOT_REQUIRE_TYPE=true
+
+TESTING_MODE=true
+ADMIN_EMAIL=your.email@gmail.com
+GMAIL_USER=your.email@gmail.com
+GMAIL_APP_PASSWORD=your-app-password
 ```
 
 ### 4. Environment Configuration
