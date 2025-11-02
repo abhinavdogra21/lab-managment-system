@@ -425,13 +425,18 @@ export default function LabStaffComponentRequestsPage() {
                     <div className="px-2">
                       <div className="flex items-center justify-between relative">
                         <div className="absolute top-6 left-6 right-6 h-0.5 bg-gray-200"></div>
-                        {[
+                        {(r.initiator_role === 'faculty' ? [
+                          { name: 'Submitted', status: 'completed', icon: Clock },
+                          { name: 'Lab Staff', status: getStepStatus(r, 'Lab Staff Review'), icon: Users },
+                          { name: 'HOD', status: getStepStatus(r, 'HOD Review'), icon: Building },
+                          { name: 'Final', status: getFinalApprovalStatus(r), icon: CheckCircle2 }
+                        ] : [
                           { name: 'Submitted', status: 'completed', icon: Clock },
                           { name: 'Faculty', status: getStepStatus(r, 'Faculty Review'), icon: User },
                           { name: 'Lab Staff', status: getStepStatus(r, 'Lab Staff Review'), icon: Users },
                           { name: 'HOD', status: getStepStatus(r, 'HOD Review'), icon: Building },
                           { name: 'Final', status: getFinalApprovalStatus(r), icon: CheckCircle2 }
-                        ].map((step, index) => (
+                        ]).map((step, index) => (
                           <div key={index} className="flex flex-col items-center space-y-1 relative z-10">
                             <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center ${
                               step.status === 'completed' ? 'bg-green-100 border-green-300' : 
