@@ -1265,6 +1265,33 @@ export const dbOperations = {
       `SELECT COUNT(1) AS cnt FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'departments' AND column_name = 'hod_email'`
     )
     const hasHodEmail = Array.isArray(colRes.rows) && colRes.rows[0] && Number(colRes.rows[0].cnt) > 0
+    
+    // If HOD email is provided, check if user exists, if not create one
+    if (dept.hodEmail) {
+      const existingUser = await this.getUserByEmail(dept.hodEmail)
+      if (!existingUser) {
+        // Create HOD user account - they'll set password via forgot password
+        // Extract name from email (e.g., john.doe@lnmiit.ac.in -> John Doe)
+        const emailUsername = dept.hodEmail.split('@')[0]
+        const nameParts = emailUsername.split('.').map(part => 
+          part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+        )
+        const hodName = nameParts.join(' ') || 'HOD'
+        
+        await this.createUser({
+          email: dept.hodEmail,
+          passwordHash: null, // User will set password via forgot password flow
+          name: hodName,
+          role: 'hod',
+          department: dept.name,
+          phone: null,
+          studentId: null,
+          employeeId: null,
+          salutation: 'none',
+        })
+      }
+    }
+    
     let insert
     if (hasHodEmail) {
       insert = await db.query(
@@ -1292,6 +1319,35 @@ export const dbOperations = {
       `SELECT COUNT(1) AS cnt FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'departments' AND column_name = 'hod_email'`
     )
     const hasHodEmail = Array.isArray(colRes.rows) && colRes.rows[0] && Number(colRes.rows[0].cnt) > 0
+
+    // If HOD email is being updated and it's a new email, create user if doesn't exist
+    if (fields.hodEmail && hasHodEmail) {
+      const existingUser = await this.getUserByEmail(fields.hodEmail)
+      if (!existingUser) {
+        // Get department name for the new HOD user
+        const deptRes = await db.query(`SELECT name FROM departments WHERE id = ?`, [id])
+        const deptName = deptRes.rows[0]?.name || fields.name || 'Unknown Department'
+        
+        // Create HOD user account
+        const emailUsername = fields.hodEmail.split('@')[0]
+        const nameParts = emailUsername.split('.').map(part => 
+          part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+        )
+        const hodName = nameParts.join(' ') || 'HOD'
+        
+        await this.createUser({
+          email: fields.hodEmail,
+          passwordHash: null, // User will set password via forgot password flow
+          name: hodName,
+          role: 'hod',
+          department: deptName,
+          phone: null,
+          studentId: null,
+          employeeId: null,
+          salutation: 'none',
+        })
+      }
+    }
 
     const allowed: Record<string, any> = {}
     if (fields.name !== undefined) allowed.name = fields.name

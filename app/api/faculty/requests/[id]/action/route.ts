@@ -68,7 +68,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             `SELECT u.email, u.name
              FROM users u
              JOIN labs l ON l.staff_id = u.id
-             WHERE u.role = 'lab_staff' ANDs l.id = ?`,
+             WHERE u.role = 'lab_staff' AND l.id = ?`,
             [booking.lab_id]
           )
           
