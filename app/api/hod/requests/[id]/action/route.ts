@@ -28,11 +28,11 @@ export async function POST(
 
     // First, verify the request exists and is in the correct state
     const checkQuery = `
-      SELECT br.*, l.department_id, d.code as dept_code
+      SELECT br.*, l.department_id, d.name as dept_name
       FROM booking_requests br
       JOIN labs l ON br.lab_id = l.id
       JOIN departments d ON l.department_id = d.id
-      WHERE br.id = ? AND d.code = ?
+      WHERE br.id = ? AND d.name = ?
     `
     const checkResult = await db.query(checkQuery, [requestId, user.department])
     

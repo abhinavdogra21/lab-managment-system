@@ -366,9 +366,9 @@ export default function HODApprovePage() {
   const handleAction = async (requestId: number, action: 'approve' | 'reject', overrideRemarks?: string) => {
     const requestRemarks = typeof overrideRemarks === 'string'
       ? overrideRemarks.trim()
-      : remarks[requestId]?.trim()
+      : remarks[requestId]?.trim() || ''
 
-    if (action === 'reject' && !requestRemarks) {
+    if (action === 'reject' && (!requestRemarks || requestRemarks === '')) {
       toast({
         title: "Error",
         description: "Please provide remarks for rejection",
