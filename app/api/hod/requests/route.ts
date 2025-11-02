@@ -12,6 +12,22 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
 
+    const db = Database.getInstance()
+
+    // For non-admin HODs, get their department(s) by hod_id or hod_email
+    let departmentIds: number[] = []
+    if (user.role !== 'admin') {
+      const depRes = await db.query(
+        `SELECT id FROM departments WHERE hod_id = ? OR LOWER(hod_email) = LOWER(?)`,
+        [Number(user.userId), String(user.email || '')]
+      )
+      departmentIds = depRes.rows.map((d: any) => Number(d.id))
+      
+      if (departmentIds.length === 0) {
+        return NextResponse.json({ requests: [], total: 0 })
+      }
+    }
+
     // Get requests that need HOD approval from the user's department
     let query = `
       SELECT DISTINCT
@@ -27,6 +43,9 @@ export async function GET(request: NextRequest) {
         br.faculty_remarks,
         br.lab_staff_remarks,
         br.hod_remarks,
+        br.faculty_approved_at,
+        br.lab_staff_approved_at,
+        br.hod_approved_at,
         s.name as student_name,
         s.email as student_email,
         f.name as faculty_name,
@@ -36,10 +55,17 @@ export async function GET(request: NextRequest) {
       JOIN users f ON br.faculty_supervisor_id = f.id
       JOIN labs l ON br.lab_id = l.id
       JOIN departments d ON l.department_id = d.id
-      WHERE d.name = ?
     `
 
-    const params = [user.department]
+    const params: any[] = []
+
+    // Add department filter for non-admin users
+    if (user.role !== 'admin') {
+      query += ` WHERE d.id IN (${departmentIds.map(() => '?').join(',')})`
+      params.push(...departmentIds)
+    } else {
+      query += ` WHERE 1=1`
+    }
 
     if (status && status !== 'all') {
       if (status === 'rejected') {
@@ -61,7 +87,6 @@ export async function GET(request: NextRequest) {
 
     query += ` ORDER BY br.created_at DESC LIMIT 50`
 
-    const db = Database.getInstance()
     const result = await db.query(query, params)
     
     return NextResponse.json({ 

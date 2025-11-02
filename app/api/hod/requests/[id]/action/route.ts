@@ -26,15 +26,38 @@ export async function POST(
 
     const db = Database.getInstance()
 
+    // For non-admin HODs, get their department(s) by hod_id or hod_email
+    let departmentIds: number[] = []
+    if (user.role !== 'admin') {
+      const depRes = await db.query(
+        `SELECT id FROM departments WHERE hod_id = ? OR LOWER(hod_email) = LOWER(?)`,
+        [Number(user.userId), String(user.email || '')]
+      )
+      departmentIds = depRes.rows.map((d: any) => Number(d.id))
+      
+      if (departmentIds.length === 0) {
+        return NextResponse.json({ error: "No department found for this HOD" }, { status: 403 })
+      }
+    }
+
     // First, verify the request exists and is in the correct state
-    const checkQuery = `
+    let checkQuery = `
       SELECT br.*, l.department_id, d.name as dept_name
       FROM booking_requests br
       JOIN labs l ON br.lab_id = l.id
       JOIN departments d ON l.department_id = d.id
-      WHERE br.id = ? AND d.name = ?
+      WHERE br.id = ?
     `
-    const checkResult = await db.query(checkQuery, [requestId, user.department])
+    
+    const checkParams: any[] = [requestId]
+    
+    // Add department filter for non-admin users
+    if (user.role !== 'admin') {
+      checkQuery += ` AND d.id IN (${departmentIds.map(() => '?').join(',')})`
+      checkParams.push(...departmentIds)
+    }
+    
+    const checkResult = await db.query(checkQuery, checkParams)
     
     if (checkResult.rows.length === 0) {
       return NextResponse.json({ error: "Request not found or not in your department" }, { status: 404 })

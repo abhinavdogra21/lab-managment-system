@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
-import { Check, Package, PackageCheck, X, Search } from "lucide-react"
+import { Check, Package, PackageCheck, X, Search, ChevronDown, ChevronUp, Clock, User, Users, Building, CheckCircle2 } from "lucide-react"
 import Link from "next/link"
 
 interface RequestItem { 
@@ -18,6 +18,12 @@ interface RequestItem {
   requester_name: string
   initiator_role: 'student' | 'faculty'
   status: string
+  faculty_remarks?: string | null
+  faculty_approved_at?: string | null
+  lab_staff_remarks?: string | null
+  lab_staff_approved_at?: string | null
+  hod_remarks?: string | null
+  hod_approved_at?: string | null
   issued_at?: string | null
   return_requested_at?: string | null
   returned_at?: string | null
@@ -48,6 +54,53 @@ export default function LabStaffComponentRequestsPage() {
   const [extensionRemarks, setExtensionRemarks] = useState<Record<number, string>>({})
   const [searchQuery, setSearchQuery] = useState("")
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'issued' | 'return-pending' | 'returned' | 'rejected'>('all')
+  const [expandedTimelines, setExpandedTimelines] = useState<Set<number>>(new Set())
+
+  const toggleTimeline = (id: number) => {
+    setExpandedTimelines(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(id)) {
+        newSet.delete(id)
+      } else {
+        newSet.add(id)
+      }
+      return newSet
+    })
+  }
+
+  // Helper function to determine step status for component requests
+  const getStepStatus = (request: RequestItem, step: string): 'completed' | 'pending' | 'rejected' | 'waiting' => {
+    if (step === 'Faculty Review') {
+      if (request.faculty_approved_at) return 'completed'
+      if (request.status === 'pending_faculty') return 'pending'
+      if (request.status === 'rejected' && !request.faculty_approved_at) return 'rejected'
+      return 'waiting'
+    }
+    
+    if (step === 'Lab Staff Review') {
+      if (request.lab_staff_approved_at) return 'completed'
+      if (request.status === 'pending_lab_staff') return 'pending'
+      if (request.status === 'rejected' && request.faculty_approved_at && !request.lab_staff_approved_at) return 'rejected'
+      if (!request.faculty_approved_at) return 'waiting'
+      return 'waiting'
+    }
+    
+    if (step === 'HOD Review') {
+      if (request.hod_approved_at) return 'completed'
+      if (request.status === 'pending_hod') return 'pending'
+      if (request.status === 'rejected' && request.lab_staff_approved_at && !request.hod_approved_at) return 'rejected'
+      if (!request.lab_staff_approved_at) return 'waiting'
+      return 'waiting'
+    }
+    
+    return 'waiting'
+  }
+
+  const getFinalApprovalStatus = (request: RequestItem): 'completed' | 'pending' | 'rejected' | 'waiting' => {
+    if (request.status === 'approved' || request.status === 'issued' || request.status === 'return-pending' || request.status === 'returned') return 'completed'
+    if (request.status === 'rejected') return 'rejected'
+    return 'waiting'
+  }
 
   const load = async () => {
     setLoading(true)
@@ -345,8 +398,94 @@ export default function LabStaffComponentRequestsPage() {
                 {r.mentor_faculty_name && (
                   <div className="text-sm text-muted-foreground">Mentor: <span className="font-medium text-foreground">{r.mentor_faculty_name}</span></div>
                 )}
-                <div className="space-y-2">
-                  {r.items?.map((it, idx) => (
+                
+                {/* View Timeline Button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs"
+                  onClick={() => toggleTimeline(r.id)}
+                >
+                  {expandedTimelines.has(r.id) ? (
+                    <>
+                      <ChevronUp className="h-3 w-3 mr-1" />
+                      Hide Timeline
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-3 w-3 mr-1" />
+                      View Timeline
+                    </>
+                  )}
+                </Button>
+
+                {/* Approval Timeline - Collapsible */}
+                {expandedTimelines.has(r.id) && (
+                  <div className="space-y-3 pt-2 border-t">
+                    <div className="px-2">
+                      <div className="flex items-center justify-between relative">
+                        <div className="absolute top-6 left-6 right-6 h-0.5 bg-gray-200"></div>
+                        {[
+                          { name: 'Submitted', status: 'completed', icon: Clock },
+                          { name: 'Faculty', status: getStepStatus(r, 'Faculty Review'), icon: User },
+                          { name: 'Lab Staff', status: getStepStatus(r, 'Lab Staff Review'), icon: Users },
+                          { name: 'HOD', status: getStepStatus(r, 'HOD Review'), icon: Building },
+                          { name: 'Final', status: getFinalApprovalStatus(r), icon: CheckCircle2 }
+                        ].map((step, index) => (
+                          <div key={index} className="flex flex-col items-center space-y-1 relative z-10">
+                            <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center ${
+                              step.status === 'completed' ? 'bg-green-100 border-green-300' : 
+                              step.status === 'pending' ? 'bg-blue-100 border-blue-300' : 
+                              step.status === 'rejected' ? 'bg-red-100 border-red-300' : 
+                              'bg-white border-gray-300'
+                            }`}>
+                              <step.icon className={`h-4 w-4 ${
+                                step.status === 'completed' ? 'text-green-600' : 
+                                step.status === 'pending' ? 'text-blue-600' : 
+                                step.status === 'rejected' ? 'text-red-600' : 
+                                'text-gray-400'
+                              }`} />
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs font-medium">{step.name}</p>
+                              <p className={`text-xs ${
+                                step.status === 'completed' ? 'text-green-600' : 
+                                step.status === 'pending' ? 'text-blue-600' : 
+                                step.status === 'rejected' ? 'text-red-600' : 
+                                'text-gray-500'
+                              }`}>
+                                {step.status === 'completed' ? 'Done' : 
+                                 step.status === 'pending' ? 'In Progress' : 
+                                 step.status === 'rejected' ? 'Rejected' : 'Waiting'}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Previous Remarks */}
+                      <div className="mt-3 space-y-2">
+                        {r.faculty_remarks && (
+                          <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
+                            <span className="font-medium">Faculty:</span> {r.faculty_remarks}
+                          </div>
+                        )}
+                        {r.lab_staff_remarks && (
+                          <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
+                            <span className="font-medium">Lab Staff:</span> {r.lab_staff_remarks}
+                          </div>
+                        )}
+                        {r.hod_remarks && (
+                          <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
+                            <span className="font-medium">HOD:</span> {r.hod_remarks}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="space-y-2">{r.items?.map((it, idx) => (
                     <div key={idx} className="p-2 border rounded text-sm flex items-center justify-between">
                       <div>
                         <div className="font-medium">{it.component_name} {it.model ? `(${it.model})` : ''}</div>
