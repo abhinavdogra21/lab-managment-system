@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       JOIN users f ON br.faculty_supervisor_id = f.id
       JOIN labs l ON br.lab_id = l.id
       JOIN departments d ON l.department_id = d.id
-      WHERE d.code = ?
+      WHERE d.name = ?
     `
 
     const params = [user.department]

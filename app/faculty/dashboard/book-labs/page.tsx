@@ -198,7 +198,17 @@ export default function FacultyBookLabsPage() {
 										</Button>
 									</PopoverTrigger>
 									<PopoverContent className="w-auto p-0">
-										<Calendar mode="single" selected={selectedDate} onSelect={setSelectedDate} disabled={(d) => d < new Date()} initialFocus />
+										<Calendar 
+											mode="single" 
+											selected={selectedDate} 
+											onSelect={setSelectedDate} 
+											disabled={(date) => {
+												const today = new Date()
+												today.setHours(0, 0, 0, 0)
+												return date < today
+											}} 
+											initialFocus 
+										/>
 									</PopoverContent>
 								</Popover>
 							</div>

@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
       FROM booking_requests br
       JOIN labs l ON br.lab_id = l.id
       JOIN departments d ON l.department_id = d.id
-      WHERE d.code = ? AND br.status = 'pending_hod'
+      WHERE d.name = ? AND br.status = 'pending_hod'
     `
     const pendingResult = await db.query(pendingQuery, [user.department])
     const pending = pendingResult.rows[0]?.count || 0
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       FROM booking_requests br
       JOIN labs l ON br.lab_id = l.id
       JOIN departments d ON l.department_id = d.id
-      WHERE d.code = ? AND br.status = 'approved' 
+      WHERE d.name = ? AND br.status = 'approved' 
       AND MONTH(br.created_at) = MONTH(CURRENT_DATE())
       AND YEAR(br.created_at) = YEAR(CURRENT_DATE())
     `
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       FROM booking_requests br
       JOIN labs l ON br.lab_id = l.id
       JOIN departments d ON l.department_id = d.id
-      WHERE d.code = ? AND br.status = 'rejected'
+      WHERE d.name = ? AND br.status = 'rejected'
       AND MONTH(br.created_at) = MONTH(CURRENT_DATE())
       AND YEAR(br.created_at) = YEAR(CURRENT_DATE())
     `
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
       SELECT COUNT(*) as count
       FROM labs l
       JOIN departments d ON l.department_id = d.id
-      WHERE d.code = ?
+      WHERE d.name = ?
     `
     const labsResult = await db.query(labsQuery, [user.department])
     const departmentLabs = labsResult.rows[0]?.count || 0
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
       FROM booking_requests br
       JOIN labs l ON br.lab_id = l.id
       JOIN departments d ON l.department_id = d.id
-      WHERE d.code = ?
+      WHERE d.name = ?
       AND MONTH(br.date) = MONTH(CURRENT_DATE())
       AND YEAR(br.date) = YEAR(CURRENT_DATE())
     `
