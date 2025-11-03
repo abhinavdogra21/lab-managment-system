@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
-import { Download, Package, Calendar, Users, Building, FileText, Filter, History, Eye } from 'lucide-react'
+import { Download, Package, Calendar, Users, Building, FileText, Filter, History, Eye, Search } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
@@ -76,6 +77,8 @@ export default function LabHeadLabsPage() {
   const [componentLogs, setComponentLogs] = useState<ComponentLog[]>([])
   const [activeTab, setActiveTab] = useState<'components' | 'logs' | 'component-logs'>('components')
   const [selectedLab, setSelectedLab] = useState<string>('all')
+  const [bookingLogsSearch, setBookingLogsSearch] = useState('')
+  const [componentLogsSearch, setComponentLogsSearch] = useState('')
   
   const uniqueLabs = labs.length > 0 
     ? labs.map(l => l.name).sort()
@@ -107,7 +110,10 @@ export default function LabHeadLabsPage() {
   const loadBookingLogs = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/lab-staff/labs/booking-logs', { cache: 'no-store' })
+      const url = bookingLogsSearch 
+        ? `/api/lab-staff/labs/booking-logs?search=${encodeURIComponent(bookingLogsSearch)}`
+        : '/api/lab-staff/labs/booking-logs'
+      const res = await fetch(url, { cache: 'no-store' })
       const data = await res.json()
       if (res.ok) {
         setBookingLogs(data.logs || [])
@@ -124,7 +130,10 @@ export default function LabHeadLabsPage() {
   const loadComponentLogs = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/lab-staff/labs/component-logs', { cache: 'no-store' })
+      const url = componentLogsSearch 
+        ? `/api/lab-staff/labs/component-logs?search=${encodeURIComponent(componentLogsSearch)}`
+        : '/api/lab-staff/labs/component-logs'
+      const res = await fetch(url, { cache: 'no-store' })
       const data = await res.json()
       if (res.ok) {
         setComponentLogs(data.logs || [])
@@ -649,6 +658,29 @@ export default function LabHeadLabsPage() {
         </TabsContent>
 
         <TabsContent value="logs" className="space-y-4">
+          {/* Search Input */}
+          <div className="flex items-center gap-2">
+            <Search className="h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by lab, requester, purpose, or email..."
+              value={bookingLogsSearch}
+              onChange={(e) => setBookingLogsSearch(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && loadBookingLogs()}
+              className="max-w-md"
+            />
+            <Button onClick={loadBookingLogs} size="sm">
+              Search
+            </Button>
+            {bookingLogsSearch && (
+              <Button onClick={() => { 
+                setBookingLogsSearch(''); 
+                setTimeout(loadBookingLogs, 100);
+              }} size="sm" variant="outline">
+                Clear
+              </Button>
+            )}
+          </div>
+
           {loading ? (
             <Card><CardContent className="p-6">Loading...</CardContent></Card>
           ) : filteredBookingLogs.length === 0 ? (
@@ -697,6 +729,29 @@ export default function LabHeadLabsPage() {
         </TabsContent>
 
         <TabsContent value="component-logs" className="space-y-4">
+          {/* Search Input */}
+          <div className="flex items-center gap-2">
+            <Search className="h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by lab, requester, component, purpose, or email..."
+              value={componentLogsSearch}
+              onChange={(e) => setComponentLogsSearch(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && loadComponentLogs()}
+              className="max-w-md"
+            />
+            <Button onClick={loadComponentLogs} size="sm">
+              Search
+            </Button>
+            {componentLogsSearch && (
+              <Button onClick={() => { 
+                setComponentLogsSearch(''); 
+                setTimeout(loadComponentLogs, 100);
+              }} size="sm" variant="outline">
+                Clear
+              </Button>
+            )}
+          </div>
+
           {loading ? (
             <Card><CardContent className="p-6">Loading...</CardContent></Card>
           ) : filteredComponentLogs.length === 0 ? (

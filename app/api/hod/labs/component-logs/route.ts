@@ -10,6 +10,8 @@ export async function GET(request: NextRequest) {
     }
 
     const db = Database.getInstance()
+    const { searchParams } = new URL(request.url)
+    const search = searchParams.get('search') || ''
 
     // Get HOD's departments
     let departmentIds: number[] = []
@@ -25,9 +27,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Build search condition
+    const searchCondition = search 
+      ? `AND (l.name LIKE ? OR u_req.name LIKE ? OR cr.purpose LIKE ? OR u_req.email LIKE ? OR c.name LIKE ?)`
+      : ''
+    const searchValue = `%${search}%`
+
     // Get issued and returned component requests with full details
     let logsRes
     if (user.role === 'admin') {
+      const params = search ? [searchValue, searchValue, searchValue, searchValue, searchValue] : []
       // Admin sees all component requests
       logsRes = await db.query(`
         SELECT 
@@ -66,11 +75,14 @@ export async function GET(request: NextRequest) {
         LEFT JOIN users u_hod ON d.hod_id = u_hod.id
         LEFT JOIN component_request_items cri ON cr.id = cri.request_id
         LEFT JOIN components c ON cri.component_id = c.id
-        WHERE cr.status = 'approved' AND cr.issued_at IS NOT NULL
+        WHERE cr.status = 'approved' AND cr.issued_at IS NOT NULL ${searchCondition}
         GROUP BY cr.id
-        ORDER BY cr.issued_at DESC
-      `)
+        ORDER BY cr.created_at DESC
+      `, params)
     } else {
+      const params = search 
+        ? [...departmentIds, searchValue, searchValue, searchValue, searchValue, searchValue]
+        : departmentIds
       // HOD sees component requests from their department's labs
       logsRes = await db.query(`
         SELECT 
@@ -110,10 +122,10 @@ export async function GET(request: NextRequest) {
         LEFT JOIN component_request_items cri ON cr.id = cri.request_id
         LEFT JOIN components c ON cri.component_id = c.id
         WHERE l.department_id IN (${departmentIds.map(() => '?').join(',')})
-          AND cr.status = 'approved' AND cr.issued_at IS NOT NULL
+          AND cr.status = 'approved' AND cr.issued_at IS NOT NULL ${searchCondition}
         GROUP BY cr.id
-        ORDER BY cr.issued_at DESC
-      `, departmentIds)
+        ORDER BY cr.created_at DESC
+      `, params)
     }
 
     return NextResponse.json({ logs: logsRes.rows || [] })

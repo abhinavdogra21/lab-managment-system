@@ -5,8 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { Clock, CheckCircle, XCircle, User, Users, Building, Eye, Calendar, ArrowRight } from "lucide-react"
+import { Clock, CheckCircle, XCircle, User, Users, Building, Eye, Calendar, ArrowRight, Filter } from "lucide-react"
 
 interface TimelineStep {
   step_name: string
@@ -35,6 +37,7 @@ export default function MyRequestsPage() {
   const [loading, setLoading] = useState(false)
   const [requests, setRequests] = useState<BookingWithTimeline[]>([])
   const [selectedRequest, setSelectedRequest] = useState<BookingWithTimeline | null>(null)
+  const [statusFilter, setStatusFilter] = useState<string>("all")
 
   useEffect(() => {
     loadMyRequests()
@@ -293,11 +296,41 @@ export default function MyRequestsPage() {
     return 'waiting'
   }
 
+  // Filter requests based on selected status
+  const filteredRequests = requests.filter(request => {
+    if (statusFilter === "all") return true
+    
+    if (statusFilter === "pending") {
+      return request.status.startsWith('pending_')
+    }
+    
+    return request.status === statusFilter
+  })
+
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold">My Lab Booking Requests</h1>
-        <p className="text-muted-foreground">Track the status of your lab booking requests</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold">My Lab Booking Requests</h1>
+          <p className="text-muted-foreground">Track the status of your lab booking requests</p>
+        </div>
+        
+        {/* Status Filter */}
+        <div className="w-[180px]">
+          <Label htmlFor="status-filter" className="sr-only">Filter by Status</Label>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger id="status-filter">
+              <Filter className="mr-2 h-4 w-4" />
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Requests</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {loading ? (
@@ -305,17 +338,21 @@ export default function MyRequestsPage() {
           <Clock className="h-8 w-8 mx-auto mb-4 animate-spin" />
           <p>Loading your requests...</p>
         </div>
-      ) : requests.length === 0 ? (
+      ) : filteredRequests.length === 0 ? (
         <Card>
           <CardContent className="text-center py-8">
             <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <p className="font-medium">No booking requests found</p>
-            <p className="text-sm text-muted-foreground">Create your first lab booking request to get started</p>
+            <p className="font-medium">
+              {requests.length === 0 ? "No booking requests found" : "No requests match the selected filter"}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {requests.length === 0 ? "Create your first lab booking request to get started" : "Try changing the filter to see other requests"}
+            </p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-4">
-          {requests.map((request) => (
+          {filteredRequests.map((request) => (
             <Card key={request.id}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">

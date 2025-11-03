@@ -11,9 +11,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
+    const { searchParams } = new URL(request.url)
+    const search = searchParams.get('search') || ''
+
+    // Build search condition - join with component_request_items for component name search
+    const searchCondition = search 
+      ? `AND (l.name LIKE ? OR u.name LIKE ? OR cr.purpose LIKE ? OR u.email LIKE ? OR c.name LIKE ?)`
+      : ''
+    const searchValue = `%${search}%`
+
     if (user.role === 'admin') {
+      const params = search ? [searchValue, searchValue, searchValue, searchValue, searchValue] : []
       const res = await db.query(`
-        SELECT cr.*, l.name AS lab_name, d.name AS department_name,
+        SELECT DISTINCT cr.*, l.name AS lab_name, d.name AS department_name,
           u.name AS requester_name, u.email AS requester_email, u.role AS requester_role,
           hodu.name AS hod_name
         FROM component_requests cr
@@ -21,9 +31,11 @@ export async function GET(request: NextRequest) {
         JOIN departments d ON l.department_id = d.id
         LEFT JOIN users u ON cr.requester_id = u.id
         LEFT JOIN users hodu ON d.hod_id = hodu.id
-        WHERE cr.status = 'approved' AND cr.issued_at IS NOT NULL
+        LEFT JOIN component_request_items cri ON cr.id = cri.request_id
+        LEFT JOIN components c ON cri.component_id = c.id
+        WHERE cr.status = 'approved' AND cr.issued_at IS NOT NULL ${searchCondition}
         ORDER BY cr.created_at DESC
-      `)
+      `, params)
       // attempt to aggregate items per request
       const rows = res.rows || []
       for (const r of rows) {
@@ -40,8 +52,9 @@ export async function GET(request: NextRequest) {
     const labIds = labRes.rows.map((r: any) => Number(r.id))
     if (labIds.length === 0) return NextResponse.json({ logs: [] })
 
+    const params = search ? [searchValue, searchValue, searchValue, searchValue, searchValue] : []
     const res = await db.query(`
-      SELECT cr.*, l.name AS lab_name, d.name AS department_name,
+      SELECT DISTINCT cr.*, l.name AS lab_name, d.name AS department_name,
         u.name AS requester_name, u.email AS requester_email, u.role AS requester_role,
         hodu.name AS hod_name
       FROM component_requests cr
@@ -49,9 +62,11 @@ export async function GET(request: NextRequest) {
       JOIN departments d ON l.department_id = d.id
       LEFT JOIN users u ON cr.requester_id = u.id
       LEFT JOIN users hodu ON d.hod_id = hodu.id
-      WHERE cr.status = 'approved' AND cr.issued_at IS NOT NULL AND l.id IN (${labIds.join(',')})
+      LEFT JOIN component_request_items cri ON cr.id = cri.request_id
+      LEFT JOIN components c ON cri.component_id = c.id
+      WHERE cr.status = 'approved' AND cr.issued_at IS NOT NULL AND l.id IN (${labIds.join(',')}) ${searchCondition}
       ORDER BY cr.created_at DESC
-    `)
+    `, params)
 
     const rows = res.rows || []
     for (const r of rows) {

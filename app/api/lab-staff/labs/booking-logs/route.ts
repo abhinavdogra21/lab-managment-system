@@ -11,7 +11,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
+    const { searchParams } = new URL(request.url)
+    const search = searchParams.get('search') || ''
+
+    // Build search condition
+    const searchCondition = search 
+      ? `AND (l.name LIKE ? OR requester.name LIKE ? OR br.purpose LIKE ? OR requester.email LIKE ?)`
+      : ''
+    const searchValue = `%${search}%`
+
     if (user.role === 'admin') {
+      const params = search ? [searchValue, searchValue, searchValue, searchValue] : []
       const res = await db.query(`
         SELECT br.*, l.name AS lab_name, d.name AS department_name,
           requester.name AS requester_name, requester.email AS requester_email, requester.role AS requester_role,
@@ -25,9 +35,9 @@ export async function GET(request: NextRequest) {
         LEFT JOIN users faculty ON br.faculty_approved_by = faculty.id
         LEFT JOIN users ls ON br.lab_staff_approved_by = ls.id
         LEFT JOIN users hodu ON d.hod_id = hodu.id
-        WHERE br.status = 'approved'
+        WHERE br.status = 'approved' ${searchCondition}
         ORDER BY br.created_at DESC
-      `)
+      `, params)
       return NextResponse.json({ logs: res.rows || [] })
     }
 
@@ -38,6 +48,9 @@ export async function GET(request: NextRequest) {
     if (labIds.length === 0) return NextResponse.json({ logs: [] })
 
     const placeholders = labIds.map(() => '?').join(',')
+    const params = search 
+      ? [...labIds, searchValue, searchValue, searchValue, searchValue]
+      : labIds
     const res = await db.query(
       `
         SELECT br.*, l.name AS lab_name, d.name AS department_name,
@@ -52,10 +65,10 @@ export async function GET(request: NextRequest) {
         LEFT JOIN users faculty ON br.faculty_approved_by = faculty.id
         LEFT JOIN users ls ON br.lab_staff_approved_by = ls.id
         LEFT JOIN users hodu ON d.hod_id = hodu.id
-        WHERE br.status = 'approved' AND l.id IN (${placeholders})
+        WHERE br.status = 'approved' AND l.id IN (${placeholders}) ${searchCondition}
         ORDER BY br.created_at DESC
       `,
-      labIds
+      params
     )
 
     return NextResponse.json({ logs: res.rows || [] })
