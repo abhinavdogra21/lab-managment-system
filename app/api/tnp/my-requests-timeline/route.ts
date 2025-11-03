@@ -44,6 +44,11 @@ export async function GET(request: NextRequest) {
     const bookingsWithTimeline = result.rows.map((booking: any) => {
       const timeline = []
       
+      // Determine who rejected (if rejected)
+      const isRejected = booking.status === 'rejected'
+      const rejectedByLabStaff = isRejected && booking.lab_staff_approved_at && !booking.hod_approved_at
+      const rejectedByHOD = isRejected && booking.hod_approved_at
+      
       // Lab staff approval step (TnP goes directly to lab staff, no faculty step)
       if (booking.status === 'pending_lab_staff') {
         timeline.push({
@@ -55,9 +60,10 @@ export async function GET(request: NextRequest) {
           user_name: null
         })
       } else if (booking.lab_staff_approved_at) {
+        // If rejected by lab staff, show as rejected, otherwise completed
         timeline.push({
           step_name: 'Lab Staff Approval',
-          step_status: 'completed',
+          step_status: rejectedByLabStaff ? 'rejected' : 'completed',
           completed_at: booking.lab_staff_approved_at,
           completed_by: booking.lab_staff_approved_by,
           remarks: booking.lab_staff_remarks,
@@ -76,25 +82,14 @@ export async function GET(request: NextRequest) {
           user_name: null
         })
       } else if (booking.hod_approved_at) {
+        // If rejected by HOD, show as rejected, otherwise completed
         timeline.push({
           step_name: 'HOD Approval',
-          step_status: 'completed',
+          step_status: rejectedByHOD ? 'rejected' : 'completed',
           completed_at: booking.hod_approved_at,
           completed_by: booking.hod_approved_by,
           remarks: booking.hod_remarks,
           user_name: booking.hod_approver_name
-        })
-      }
-      
-      // Rejection step
-      if (booking.status === 'rejected') {
-        timeline.push({
-          step_name: 'Rejected',
-          step_status: 'completed',
-          completed_at: booking.rejected_at,
-          completed_by: booking.rejected_by,
-          remarks: booking.rejection_reason,
-          user_name: null
         })
       }
 
@@ -107,6 +102,8 @@ export async function GET(request: NextRequest) {
         purpose: booking.purpose,
         status: booking.status,
         created_at: booking.created_at,
+        requested_by: booking.requested_by,
+        faculty_supervisor_id: booking.faculty_supervisor_id,
         timeline
       }
     })

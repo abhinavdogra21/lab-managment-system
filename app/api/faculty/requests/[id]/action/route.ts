@@ -98,8 +98,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     } else if (action === 'reject') {
       await db.query(
-        `UPDATE booking_requests SET status = 'rejected', rejection_reason = ?, rejected_by = ?, rejected_at = NOW(), faculty_remarks = ? WHERE id = ?`,
-        [remarks || 'Rejected by faculty', user.userId, remarks || null, id]
+        `UPDATE booking_requests SET status = 'rejected', rejection_reason = ?, rejected_by = ?, rejected_at = NOW(), 
+         faculty_remarks = ?, faculty_approved_by = ?, faculty_approved_at = NOW() WHERE id = ?`,
+        [remarks || 'Rejected by faculty', user.userId, remarks || null, user.userId, id]
       )
 
       // Send email notification to student

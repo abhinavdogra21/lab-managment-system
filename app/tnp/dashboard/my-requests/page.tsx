@@ -11,7 +11,7 @@ import { Clock, CheckCircle, XCircle, Users, Building, Eye, Calendar, Loader2 } 
 
 interface TimelineStep {
   step_name: string
-  step_status: 'pending' | 'completed' | 'skipped'
+  step_status: 'pending' | 'completed' | 'rejected' | 'skipped'
   completed_at: string | null
   completed_by: number | null
   remarks: string | null
@@ -148,7 +148,14 @@ export default function TNPMyRequestsPage() {
 
               const isCompleted = timelineStep?.step_status === 'completed'
               const isPending = timelineStep?.step_status === 'pending'
-              const isRejected = request.status === 'rejected' && step.key !== 'submitted'
+              const isRejected = timelineStep?.step_status === 'rejected'
+              
+              // If a step is rejected, all subsequent steps should be skipped (not shown as rejected)
+              const isAfterRejection = request.timeline.some((t, i) => {
+                const stepIndex = request.timeline.findIndex(ts => ts.step_name === timelineStep?.step_name)
+                const rejectedIndex = request.timeline.findIndex(ts => ts.step_status === 'rejected')
+                return rejectedIndex !== -1 && stepIndex > rejectedIndex
+              })
 
               return (
                 <div key={step.key} className="relative flex flex-col items-center" style={{ 
@@ -160,8 +167,8 @@ export default function TNPMyRequestsPage() {
                     relative z-10 flex items-center justify-center w-12 h-12 rounded-full border-2 bg-white
                     ${isCompleted ? 'border-green-500 text-green-500' : ''}
                     ${isPending ? 'border-orange-500 text-orange-500 animate-pulse' : ''}
-                    ${!isCompleted && !isPending ? 'border-gray-300 text-gray-300' : ''}
                     ${isRejected ? 'border-red-500 text-red-500' : ''}
+                    ${!isCompleted && !isPending && !isRejected ? 'border-gray-300 text-gray-300' : ''}
                   `}>
                     {isCompleted && <CheckCircle className="h-6 w-6" />}
                     {isPending && <Clock className="h-6 w-6" />}
@@ -171,8 +178,12 @@ export default function TNPMyRequestsPage() {
                   
                   {/* Step label */}
                   <div className="mt-2 text-center">
-                    <div className={`text-xs font-medium ${isCompleted || isPending ? 'text-foreground' : 'text-muted-foreground'}`}>
-                      {step.name}
+                    <div className={`text-xs font-medium ${
+                      isCompleted || isPending ? 'text-foreground' : 
+                      isRejected ? 'text-red-500' : 
+                      'text-muted-foreground'
+                    }`}>
+                      {isRejected ? `Rejected at ${step.name}` : step.name}
                     </div>
                     {timelineStep?.completed_at && (
                       <div className="text-xs text-muted-foreground mt-1">

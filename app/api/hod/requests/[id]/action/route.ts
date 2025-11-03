@@ -71,13 +71,28 @@ export async function POST(
 
     // Update the booking status
     const newStatus = action === 'approve' ? 'approved' : 'rejected'
-    const updateQuery = `
-      UPDATE booking_requests 
-      SET status = ?, hod_approved_at = NOW(), hod_approved_by = ?, hod_remarks = ?
-      WHERE id = ?
-    `
+    let updateQuery: string
+    let updateParams: any[]
     
-    await db.query(updateQuery, [newStatus, user.userId, remarks || null, requestId])
+    if (action === 'approve') {
+      updateQuery = `
+        UPDATE booking_requests 
+        SET status = ?, hod_approved_at = NOW(), hod_approved_by = ?, hod_remarks = ?
+        WHERE id = ?
+      `
+      updateParams = [newStatus, user.userId, remarks || null, requestId]
+    } else {
+      // For rejection, also set rejected_by and rejected_at
+      updateQuery = `
+        UPDATE booking_requests 
+        SET status = ?, hod_approved_at = NOW(), hod_approved_by = ?, hod_remarks = ?,
+            rejected_by = ?, rejected_at = NOW(), rejection_reason = ?
+        WHERE id = ?
+      `
+      updateParams = [newStatus, user.userId, remarks || null, user.userId, remarks || 'Rejected by HOD', requestId]
+    }
+    
+    await db.query(updateQuery, updateParams)
 
     // Send email notification to student
     try {

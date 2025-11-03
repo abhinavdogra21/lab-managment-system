@@ -51,6 +51,12 @@ export async function GET(request: NextRequest) {
     const bookingsWithTimeline = result.rows.map((booking: any) => {
       const timeline = []
       
+      // Determine who rejected (if rejected)
+      const isRejected = booking.status === 'rejected'
+      const rejectedByFaculty = isRejected && booking.faculty_approved_at && !booking.lab_staff_approved_at && !booking.hod_approved_at
+      const rejectedByLabStaff = isRejected && booking.lab_staff_approved_at && !booking.hod_approved_at
+      const rejectedByHOD = isRejected && booking.hod_approved_at
+      
       // Faculty approval step
       if (booking.status === 'pending_faculty') {
         timeline.push({
@@ -64,7 +70,7 @@ export async function GET(request: NextRequest) {
       } else if (booking.faculty_approved_at) {
         timeline.push({
           step_name: 'Faculty Approval',
-          step_status: 'completed',
+          step_status: rejectedByFaculty ? 'rejected' : 'completed',
           completed_at: booking.faculty_approved_at,
           completed_by: booking.faculty_approved_by,
           remarks: booking.faculty_remarks,
@@ -85,7 +91,7 @@ export async function GET(request: NextRequest) {
       } else if (booking.lab_staff_approved_at) {
         timeline.push({
           step_name: 'Lab Staff Approval',
-          step_status: 'completed',
+          step_status: rejectedByLabStaff ? 'rejected' : 'completed',
           completed_at: booking.lab_staff_approved_at,
           completed_by: booking.lab_staff_approved_by,
           remarks: booking.lab_staff_remarks,
@@ -106,23 +112,11 @@ export async function GET(request: NextRequest) {
       } else if (booking.hod_approved_at) {
         timeline.push({
           step_name: 'HOD Approval',
-          step_status: 'completed',
+          step_status: rejectedByHOD ? 'rejected' : 'completed',
           completed_at: booking.hod_approved_at,
           completed_by: booking.hod_approved_by,
           remarks: booking.hod_remarks,
           user_name: booking.hod_approver_name
-        })
-      }
-      
-      // Rejection step
-      if (booking.status === 'rejected') {
-        timeline.push({
-          step_name: 'Rejected',
-          step_status: 'completed',
-          completed_at: booking.rejected_at,
-          completed_by: booking.rejected_by,
-          remarks: booking.rejection_reason,
-          user_name: null
         })
       }
 

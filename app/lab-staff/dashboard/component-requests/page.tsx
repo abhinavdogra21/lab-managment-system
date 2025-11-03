@@ -17,6 +17,7 @@ interface RequestItem {
   requester_id: number
   requester_name: string
   initiator_role: 'student' | 'faculty'
+  purpose?: string | null
   status: string
   faculty_remarks?: string | null
   faculty_approved_at?: string | null
@@ -281,6 +282,7 @@ export default function LabStaffComponentRequestsPage() {
         r.requester_name?.toLowerCase().includes(query) ||
         r.lab_name?.toLowerCase().includes(query) ||
         r.mentor_faculty_name?.toLowerCase().includes(query) ||
+        r.purpose?.toLowerCase().includes(query) ||
         r.items?.some(item => 
           item.component_name?.toLowerCase().includes(query) ||
           item.model?.toLowerCase().includes(query) ||
@@ -317,7 +319,7 @@ export default function LabStaffComponentRequestsPage() {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search by requester, lab, mentor, component name, model, or category..."
+          placeholder="Search by requester, lab, mentor, purpose, component name, model, or category..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-10"
@@ -397,6 +399,12 @@ export default function LabStaffComponentRequestsPage() {
                 <div className="text-sm text-muted-foreground">Requester: <span className="font-medium text-foreground">{r.requester_name}</span></div>
                 {r.mentor_faculty_name && (
                   <div className="text-sm text-muted-foreground">Mentor: <span className="font-medium text-foreground">{r.mentor_faculty_name}</span></div>
+                )}
+                {r.purpose && (
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Purpose: </span>
+                    <span className="font-medium text-foreground">{r.purpose}</span>
+                  </div>
                 )}
                 
                 {/* View Timeline Button */}

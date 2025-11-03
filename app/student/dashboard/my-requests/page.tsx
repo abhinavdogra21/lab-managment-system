@@ -10,7 +10,7 @@ import { Clock, CheckCircle, XCircle, User, Users, Building, Eye, Calendar, Arro
 
 interface TimelineStep {
   step_name: string
-  step_status: 'pending' | 'completed' | 'skipped'
+  step_status: 'pending' | 'completed' | 'rejected' | 'skipped'
   completed_at: string | null
   completed_by: number | null
   remarks: string | null
@@ -234,27 +234,35 @@ export default function MyRequestsPage() {
 
   // Helper function to determine step status with proper flow logic
   const getStepStatus = (request: BookingWithTimeline, stepName: string) => {
-    // If request is rejected, all remaining steps are rejected
-    if (request.status === 'rejected') return 'rejected'
+    // Find the timeline step for this stage
+    const step = request.timeline.find(t => {
+      const stepTitle = getStepTitle(t.step_name)
+      return stepTitle === stepName
+    })
     
-    // Status-based checking first (prioritized over timeline data)
+    // If this specific step was rejected, return rejected
+    if (step?.step_status === 'rejected') return 'rejected'
+    
+    // Status-based checking (prioritized over timeline data)
     if (stepName === 'Faculty Review') {
       if (request.status === 'pending_faculty') return 'pending'
       if (['pending_lab_staff', 'pending_hod', 'approved'].includes(request.status)) return 'completed'
+      if (request.status === 'rejected' && !step) return 'waiting' // Rejected before this step
     }
     if (stepName === 'Lab Staff Review') {
       if (request.status === 'pending_lab_staff') return 'pending'
       if (['pending_hod', 'approved'].includes(request.status)) return 'completed'
       if (request.status === 'pending_faculty') return 'waiting'
+      if (request.status === 'rejected' && !step) return 'waiting' // Rejected before this step
     }
     if (stepName === 'HOD Review') {
       if (request.status === 'pending_hod') return 'pending'
       if (request.status === 'approved') return 'completed'
       if (['pending_faculty', 'pending_lab_staff'].includes(request.status)) return 'waiting'
+      if (request.status === 'rejected' && !step) return 'waiting' // Rejected before this step
     }
     
-    // Fallback to timeline data if status-based check doesn't match
-    const step = request.timeline.find(t => getStepTitle(t.step_name) === stepName)
+    // Check if step was completed in timeline
     if (step?.step_status === 'completed') return 'completed'
     
     return 'waiting'
