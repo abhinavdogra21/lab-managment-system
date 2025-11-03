@@ -76,11 +76,10 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
       case "lab-staff":
         return [
           ...baseItems,
+          { name: "My Labs", href: withPrefix("/dashboard/labs"), icon: Building },
           { name: "Approve Requests", href: withPrefix("/dashboard/approve"), icon: UserCheck },
           { name: "Component Requests", href: withPrefix("/dashboard/component-requests"), icon: FileText },
           { name: "Inventory", href: withPrefix("/dashboard/inventory"), icon: Package },
-          { name: "Attendance", href: withPrefix("/dashboard/attendance"), icon: CheckSquare },
-          { name: "Reports", href: withPrefix("/dashboard/reports"), icon: BarChart3 },
         ]
 
       case "hod":
