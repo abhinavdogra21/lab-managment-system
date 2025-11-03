@@ -72,10 +72,11 @@ export default function FacultyBookingsPage() {
   const TimelineView = ({ request }: { request: BookingWithTimeline }) => {
     // Faculty-initiated bookings skip the Faculty Approval step entirely
     const hasFacultyStep = request.status === 'pending_faculty' || request.timeline.some(t => t.step_name.includes('Faculty Approval'))
+    // Use "Recommendation" for Faculty and Lab Staff, "Approval" only for HOD
     const steps = [
-      ...(hasFacultyStep ? [{ key: 'Faculty Approval', icon: User }] : []),
-      { key: 'Lab Staff Approval', icon: Users },
-      { key: 'HOD Approval', icon: Building },
+      ...(hasFacultyStep ? [{ key: 'Faculty Recommendation', apiKey: 'Faculty Approval', icon: User }] : []),
+      { key: 'Lab Staff Recommendation', apiKey: 'Lab Staff Approval', icon: Users },
+      { key: 'HOD Approval', apiKey: 'HOD Approval', icon: Building },
     ]
     const findStep = (key: string) => request.timeline.find(t => t.step_name.includes(key))
     const iconForStatus = (s?: string) => s === 'completed' ? 'completed' : s === 'pending' ? 'pending' : s === 'rejected' ? 'rejected' : 'waiting'
@@ -92,7 +93,7 @@ export default function FacultyBookingsPage() {
           <div className="flex items-center justify-between relative">
             <div className="absolute top-6 left-6 right-6 h-0.5 bg-gray-200"></div>
             {steps.map((s, idx) => {
-              const st = findStep(s.key)
+              const st = findStep(s.apiKey)
               const state = iconForStatus(st?.step_status)
               const Icon = s.icon
               return (

@@ -344,12 +344,12 @@ export default function FacultyMyComponentRequestsPage() {
                               {/* Lab Staff */}
                               <div className="flex flex-col items-center space-y-1 relative z-10">
                                 <StepCircle state={getStepState(req,'labstaff')}><Users className="h-5 w-5"/></StepCircle>
-                                <div className="text-xs text-center"><div className="font-medium">Lab Staff Review</div><div className="text-gray-500">{req.status !== 'pending_lab_staff' && (req.status === 'approved' || req.issued_at) ? 'Approved' : ''}</div></div>
+                                <div className="text-xs text-center"><div className="font-medium">Lab Staff Recommendation</div><div className="text-gray-500">{req.status !== 'pending_lab_staff' && (req.status === 'approved' || req.issued_at) ? 'Done' : ''}</div></div>
                               </div>
                               {/* HOD */}
                               <div className="flex flex-col items-center space-y-1 relative z-10">
                                 <StepCircle state={getStepState(req,'hod')}><Building className="h-5 w-5"/></StepCircle>
-                                <div className="text-xs text-center"><div className="font-medium">HOD Review</div><div className="text-gray-500">{(req.status === 'approved' || req.issued_at) ? 'Approved' : ''}</div></div>
+                                <div className="text-xs text-center"><div className="font-medium">HOD Approval</div><div className="text-gray-500">{(req.status === 'approved' || req.issued_at) ? 'Approved' : ''}</div></div>
                               </div>
                               {/* Final */}
                               <div className="flex flex-col items-center space-y-1 relative z-10">
@@ -369,8 +369,8 @@ export default function FacultyMyComponentRequestsPage() {
                           {(req.lab_staff_remarks || req.hod_remarks) && (
                             <div className="space-y-2">
                               <h4 className="text-sm font-medium">Remarks</h4>
-                              {req.lab_staff_remarks && <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300"><span className="font-medium">Lab Staff:</span> {req.lab_staff_remarks}</div>}
-                              {req.hod_remarks && <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300"><span className="font-medium">HOD:</span> {req.hod_remarks}</div>}
+                              {req.lab_staff_remarks && <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300"><span className="font-medium">Lab Staff Recommendation:</span> {req.lab_staff_remarks}</div>}
+                              {req.hod_remarks && <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300"><span className="font-medium">HOD Approval:</span> {req.hod_remarks}</div>}
                             </div>
                           )}
                         </div>

@@ -75,6 +75,8 @@ export default function TNPMyRequestsPage() {
         return <Users className="h-4 w-4" />
       case 'HOD Approval':
         return <Building className="h-4 w-4" />
+      case 'Faculty Approval':
+        return <Users className="h-4 w-4" />
       case 'Rejected':
         return <XCircle className="h-4 w-4" />
       default:
@@ -82,20 +84,33 @@ export default function TNPMyRequestsPage() {
     }
   }
 
+  // Helper to convert approval names to recommendation for TnP bookings
+  const getStepDisplayName = (stepName: string) => {
+    // For TnP bookings, use "Recommendation" instead of "Approval" for Faculty and Lab Staff
+    if (stepName === 'Faculty Approval') {
+      return 'Faculty Recommendation'
+    }
+    if (stepName === 'Lab Staff Approval') {
+      return 'Lab Staff Recommendation'
+    }
+    return stepName
+  }
+
   const TimelineView = ({ request }: { request: BookingWithTimeline }) => {
     // Only student bookings have 5 steps (where requested_by != faculty_supervisor_id)
     // Faculty and TnP bookings have 4 steps (they book for themselves)
     const isStudentBooking = request.faculty_supervisor_id && request.requested_by !== request.faculty_supervisor_id
     
+    // For TnP bookings, show "Recommended" instead of "Approval" for Faculty and Lab Staff
     const allSteps = isStudentBooking ? [
       { name: 'Submitted', key: 'submitted', icon: CheckCircle, color: 'green' },
-      { name: 'Faculty Approval', key: 'faculty', icon: Users, color: 'blue' },
-      { name: 'Lab Staff Approval', key: 'lab_staff', icon: Users, color: 'blue' },
+      { name: 'Faculty Recommendation', key: 'faculty', icon: Users, color: 'blue' },
+      { name: 'Lab Staff Recommendation', key: 'lab_staff', icon: Users, color: 'blue' },
       { name: 'HOD Approval', key: 'hod', icon: Building, color: 'purple' },
       { name: 'Approved', key: 'approved', icon: CheckCircle, color: 'green' }
     ] : [
       { name: 'Submitted', key: 'submitted', icon: CheckCircle, color: 'green' },
-      { name: 'Lab Staff Approval', key: 'lab_staff', icon: Users, color: 'blue' },
+      { name: 'Lab Staff Recommendation', key: 'lab_staff', icon: Users, color: 'blue' },
       { name: 'HOD Approval', key: 'hod', icon: Building, color: 'purple' },
       { name: 'Approved', key: 'approved', icon: CheckCircle, color: 'green' }
     ]
@@ -211,7 +226,7 @@ export default function TNPMyRequestsPage() {
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-sm">{step.step_name}</span>
+                        <span className="font-medium text-sm">{getStepDisplayName(step.step_name)}</span>
                         {step.user_name && (
                           <span className="text-xs text-muted-foreground">by {step.user_name}</span>
                         )}

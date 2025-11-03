@@ -92,18 +92,24 @@ export default function MyRequestsPage() {
     switch (stepName) {
       case 'submitted':
         return 'Request Submitted'
+      case 'Faculty Approval':
+        return 'Faculty Recommendation'
       case 'faculty_review':
-        return 'Faculty Review'
+        return 'Faculty Recommendation'
       case 'faculty_approved':
-        return 'Faculty Approved'
+        return 'Faculty Recommendation'
+      case 'Lab Staff Approval':
+        return 'Lab Staff Recommendation'
       case 'staff_review':
-        return 'Lab Staff Review'
+        return 'Lab Staff Recommendation'
       case 'staff_approved':
-        return 'Lab Staff Approved'
+        return 'Lab Staff Recommendation'
+      case 'HOD Approval':
+        return 'HOD Approval'
       case 'hod_review':
-        return 'HOD Review'
+        return 'HOD Approval'
       case 'hod_approved':
-        return 'HOD Approved'
+        return 'HOD Approval'
       case 'rejected':
         return 'Request Rejected'
       default:
@@ -130,11 +136,12 @@ export default function MyRequestsPage() {
 
   const TimelineView = ({ request }: { request: BookingWithTimeline }) => {
     // Create standard timeline steps for visual consistency
+    // Use "Recommendation" for Faculty and Lab Staff, "Approval" only for HOD
     const allSteps = [
       { name: 'Submitted', status: 'completed', icon: Clock },
-      { name: 'Faculty Review', status: getStepStatus(request, 'Faculty Review'), icon: User },
-      { name: 'Lab Staff Review', status: getStepStatus(request, 'Lab Staff Review'), icon: Users },
-      { name: 'HOD Review', status: getStepStatus(request, 'HOD Review'), icon: Building },
+      { name: 'Faculty Recommendation', status: getStepStatus(request, 'Faculty Recommendation'), icon: User },
+      { name: 'Lab Staff Recommendation', status: getStepStatus(request, 'Lab Staff Recommendation'), icon: Users },
+      { name: 'HOD Approval', status: getStepStatus(request, 'HOD Approval'), icon: Building },
       { name: 'Approved', status: getFinalApprovalStatus(request), icon: CheckCircle }
     ]
 
@@ -244,18 +251,18 @@ export default function MyRequestsPage() {
     if (step?.step_status === 'rejected') return 'rejected'
     
     // Status-based checking (prioritized over timeline data)
-    if (stepName === 'Faculty Review') {
+    if (stepName === 'Faculty Recommendation') {
       if (request.status === 'pending_faculty') return 'pending'
       if (['pending_lab_staff', 'pending_hod', 'approved'].includes(request.status)) return 'completed'
       if (request.status === 'rejected' && !step) return 'waiting' // Rejected before this step
     }
-    if (stepName === 'Lab Staff Review') {
+    if (stepName === 'Lab Staff Recommendation') {
       if (request.status === 'pending_lab_staff') return 'pending'
       if (['pending_hod', 'approved'].includes(request.status)) return 'completed'
       if (request.status === 'pending_faculty') return 'waiting'
       if (request.status === 'rejected' && !step) return 'waiting' // Rejected before this step
     }
-    if (stepName === 'HOD Review') {
+    if (stepName === 'HOD Approval') {
       if (request.status === 'pending_hod') return 'pending'
       if (request.status === 'approved') return 'completed'
       if (['pending_faculty', 'pending_lab_staff'].includes(request.status)) return 'waiting'
