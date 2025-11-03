@@ -97,8 +97,6 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
           { name: "Department and Lab Management", href: "/admin/dashboard/department-and-lab-management", icon: Building },
           { name: "Timetable", href: "/admin/dashboard/timetable", icon: Calendar },
           { name: "System Logs", href: withPrefix("/dashboard/logs"), icon: FileText },
-          { name: "Reports", href: withPrefix("/dashboard/reports"), icon: BarChart3 },
-          { name: "Analytics", href: withPrefix("/dashboard/analytics"), icon: BarChart3 },
         ]
 
       case "tnp":
