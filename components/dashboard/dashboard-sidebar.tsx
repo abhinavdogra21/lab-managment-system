@@ -78,8 +78,8 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
           ...baseItems,
           { name: "My Labs", href: withPrefix("/dashboard/labs"), icon: Building },
           { name: "Approve Requests", href: withPrefix("/dashboard/approve"), icon: UserCheck },
-          { name: "Component Requests", href: withPrefix("/dashboard/component-requests"), icon: FileText },
-          { name: "Inventory", href: withPrefix("/dashboard/inventory"), icon: Package },
+          { name: "Component Requests", href: withPrefix("/dashboard/component-requests"), icon: Package },
+          { name: "Analytics", href: withPrefix("/dashboard/analytics"), icon: BarChart3 },
         ]
 
       case "hod":
@@ -87,7 +87,6 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
           ...baseItems,
           { name: "Department Labs", href: withPrefix("/dashboard/labs"), icon: Building },
           { name: "Approvals", href: withPrefix("/dashboard/approvals"), icon: UserCheck },
-          { name: "Reports", href: withPrefix("/dashboard/reports"), icon: BarChart3 },
           { name: "Analytics", href: withPrefix("/dashboard/analytics"), icon: BarChart3 },
         ]
 

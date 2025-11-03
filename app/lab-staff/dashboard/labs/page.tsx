@@ -544,8 +544,8 @@ export default function LabHeadLabsPage() {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">My Labs (Head)</h1>
-          <p className="text-muted-foreground mt-1">Manage lab inventory and view logs for labs you head</p>
+          <h1 className="text-3xl font-bold">My Labs</h1>
+          <p className="text-muted-foreground mt-1">Manage lab inventory and view logs</p>
         </div>
         <div className="flex gap-2 items-center">
           <Select value={selectedLab} onValueChange={setSelectedLab}>

@@ -41,7 +41,7 @@ interface Lab {
   department_name: string
 }
 
-export default function HODAnalyticsPage() {
+export default function LabStaffAnalyticsPage() {
   const [labStats, setLabStats] = useState<LabStat[]>([])
   const [componentStats, setComponentStats] = useState<ComponentStat[]>([])
   const [allLabs, setAllLabs] = useState<Lab[]>([])
@@ -57,7 +57,7 @@ export default function HODAnalyticsPage() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const res = await fetch('/api/hod/analytics/component-utilization')
+      const res = await fetch('/api/lab-staff/analytics/component-utilization')
       const data = await res.json()
       setLabStats(data.labStats || [])
       setComponentStats(data.componentStats || [])
@@ -115,7 +115,7 @@ export default function HODAnalyticsPage() {
       <div>
         <h1 className="text-3xl font-bold">Component Utilization Analytics</h1>
         <p className="text-muted-foreground mt-2">
-          Track component usage across your department labs
+          Track component usage across your assigned lab(s)
         </p>
       </div>
 
@@ -271,7 +271,7 @@ export default function HODAnalyticsPage() {
             Overall Component Utilization
           </CardTitle>
           <CardDescription>
-            Most used components across all labs in your department
+            Most used components across all your assigned lab(s)
           </CardDescription>
         </CardHeader>
         <CardContent>
