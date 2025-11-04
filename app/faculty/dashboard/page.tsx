@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { Clock, CheckCircle, XCircle, User, Calendar, Eye, Plus, Package } from "lucide-react"
+import { Clock, CheckCircle, XCircle, User, Calendar, Eye, Plus, Package, History as HistoryIcon } from "lucide-react"
 import Link from "next/link"
 
 interface PendingRequest {
@@ -254,9 +254,9 @@ export default function FacultyDashboardPage() {
               </Link>
             </Button>
             <Button asChild variant="outline" className="w-full justify-start">
-              <Link href="/faculty/dashboard/reports">
-                <Eye className="h-4 w-4 mr-2" />
-                Generate Reports
+              <Link href="/faculty/dashboard/logs">
+                <HistoryIcon className="h-4 w-4 mr-2" />
+                View Logs
               </Link>
             </Button>
           </CardContent>
