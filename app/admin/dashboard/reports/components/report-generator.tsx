@@ -199,7 +199,7 @@ export function ReportGenerator({ user }: ReportGeneratorProps) {
           },
         ]
 
-      case "tnp":
+      case "others":
         return [
           ...baseReports,
           {

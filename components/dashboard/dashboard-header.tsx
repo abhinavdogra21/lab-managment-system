@@ -38,9 +38,9 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
       student: "Student",
       faculty: "Faculty",
       "lab-staff": "Lab Staff",
-      hod: "Head of Department",
+      hod: "Head of Department (HoD)",
       admin: "Administrator",
-      tnp: "Training & Placement",
+      others: "Others",
     }
     return roleMap[role] || role
   }
@@ -53,7 +53,7 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
       "lab_staff": "/lab-staff/dashboard/settings",
       hod: "/hod/dashboard/settings",
       admin: "/admin/dashboard/settings",
-      tnp: "/tnp/dashboard/settings",
+      others: "/others/dashboard/settings",
       "non-teaching": "/non-teaching/dashboard/settings",
       "non_teaching": "/non-teaching/dashboard/settings",
     }
@@ -94,17 +94,16 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-              <Avatar className="h-10 w-10">
-                <AvatarImage src={`https://avatar.vercel.sh/${user.email}`} alt={user.name} />
-                <AvatarFallback className="bg-primary text-primary-foreground">
-                  {user.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
+            <Button variant="ghost" className="flex items-center gap-2 h-auto py-2 px-3">
+              <div className="hidden md:flex flex-col items-end">
+                <p className="text-sm font-medium leading-none">{user.name}</p>
+                <p className="text-xs leading-none text-muted-foreground mt-0.5">
+                  {getRoleDisplayName(user.role)}
+                </p>
+              </div>
+              <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center">
+                <Settings className="h-5 w-5 text-muted-foreground" />
+              </div>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-56" align="end" forceMount>

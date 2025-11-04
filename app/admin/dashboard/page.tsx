@@ -1,10 +1,8 @@
 "use client"
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
-import { Activity, Database, HardDrive, Users, FlaskConical, Calendar, Clock } from "lucide-react"
+import { Database, HardDrive, Users, FlaskConical, Calendar, Clock } from "lucide-react"
 import Link from "next/link"
 
 type StatResponse = {
@@ -13,7 +11,6 @@ type StatResponse = {
   dbUptimeSeconds: number
   dbSizeMB: number
   pendingApprovals: number
-  recentLogs: Array<{ id: number; created_at: string; action: string; user_email?: string; entity_type?: string; details?: any }>
 }
 
 export default function AdminDashboardPage() {
@@ -66,7 +63,7 @@ export default function AdminDashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-montserrat text-2xl font-bold text-foreground">Admin Overview</h1>
-        <p className="text-muted-foreground">Key metrics and your system7s recent activity</p>
+        <p className="text-muted-foreground">Your system's recent activity</p>
       </div>
 
       {loading && skeleton}
@@ -175,43 +172,6 @@ export default function AdminDashboardPage() {
               </div>
             </CardContent>
           </Card>
-
-          {/* Recent System Activity */}
-          <div className="grid gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-primary" /> Recent Activity
-                </CardTitle>
-                <CardDescription>Latest system logs</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {data.recentLogs?.length ? (
-                  data.recentLogs.map((log) => (
-                    <div key={log.id} className="text-sm">
-                      <div className="flex items-center justify-between">
-                        <div className="font-medium">{log.action}</div>
-                        <Badge variant="outline" className="ml-2">
-                          {new Date(log.created_at).toLocaleString()}
-                        </Badge>
-                      </div>
-                      <div className="text-muted-foreground">
-                        {log.user_email || "system"} • {log.entity_type || "-"}
-                      </div>
-                      {log.details && (
-                        <div className="text-muted-foreground/80 truncate">
-                          {typeof log.details === "string" ? log.details : JSON.stringify(log.details)}
-                        </div>
-                      )}
-                      <Separator className="my-2" />
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-sm text-muted-foreground">No recent logs</div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
         </>
       )}
     </div>

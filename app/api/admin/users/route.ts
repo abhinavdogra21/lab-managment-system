@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { dbOperations } from "@/lib/database"
 import { verifyToken, hasRole } from "@/lib/auth"
+import { sendWelcomeEmail } from "@/lib/email"
+import crypto from "crypto"
 
 export async function GET(req: NextRequest) {
 	const user = await verifyToken(req)
@@ -57,6 +59,30 @@ export async function POST(req: NextRequest) {
 			employeeId: body.employeeId || null,
 			salutation: body.salutation || 'none',
 		})
+		
+		// Generate password reset token and send welcome email
+		try {
+			const token = crypto.randomBytes(32).toString("hex")
+			const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+			await dbOperations.upsertPasswordReset(created.id, token, expiresAt)
+			
+			const hostHeader = (req.headers as any).get?.("x-forwarded-host") || (req.headers as any).get?.("host") || undefined
+			const proto = (req.headers as any).get?.("x-forwarded-proto") || "http"
+			const baseUrl = hostHeader ? `${proto}://${hostHeader}` : undefined
+			
+			await sendWelcomeEmail(
+				created.email,
+				created.name,
+				created.salutation || 'none',
+				created.role,
+				token,
+				baseUrl
+			)
+		} catch (emailError) {
+			console.error("Failed to send welcome email:", emailError)
+			// Don't fail user creation if email fails
+		}
+		
 		return NextResponse.json({ user: created }, { status: 201 })
 	} catch (e: any) {
 		if (e?.code === "ER_DUP_ENTRY") {

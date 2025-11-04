@@ -8,7 +8,7 @@ const roleMap: Array<{ pattern: RegExp; roles: string[] }> = [
   { pattern: /^\/faculty(?:\/|$)/, roles: ["faculty", "admin"] },
   { pattern: /^\/lab-staff(?:\/|$)/, roles: ["lab_staff", "admin"] },
   { pattern: /^\/student(?:\/|$)/, roles: ["student", "admin"] },
-  { pattern: /^\/tnp(?:\/|$)/, roles: ["tnp", "admin"] },
+  { pattern: /^\/others(?:\/|$)/, roles: ["others", "admin"] },
   { pattern: /^\/non-teaching(?:\/|$)/, roles: ["non_teaching", "admin"] },
   // APIs (canonical)
   { pattern: /^\/api\/admin(?:\/|$)/, roles: ["admin"] },

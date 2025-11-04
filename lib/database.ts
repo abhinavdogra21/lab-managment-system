@@ -1484,18 +1484,28 @@ export const dbOperations = {
   async setDepartmentHod(departmentId: number, hodId: number | null) {
     return db.transaction(async (client) => {
       // Ensure department exists
-      const d = await client.query(`SELECT id, code FROM departments WHERE id = ?`, [departmentId])
+      const d = await client.query(`SELECT id, code, hod_email FROM departments WHERE id = ?`, [departmentId])
       const dep = d.rows[0]
       if (!dep) throw new Error("Department not found")
+      
       if (hodId != null) {
-        const u = await client.query(`SELECT id, role FROM users WHERE id = ? AND is_active = 1`, [hodId])
+        const u = await client.query(`SELECT id, role, name, salutation FROM users WHERE id = ? AND is_active = 1`, [hodId])
         const ur = u.rows[0]
         if (!ur) throw new Error("User not found")
         if (String(ur.role) !== 'faculty') throw new Error("User must be a faculty member to be assigned as HOD")
-  // Ensure this user is not already HOD of another department
-  const existing = await client.query(`SELECT id FROM departments WHERE hod_id = ? AND id <> ?`, [hodId, departmentId])
-  if (existing.rows[0]) throw new Error('This user is already assigned as HOD of another department')
+        // Ensure this user is not already HOD of another department
+        const existing = await client.query(`SELECT id FROM departments WHERE hod_id = ? AND id <> ?`, [hodId, departmentId])
+        if (existing.rows[0]) throw new Error('This user is already assigned as HOD of another department')
+        
+        // Update the HOD user account name and salutation to match the assigned faculty member
+        if (dep.hod_email) {
+          await client.query(
+            `UPDATE users SET name = ?, salutation = ? WHERE email = ? AND role = 'hod'`,
+            [ur.name, ur.salutation, dep.hod_email]
+          )
+        }
       }
+      
       await client.query(`UPDATE departments SET hod_id = ? WHERE id = ?`, [hodId, departmentId])
       const sel = await client.query(
         `SELECT d.id, d.name, d.code, d.hod_id, u.name AS hod_name, d.hod_email

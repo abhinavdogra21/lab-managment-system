@@ -15,7 +15,7 @@ import { Eye, EyeOff, Mail, Lock, User } from "lucide-react"
  * LoginForm Component
  *
  * Provides authentication interface for LNMIIT Lab Management System
- * Supports multiple user roles: Student, Faculty, Lab Staff, HOD, Admin, T&P
+ * Supports multiple user roles: Student, Faculty, Lab Staff, HoD, Admin, Others
  *
  * Features:
  * - Role-based login selection
@@ -44,12 +44,12 @@ export function LoginForm() {
 
   // User roles available in the system
   const userRoles = [
-    { value: "student", label: "Student" },
-    { value: "faculty", label: "Faculty" },
-    { value: "lab-staff", label: "Lab Staff" },
-    { value: "hod", label: "Head of Department (HOD)" },
     { value: "admin", label: "Administrator" },
-    { value: "tnp", label: "Training & Placement Cell" },
+    { value: "lab-staff", label: "Lab Staff" },
+    { value: "faculty", label: "Faculty" },
+    { value: "hod", label: "Head of Department (HoD)" },
+    { value: "student", label: "Student" },
+    { value: "others", label: "Others" },
   ]
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -241,7 +241,7 @@ export function LoginForm() {
 
         {/* Footer */}
         <div className="text-center text-xs text-muted-foreground">
-          <p>© 2024 The LNM Institute of Information Technology</p>
+          <p>© 2025 The LNM Institute of Information Technology</p>
           <p className="mt-1">Lab Management System v1.0</p>
         </div>
       </div>

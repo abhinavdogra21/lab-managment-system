@@ -53,18 +53,19 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid credentials or role" }, { status: 401 })
       }
 
-      // For HOD users, get the actual name of the person assigned as HOD for this department
+      // For HOD users, get the actual name and salutation of the person assigned as HOD for this department
       let displayName = dbUser.name
       if (dbUser.role === 'hod') {
         try {
           const db = Database.getInstance()
           const result = await db.query(
-            "SELECT u.name FROM departments d JOIN users u ON d.hod_id = u.id WHERE d.code = ?",
+            "SELECT u.name, u.salutation FROM departments d JOIN users u ON d.hod_id = u.id WHERE d.code = ?",
             [dbUser.department]
           )
           console.log("HOD name lookup result:", result.rows)
           if (result.rows.length > 0 && result.rows[0].name) {
-            displayName = result.rows[0].name
+            const salutation = result.rows[0].salutation ? result.rows[0].salutation.toUpperCase() + '. ' : ''
+            displayName = salutation + result.rows[0].name
             console.log("Updated display name to:", displayName)
           }
         } catch (error) {

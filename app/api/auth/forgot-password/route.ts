@@ -56,7 +56,7 @@ export async function POST(req: Request) {
     const hostHeader = (req.headers as any).get?.("x-forwarded-host") || (req.headers as any).get?.("host") || undefined
     const proto = (req.headers as any).get?.("x-forwarded-proto") || "http"
     const baseUrl = hostHeader ? `${proto}://${hostHeader}` : undefined
-    await sendPasswordResetEmail(user.email, token, baseUrl)
+    await sendPasswordResetEmail(user.email, token, baseUrl, user.name, user.salutation)
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error("forgot-password error", e)

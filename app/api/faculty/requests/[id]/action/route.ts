@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
 import { verifyToken } from "@/lib/auth"
 import { sendEmail, emailTemplates } from "@/lib/notifications"
+import { logLabBookingActivity, getUserInfoForLogging } from "@/lib/activity-logger"
 
 const db = Database.getInstance()
 
@@ -29,6 +30,25 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         `UPDATE booking_requests SET status = 'pending_lab_staff', faculty_remarks = ?, faculty_approved_by = ?, faculty_approved_at = NOW() WHERE id = ?`,
         [remarks || null, user.userId, id]
       )
+
+      // Log the activity
+      const userInfo = await getUserInfoForLogging(user.userId)
+      const updatedBooking = await db.query('SELECT * FROM booking_requests WHERE id = ?', [id])
+      if (updatedBooking.rows.length > 0) {
+        logLabBookingActivity({
+          bookingId: id,
+          labId: req.lab_id,
+          actorUserId: userInfo?.userId || null,
+          actorName: userInfo?.name || null,
+          actorEmail: userInfo?.email || null,
+          actorRole: userInfo?.role || null,
+          action: 'approved_by_faculty',
+          actionDescription: `Approved booking request${remarks ? ': ' + remarks : ''}`,
+          bookingSnapshot: updatedBooking.rows[0],
+          ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || null,
+          userAgent: request.headers.get("user-agent") || null,
+        }).catch(err => console.error("Activity logging failed:", err))
+      }
 
       // Send email notification to student and lab staff
       try {
@@ -102,6 +122,25 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
          faculty_remarks = ?, faculty_approved_by = ?, faculty_approved_at = NOW() WHERE id = ?`,
         [remarks || 'Rejected by faculty', user.userId, remarks || null, user.userId, id]
       )
+
+      // Log the activity
+      const userInfo = await getUserInfoForLogging(user.userId)
+      const updatedBooking = await db.query('SELECT * FROM booking_requests WHERE id = ?', [id])
+      if (updatedBooking.rows.length > 0) {
+        logLabBookingActivity({
+          bookingId: id,
+          labId: req.lab_id,
+          actorUserId: userInfo?.userId || null,
+          actorName: userInfo?.name || null,
+          actorEmail: userInfo?.email || null,
+          actorRole: userInfo?.role || null,
+          action: 'rejected_by_faculty',
+          actionDescription: `Rejected booking request: ${remarks || 'No reason provided'}`,
+          bookingSnapshot: updatedBooking.rows[0],
+          ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || null,
+          userAgent: request.headers.get("user-agent") || null,
+        }).catch(err => console.error("Activity logging failed:", err))
+      }
 
       // Send email notification to student
       try {

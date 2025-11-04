@@ -31,12 +31,14 @@ export default function DashboardPage() {
 
         // Redirect to role-specific dashboard
         const roleMapping: Record<string, string> = {
-          "admin": "/admin/dashboard",
+                    "admin": "/admin/dashboard",
           "hod": "/hod/dashboard", 
           "faculty": "/faculty/dashboard",
+          "lab_staff": "/lab-staff/dashboard",
           "lab-staff": "/lab-staff/dashboard",
           "student": "/student/dashboard",
-          "tnp": "/tnp/dashboard",
+          "others": "/others/dashboard",
+          "non_teaching": "/non-teaching/dashboard",
           "non-teaching": "/non-teaching/dashboard"
         }
 

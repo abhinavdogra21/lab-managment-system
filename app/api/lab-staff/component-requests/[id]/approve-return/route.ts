@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { verifyToken, hasRole } from "@/lib/auth"
 import { db } from "@/lib/database"
 import { sendEmail, emailTemplates } from "@/lib/notifications"
+import { logComponentActivity, getUserInfoForLogging } from "@/lib/activity-logger"
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -97,6 +98,61 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     })
 
     console.log(`Approve return #${requestId}: Transaction completed successfully`)
+
+    // Log the activity
+    const userInfo = await getUserInfoForLogging(user.userId)
+    const updatedRequest = await db.query(
+      `SELECT cr.*, l.name as lab_name, 
+              req.name as requester_name, req.email as requester_email, req.role as requester_role,
+              CASE 
+                WHEN fac.salutation IS NOT NULL 
+                THEN CONCAT(UPPER(fac.salutation), '. ', fac.name)
+                ELSE fac.name
+              END as faculty_name,
+              CASE 
+                WHEN ls.salutation IS NOT NULL 
+                THEN CONCAT(UPPER(ls.salutation), '. ', ls.name)
+                ELSE ls.name
+              END as lab_staff_name,
+              CASE 
+                WHEN hod.salutation IS NOT NULL 
+                THEN CONCAT(UPPER(hod.salutation), '. ', hod.name)
+                ELSE hod.name
+              END as hod_name
+       FROM component_requests cr
+       JOIN labs l ON cr.lab_id = l.id
+       JOIN users req ON cr.requester_id = req.id
+       LEFT JOIN users fac ON cr.faculty_approver_id = fac.id
+       LEFT JOIN users ls ON cr.lab_staff_approver_id = ls.id
+       LEFT JOIN users hod ON cr.hod_approver_id = hod.id
+       WHERE cr.id = ?`,
+      [requestId]
+    )
+    
+    if (updatedRequest.rows.length > 0) {
+      const itemsDetails = await db.query(
+        `SELECT c.name as component_name, cri.quantity_requested
+         FROM component_request_items cri
+         JOIN components c ON c.id = cri.component_id
+         WHERE cri.request_id = ?`,
+        [requestId]
+      )
+      
+      logComponentActivity({
+        entityType: 'component_request',
+        entityId: requestId,
+        labId: request.lab_id,
+        actorUserId: userInfo?.userId || null,
+        actorName: userInfo?.name || null,
+        actorEmail: userInfo?.email || null,
+        actorRole: userInfo?.role || null,
+        action: 'returned',
+        actionDescription: `Component return approved${remarks ? ': ' + remarks : ''}`,
+        entitySnapshot: { ...updatedRequest.rows[0], items: itemsDetails.rows },
+        ipAddress: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || null,
+        userAgent: req.headers.get("user-agent") || null,
+      }).catch(err => console.error("Activity logging failed:", err))
+    }
 
     // Send email to requester
     try {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
 import { verifyToken, hasRole } from "@/lib/auth"
 import { sendEmail, emailTemplates } from "@/lib/notifications"
+import { logLabBookingActivity, getUserInfoForLogging } from "@/lib/activity-logger"
 
 export async function POST(
   request: NextRequest,
@@ -99,6 +100,27 @@ export async function POST(
     }
 
     await db.query(updateQuery, updateParams)
+
+    // Log the activity
+    const userInfo = await getUserInfoForLogging(userId)
+    const updatedBooking = await db.query('SELECT * FROM booking_requests WHERE id = ?', [id])
+    if (updatedBooking.rows.length > 0) {
+      logLabBookingActivity({
+        bookingId: Number(id),
+        labId: bookingRequest.lab_id,
+        actorUserId: userInfo?.userId || null,
+        actorName: userInfo?.name || null,
+        actorEmail: userInfo?.email || null,
+        actorRole: userInfo?.role || null,
+        action: action === 'approve' ? 'approved_by_lab_staff' : 'rejected_by_lab_staff',
+        actionDescription: action === 'approve'
+          ? `Approved booking request${remarks ? ': ' + remarks : ''}`
+          : `Rejected booking request: ${remarks}`,
+        bookingSnapshot: updatedBooking.rows[0],
+        ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || null,
+        userAgent: request.headers.get("user-agent") || null,
+      }).catch(err => console.error("Activity logging failed:", err))
+    }
 
     // Get updated request details for response and emails
     const updatedResult = await db.query(

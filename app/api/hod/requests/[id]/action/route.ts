@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
 import { verifyToken, hasRole } from "@/lib/auth"
 import { sendEmail, emailTemplates } from "@/lib/notifications"
+import { logLabBookingActivity, getUserInfoForLogging } from "@/lib/activity-logger"
 
 export async function POST(
   request: NextRequest,
@@ -93,6 +94,63 @@ export async function POST(
     }
     
     await db.query(updateQuery, updateParams)
+
+    // Log the activity
+    const userInfo = await getUserInfoForLogging(user.userId)
+    // Get complete booking details with requester, lab, and faculty info with salutations
+    const bookingDetails = await db.query(`
+      SELECT 
+        br.*,
+        u.name as requester_name,
+        u.email as requester_email,
+        u.role as requester_role,
+        l.name as lab_name,
+        l.code as lab_code,
+        CASE 
+          WHEN faculty.salutation IS NOT NULL 
+          THEN CONCAT(UPPER(faculty.salutation), '. ', faculty.name)
+          ELSE faculty.name
+        END as faculty_name,
+        faculty.email as faculty_email,
+        CASE 
+          WHEN lab_staff.salutation IS NOT NULL 
+          THEN CONCAT(UPPER(lab_staff.salutation), '. ', lab_staff.name)
+          ELSE lab_staff.name
+        END as lab_staff_name,
+        lab_staff.email as lab_staff_email,
+        CASE 
+          WHEN hod.salutation IS NOT NULL 
+          THEN CONCAT(UPPER(hod.salutation), '. ', hod.name)
+          ELSE hod.name
+        END as hod_name,
+        hod.email as hod_email
+      FROM booking_requests br
+      LEFT JOIN users u ON u.id = br.requested_by
+      LEFT JOIN labs l ON l.id = br.lab_id
+      LEFT JOIN departments d ON l.department_id = d.id
+      LEFT JOIN users faculty ON faculty.id = br.faculty_supervisor_id
+      LEFT JOIN users lab_staff ON lab_staff.id = br.lab_staff_approved_by
+      LEFT JOIN users hod ON hod.id = d.hod_id
+      WHERE br.id = ?
+    `, [requestId])
+    
+    if (bookingDetails.rows.length > 0) {
+      logLabBookingActivity({
+        bookingId: requestId,
+        labId: booking.lab_id,
+        actorUserId: userInfo?.userId || null,
+        actorName: userInfo?.name || null,
+        actorEmail: userInfo?.email || null,
+        actorRole: userInfo?.role || null,
+        action: action === 'approve' ? 'approved_by_hod' : 'rejected_by_hod',
+        actionDescription: action === 'approve' 
+          ? `Approved booking request${remarks ? ': ' + remarks : ''}`
+          : `Rejected booking request: ${remarks}`,
+        bookingSnapshot: bookingDetails.rows[0],
+        ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || null,
+        userAgent: request.headers.get("user-agent") || null,
+      }).catch(err => console.error("Activity logging failed:", err))
+    }
 
     // Send email notification to student
     try {

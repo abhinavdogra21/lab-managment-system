@@ -8,7 +8,6 @@ import {
   Calendar,
   Package,
   Users,
-  FileText,
   Settings,
   BarChart3,
   BookOpen,
@@ -44,7 +43,7 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
   const pathname = usePathname()
 
   // Compute optional role prefix from current URL (e.g., /admin, /student)
-  const roleMatch = pathname?.match(/^\/(admin|student|faculty|lab-staff|hod|tnp)(?:\/|$)/)
+  const roleMatch = pathname?.match(/^\/(admin|student|faculty|lab-staff|hod|others)(?:\/|$)/)
   const prefix = roleMatch ? `/${roleMatch[1]}` : ""
 
   const withPrefix = (p: string) => `${prefix}${p}`
@@ -96,10 +95,9 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
           { name: "User Management", href: "/admin/users", icon: Users },
           { name: "Department and Lab Management", href: "/admin/dashboard/department-and-lab-management", icon: Building },
           { name: "Timetable", href: "/admin/dashboard/timetable", icon: Calendar },
-          { name: "System Logs", href: withPrefix("/dashboard/logs"), icon: FileText },
         ]
 
-      case "tnp":
+      case "others":
         return [
           ...baseItems,
           { name: "Book Labs", href: withPrefix("/dashboard/book-labs"), icon: Calendar },
@@ -126,7 +124,7 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
         <nav className="space-y-2">
           {navigationItems.map((item) => {
             // Normalize for active match across prefixed and non-prefixed URLs
-            const normalized = pathname?.replace(/^\/(admin|student|faculty|lab-staff|hod|tnp)(?=\/)/, "") || ""
+            const normalized = pathname?.replace(/^\/(admin|student|faculty|lab-staff|hod|others)(?=\/)/, "") || ""
             const itemPath = item.href.replace(prefix, "")
             const isDashboardRoot = itemPath === "/dashboard" || item.href === "/admin/users"
             const isExact = normalized === itemPath

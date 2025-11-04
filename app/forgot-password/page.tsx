@@ -40,10 +40,10 @@ export default function ForgotPasswordPage() {
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center space-y-2">
           <div className="flex justify-center">
-            <Image src="/lnmiit-logo.png" alt="LNMIIT Logo" width={120} height={40} className="h-10 w-auto" />
+            <Image src="/lnmiit-logo.png" alt="LNMIIT Logo" width={200} height={80} className="h-16 w-auto" />
           </div>
           <CardTitle className="text-3xl">Forgot password</CardTitle>
-          <CardDescription className="text-base">Enter your LNMIIT email and select your user type to receive a reset link.</CardDescription>
+          <CardDescription className="text-base">Select the user type and institute email ID to receive a reset link.</CardDescription>
         </CardHeader>
         <CardContent>
           {sent ? (
@@ -56,6 +56,23 @@ export default function ForgotPasswordPage() {
             <form onSubmit={onSubmit} className="space-y-4">
               {error && <p className="text-sm text-red-600">{error}</p>}
               <div className="space-y-2">
+                <label className="text-base font-medium">User type</label>
+                <select
+                  className="w-full border rounded-md p-2 bg-background"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  required
+                >
+                  <option value="admin">Admin</option>
+                  <option value="lab_staff">Lab Staff</option>
+                  <option value="faculty">Faculty</option>
+                  <option value="hod">HoD</option>
+                  <option value="student">Student</option>
+                  <option value="others">Others</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-base font-medium">Email</label>
                 <Input
                   type="email"
                   placeholder="your.email@lnmiit.ac.in"
@@ -67,6 +84,7 @@ export default function ForgotPasswordPage() {
               </div>
               {role === "student" && (
                 <div className="space-y-2">
+                  <label className="text-base font-medium">Your full name</label>
                   <Input
                     type="text"
                     placeholder="Your full name"
@@ -77,22 +95,6 @@ export default function ForgotPasswordPage() {
                   <p className="text-sm text-muted-foreground">We'll create your student account with this name.</p>
                 </div>
               )}
-              <div className="space-y-2">
-                <label className="text-base font-medium">User type</label>
-                <select
-                  className="w-full border rounded-md p-2 bg-background"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  required
-                >
-                  <option value="student">Student</option>
-                  <option value="faculty">Faculty</option>
-                  <option value="hod">HOD</option>
-                  <option value="lab_staff">Lab Staff</option>
-                  <option value="tnp">T&P</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Sending…" : "Send reset link"}
               </Button>

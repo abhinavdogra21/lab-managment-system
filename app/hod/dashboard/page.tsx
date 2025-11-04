@@ -92,11 +92,11 @@ export default function HODDashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">HOD Dashboard</h1>
-        <p className="text-muted-foreground mt-1">Overview of your department's lab management</p>
-      </div>
+          <div className="space-y-1">
+        <h1 className="text-3xl font-bold">HoD Dashboard</h1>
+        <p className="text-muted-foreground">
+          Manage your department and track lab activities
+        </p>
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

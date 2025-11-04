@@ -12,6 +12,8 @@ export async function GET(request: NextRequest) {
     const db = Database.getInstance()
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search') || ''
+    const startDate = searchParams.get('startDate') || ''
+    const endDate = searchParams.get('endDate') || ''
 
     // For non-admin HODs, get their department(s) by hod_id or hod_email
     let departmentIds: number[] = []
@@ -29,67 +31,122 @@ export async function GET(request: NextRequest) {
 
     // Build search condition
     const searchCondition = search 
-      ? `AND (l.name LIKE ? OR requester.name LIKE ? OR br.purpose LIKE ? OR requester.email LIKE ?)`
+      ? `AND (l.name LIKE ? OR lbal.actor_name LIKE ? OR JSON_EXTRACT(lbal.booking_snapshot, '$.purpose') LIKE ? OR lbal.actor_email LIKE ?)`
       : ''
     const searchValue = `%${search}%`
+    
+    // Build date filter condition
+    const dateConditions: string[] = []
+    const dateParams: string[] = []
+    if (startDate) {
+      dateConditions.push('lbal.created_at >= ?')
+      dateParams.push(startDate)
+    }
+    if (endDate) {
+      dateConditions.push('lbal.created_at <= ?')
+      dateParams.push(`${endDate} 23:59:59`)
+    }
+    const dateCondition = dateConditions.length > 0 ? `AND ${dateConditions.join(' AND ')}` : ''
 
-    // Get approved booking logs from labs in HOD's departments
-    // Including the approval chain: requester -> faculty -> lab staff -> hod
+    // Get approved booking logs from activity logs (deletion-proof)
+    // Only show logs where action = 'approved_by_hod' (final approval by HOD)
     let logsRes
     if (user.role === 'admin') {
-      const params = search ? [searchValue, searchValue, searchValue, searchValue] : []
+      const params = [...(search ? [searchValue, searchValue, searchValue, searchValue] : []), ...dateParams]
       logsRes = await db.query(
         `SELECT 
-          br.id, br.lab_id, br.purpose, br.booking_date, br.start_time, br.end_time, br.status,
-          br.created_at, br.updated_at,
-          br.faculty_approved_at, br.lab_staff_approved_at, br.hod_approved_at,
-          l.name as lab_name, l.department_id,
-          requester.name as requester_name, requester.email as requester_email, requester.role as requester_role,
-          faculty.name as faculty_name, faculty.email as faculty_email,
-          lab_staff.name as lab_staff_name, lab_staff.email as lab_staff_email,
-          hod.name as hod_name, hod.email as hod_email
-         FROM booking_requests br
-         JOIN labs l ON br.lab_id = l.id
-         JOIN departments d ON l.department_id = d.id
-         LEFT JOIN users requester ON br.requested_by = requester.id
-         LEFT JOIN users faculty ON br.faculty_approved_by = faculty.id
-         LEFT JOIN users lab_staff ON br.lab_staff_approved_by = lab_staff.id
-         LEFT JOIN users hod ON d.hod_id = hod.id
-         WHERE br.status = 'approved' AND br.request_type = 'lab_booking' ${searchCondition}
-         ORDER BY br.created_at DESC
+          lbal.id as log_id,
+          lbal.booking_id,
+          lbal.lab_id,
+          lbal.actor_user_id,
+          lbal.actor_name,
+          lbal.actor_email,
+          lbal.actor_role,
+          lbal.action,
+          lbal.action_description,
+          lbal.booking_snapshot,
+          lbal.created_at,
+          l.name as lab_name,
+          l.department_id,
+          d.hod_id,
+          hod_user.name as current_hod_name,
+          hod_user.email as current_hod_email
+         FROM lab_booking_activity_logs lbal
+         LEFT JOIN labs l ON lbal.lab_id = l.id
+         LEFT JOIN departments d ON l.department_id = d.id
+         LEFT JOIN users hod_user ON d.hod_id = hod_user.id
+         WHERE lbal.action = 'approved_by_hod' ${searchCondition} ${dateCondition}
+         ORDER BY lbal.created_at DESC
          LIMIT 100`,
         params
       )
     } else {
       const placeholders = departmentIds.map(() => '?').join(',')
-      const params = search 
-        ? [...departmentIds, searchValue, searchValue, searchValue, searchValue]
-        : departmentIds
+      const params = [
+        ...departmentIds, 
+        ...(search ? [searchValue, searchValue, searchValue, searchValue] : []),
+        ...dateParams
+      ]
       logsRes = await db.query(
         `SELECT 
-          br.id, br.lab_id, br.purpose, br.booking_date, br.start_time, br.end_time, br.status,
-          br.created_at, br.updated_at,
-          br.faculty_approved_at, br.lab_staff_approved_at, br.hod_approved_at,
-          l.name as lab_name, l.department_id,
-          requester.name as requester_name, requester.email as requester_email, requester.role as requester_role,
-          faculty.name as faculty_name, faculty.email as faculty_email,
-          lab_staff.name as lab_staff_name, lab_staff.email as lab_staff_email,
-          hod.name as hod_name, hod.email as hod_email
-         FROM booking_requests br
-         JOIN labs l ON br.lab_id = l.id
-         JOIN departments d ON l.department_id = d.id
-         LEFT JOIN users requester ON br.requested_by = requester.id
-         LEFT JOIN users faculty ON br.faculty_approved_by = faculty.id
-         LEFT JOIN users lab_staff ON br.lab_staff_approved_by = lab_staff.id
-         LEFT JOIN users hod ON d.hod_id = hod.id
-         WHERE br.status = 'approved' AND br.request_type = 'lab_booking' AND l.department_id IN (${placeholders}) ${searchCondition}
-         ORDER BY br.created_at DESC
+          lbal.id as log_id,
+          lbal.booking_id,
+          lbal.lab_id,
+          lbal.actor_user_id,
+          lbal.actor_name,
+          lbal.actor_email,
+          lbal.actor_role,
+          lbal.action,
+          lbal.action_description,
+          lbal.booking_snapshot,
+          lbal.created_at,
+          l.name as lab_name,
+          l.department_id,
+          d.hod_id,
+          hod_user.name as current_hod_name,
+          hod_user.email as current_hod_email
+         FROM lab_booking_activity_logs lbal
+         LEFT JOIN labs l ON lbal.lab_id = l.id
+         LEFT JOIN departments d ON l.department_id = d.id
+         LEFT JOIN users hod_user ON d.hod_id = hod_user.id
+         WHERE lbal.action = 'approved_by_hod' AND l.department_id IN (${placeholders}) ${searchCondition} ${dateCondition}
+         ORDER BY lbal.created_at DESC
          LIMIT 100`,
         params
       )
     }
 
-    const logs = logsRes.rows
+    // Parse booking_snapshot JSON for each log
+    const logs = logsRes.rows.map((row: any) => {
+      const snapshot = typeof row.booking_snapshot === 'string' 
+        ? JSON.parse(row.booking_snapshot) 
+        : row.booking_snapshot
+      
+      return {
+        id: row.booking_id,
+        log_id: row.log_id,
+        lab_id: row.lab_id,
+        lab_name: row.lab_name,
+        department_id: row.department_id,
+        purpose: snapshot?.purpose || '',
+        booking_date: snapshot?.booking_date || null,
+        start_time: snapshot?.start_time || null,
+        end_time: snapshot?.end_time || null,
+        status: snapshot?.status || 'approved',
+        created_at: snapshot?.created_at || row.created_at,
+        hod_approved_at: snapshot?.hod_approved_at || row.created_at,
+        requester_name: snapshot?.requester_name || 'Unknown',
+        requester_email: snapshot?.requester_email || '',
+        requester_role: snapshot?.requester_role || 'student',
+        faculty_name: snapshot?.faculty_name || null,
+        lab_staff_name: snapshot?.lab_staff_name || null,
+        hod_name: snapshot?.hod_name || null,
+        hod_email: snapshot?.hod_email || null,
+        current_hod_name: row.current_hod_name, // Current HOD assigned to department
+        current_hod_email: row.current_hod_email, // Current HOD email
+        action_description: row.action_description,
+      }
+    })
 
     return NextResponse.json({ logs: logs || [] })
   } catch (error) {

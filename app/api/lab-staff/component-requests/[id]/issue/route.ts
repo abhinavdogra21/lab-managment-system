@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { verifyToken, hasRole } from "@/lib/auth"
 import { db } from "@/lib/database"
 import { sendEmail, emailTemplates } from "@/lib/notifications"
+import { logComponentActivity, getUserInfoForLogging } from "@/lib/activity-logger"
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -88,10 +89,28 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // Send email to requester
     const details = await db.query(
       `SELECT r.*, l.name as lab_name,
-              u.name as requester_name, u.email as requester_email
+              u.name as requester_name, u.email as requester_email,
+              CASE 
+                WHEN fac.salutation IS NOT NULL 
+                THEN CONCAT(UPPER(fac.salutation), '. ', fac.name)
+                ELSE fac.name
+              END as faculty_name,
+              CASE 
+                WHEN ls.salutation IS NOT NULL 
+                THEN CONCAT(UPPER(ls.salutation), '. ', ls.name)
+                ELSE ls.name
+              END as lab_staff_name,
+              CASE 
+                WHEN hod.salutation IS NOT NULL 
+                THEN CONCAT(UPPER(hod.salutation), '. ', hod.name)
+                ELSE hod.name
+              END as hod_name
        FROM component_requests r
        JOIN labs l ON l.id = r.lab_id
        JOIN users u ON u.id = r.requester_id
+       LEFT JOIN users fac ON r.faculty_approver_id = fac.id
+       LEFT JOIN users ls ON r.lab_staff_approver_id = ls.id
+       LEFT JOIN users hod ON r.hod_approver_id = hod.id
        WHERE r.id = ?`,
       [requestId]
     )
@@ -115,6 +134,33 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         returnDate: requestDetails.return_date || 'Not specified'
       })
       await sendEmail({ to: requestDetails.requester_email, ...emailData }).catch(err => console.error('Email failed:', err))
+    }
+
+    // Log the activity
+    const userInfo = await getUserInfoForLogging(user.userId)
+    if (requestDetails) {
+      const itemsDetails = await db.query(
+        `SELECT c.name as component_name, cri.quantity_requested
+         FROM component_request_items cri
+         JOIN components c ON c.id = cri.component_id
+         WHERE cri.request_id = ?`,
+        [requestId]
+      )
+      
+      logComponentActivity({
+        entityType: 'component_request',
+        entityId: requestId,
+        labId: request.lab_id,
+        actorUserId: userInfo?.userId || null,
+        actorName: userInfo?.name || null,
+        actorEmail: userInfo?.email || null,
+        actorRole: userInfo?.role || null,
+        action: 'issued',
+        actionDescription: `Components issued to ${requestDetails.initiator_role}`,
+        entitySnapshot: { ...requestDetails, items: itemsDetails.rows },
+        ipAddress: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || null,
+        userAgent: req.headers.get("user-agent") || null,
+      }).catch(err => console.error("Activity logging failed:", err))
     }
 
     return NextResponse.json({ 

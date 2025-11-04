@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
 import { verifyToken, hasRole } from "@/lib/auth"
 import { sendEmail, emailTemplates } from "@/lib/notifications"
+import { logComponentActivity, getUserInfoForLogging } from "@/lib/activity-logger"
 
 const db = Database.getInstance()
 
@@ -140,7 +141,33 @@ export async function POST(
         await sendEmail({ to: req.hod_email, ...emailData }).catch(err => console.error('Email failed:', err))
       }
       
+      // Log the activity
       const sel = await db.query(`SELECT * FROM component_requests WHERE id = ?`, [requestId])
+      const userInfo = await getUserInfoForLogging(user.userId)
+      if (sel.rows.length > 0) {
+        const itemsDetails = await db.query(
+          `SELECT c.name as component_name, cri.quantity_requested
+           FROM component_request_items cri
+           JOIN components c ON c.id = cri.component_id
+           WHERE cri.request_id = ?`,
+          [requestId]
+        )
+        logComponentActivity({
+          entityType: 'component_request',
+          entityId: requestId,
+          labId: request.lab_id,
+          actorUserId: userInfo?.userId || null,
+          actorName: userInfo?.name || null,
+          actorEmail: userInfo?.email || null,
+          actorRole: userInfo?.role || null,
+          action: 'approved_by_lab_staff',
+          actionDescription: `Approved component request by lab staff${remarks ? ': ' + remarks : ''}`,
+          entitySnapshot: { ...sel.rows[0], items: itemsDetails.rows },
+          ipAddress: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || null,
+          userAgent: req.headers.get("user-agent") || null,
+        }).catch(err => console.error("Activity logging failed:", err))
+      }
+      
       return NextResponse.json({ request: sel.rows[0] })
     }
     if (action === 'reject') {
@@ -177,7 +204,33 @@ export async function POST(
         await sendEmail({ to: req.requester_email, ...emailData }).catch(err => console.error('Email failed:', err))
       }
       
+      // Log the activity
       const sel = await db.query(`SELECT * FROM component_requests WHERE id = ?`, [requestId])
+      const userInfo = await getUserInfoForLogging(user.userId)
+      if (sel.rows.length > 0) {
+        const itemsDetails = await db.query(
+          `SELECT c.name as component_name, cri.quantity_requested
+           FROM component_request_items cri
+           JOIN components c ON c.id = cri.component_id
+           WHERE cri.request_id = ?`,
+          [requestId]
+        )
+        logComponentActivity({
+          entityType: 'component_request',
+          entityId: requestId,
+          labId: request.lab_id,
+          actorUserId: userInfo?.userId || null,
+          actorName: userInfo?.name || null,
+          actorEmail: userInfo?.email || null,
+          actorRole: userInfo?.role || null,
+          action: 'rejected_by_lab_staff',
+          actionDescription: `Rejected component request by lab staff: ${remarks || 'No reason provided'}`,
+          entitySnapshot: { ...sel.rows[0], items: itemsDetails.rows },
+          ipAddress: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || null,
+          userAgent: req.headers.get("user-agent") || null,
+        }).catch(err => console.error("Activity logging failed:", err))
+      }
+      
       return NextResponse.json({ request: sel.rows[0] })
     }
     return NextResponse.json({ error: "Unsupported action" }, { status: 400 })

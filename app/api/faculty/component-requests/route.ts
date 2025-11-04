@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
 import { verifyToken, hasRole } from "@/lib/auth"
 import { sendEmail, emailTemplates } from "@/lib/notifications"
+import { logComponentActivity, getUserInfoForLogging } from "@/lib/activity-logger"
 
 const db = Database.getInstance()
 
@@ -170,6 +171,36 @@ export async function POST(req: NextRequest) {
         to: request.lab_staff_email,
         ...emailData
       }).catch(err => console.error('Failed to send email:', err))
+    }
+
+    // Log activity
+    const actorInfo = await getUserInfoForLogging(Number(user.userId))
+    if (actorInfo) {
+      logComponentActivity({
+        entityType: 'component_request',
+        entityId: created,
+        labId: Number(lab_id),
+        action: 'created',
+        actorUserId: Number(user.userId),
+        actorRole: actorInfo.role,
+        actorName: actorInfo.name,
+        actorEmail: actorInfo.email,
+        actionDescription: `Faculty component request created for ${purpose || 'lab equipment'}`,
+        entitySnapshot: {
+          requestId: created,
+          labId: Number(lab_id),
+          labName: request?.lab_name || '',
+          requesterId: Number(user.userId),
+          requesterName: actorInfo.name,
+          initiatorRole: 'faculty',
+          purpose: purpose || null,
+          returnDate: return_date,
+          status: 'pending_lab_staff',
+          items: itemsDetails.rows
+        },
+        ipAddress: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+        userAgent: req.headers.get('user-agent') || 'unknown'
+      }).catch(err => console.error('Failed to log activity:', err))
     }
 
     const sel = await db.query(`SELECT * FROM component_requests WHERE id = ?`, [created])

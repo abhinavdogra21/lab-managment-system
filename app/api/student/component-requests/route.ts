@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
 import { verifyToken, hasRole } from "@/lib/auth"
 import { sendEmail, emailTemplates } from "@/lib/notifications"
+import { logComponentActivity, getUserInfoForLogging } from "@/lib/activity-logger"
 
 const db = Database.getInstance()
 
@@ -187,7 +188,26 @@ export async function POST(req: NextRequest) {
       }).catch(err => console.error('Failed to send email:', err))
     }
 
+    // Log the activity
     const sel = await db.query(`SELECT * FROM component_requests WHERE id = ?`, [created])
+    const userInfo = await getUserInfoForLogging(user.userId)
+    if (sel.rows.length > 0) {
+      logComponentActivity({
+        entityType: 'component_request',
+        entityId: created,
+        labId: Number(lab_id),
+        actorUserId: userInfo?.userId || null,
+        actorName: userInfo?.name || null,
+        actorEmail: userInfo?.email || null,
+        actorRole: userInfo?.role || null,
+        action: "created",
+        actionDescription: `Created component request for ${purpose || 'lab work'}`,
+        entitySnapshot: { ...sel.rows[0], items: itemsDetails.rows },
+        ipAddress: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || null,
+        userAgent: req.headers.get("user-agent") || null,
+      }).catch(err => console.error("Activity logging failed:", err))
+    }
+
     return NextResponse.json({ request: sel.rows[0] }, { status: 201 })
   } catch (e) {
     console.error("student component-requests POST error:", e)

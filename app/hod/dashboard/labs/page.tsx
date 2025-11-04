@@ -87,6 +87,10 @@ export default function HODLabsPage() {
   const [selectedLab, setSelectedLab] = useState<string>('all')
   const [bookingLogsSearch, setBookingLogsSearch] = useState('')
   const [componentLogsSearch, setComponentLogsSearch] = useState('')
+  const [bookingStartDate, setBookingStartDate] = useState('')
+  const [bookingEndDate, setBookingEndDate] = useState('')
+  const [componentStartDate, setComponentStartDate] = useState('')
+  const [componentEndDate, setComponentEndDate] = useState('')
   
   // Get unique labs for filter - prioritize labs list, fallback to components/logs
   const uniqueLabs = labs.length > 0 
@@ -119,12 +123,21 @@ export default function HODLabsPage() {
   const loadBookingLogs = async () => {
     setLoading(true)
     try {
-      const url = bookingLogsSearch 
-        ? `/api/hod/labs/booking-logs?search=${encodeURIComponent(bookingLogsSearch)}`
+      const params = new URLSearchParams()
+      if (bookingLogsSearch) params.append('search', bookingLogsSearch)
+      if (bookingStartDate) params.append('startDate', bookingStartDate)
+      if (bookingEndDate) params.append('endDate', bookingEndDate)
+      
+      const url = params.toString() 
+        ? `/api/hod/labs/booking-logs?${params.toString()}`
         : '/api/hod/labs/booking-logs'
       const res = await fetch(url, { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
+        console.log('Booking logs received:', data.logs)
+        if (data.logs && data.logs.length > 0) {
+          console.log('First booking log sample:', data.logs[0])
+        }
         setBookingLogs(data.logs || [])
       } else {
         toast({ title: 'Error', description: 'Failed to load booking logs', variant: 'destructive' })
@@ -139,8 +152,13 @@ export default function HODLabsPage() {
   const loadComponentLogs = async () => {
     setLoading(true)
     try {
-      const url = componentLogsSearch 
-        ? `/api/hod/labs/component-logs?search=${encodeURIComponent(componentLogsSearch)}`
+      const params = new URLSearchParams()
+      if (componentLogsSearch) params.append('search', componentLogsSearch)
+      if (componentStartDate) params.append('startDate', componentStartDate)
+      if (componentEndDate) params.append('endDate', componentEndDate)
+      
+      const url = params.toString() 
+        ? `/api/hod/labs/component-logs?${params.toString()}`
         : '/api/hod/labs/component-logs'
       const res = await fetch(url, { cache: 'no-store' })
       if (res.ok) {
@@ -543,31 +561,24 @@ export default function HODLabsPage() {
     doc.text(new Date(log.return_date).toLocaleDateString('en-IN'), 85, yPos)
     yPos += 8
     
-    if (log.returned_at) {
+    if (log.returned_at && log.actual_return_date) {
       yPos = checkAddPage(yPos, 10)
-      doc.text(`Returned On:`, 20, yPos)
-      doc.text(new Date(log.returned_at).toLocaleString('en-IN'), 85, yPos)
+      doc.text(`Actual Return Date:`, 20, yPos)
+      doc.text(new Date(log.actual_return_date).toLocaleDateString('en-IN'), 85, yPos)
       yPos += 8
       
-      if (log.actual_return_date) {
+      // Calculate delay
+      const returnDate = new Date(log.return_date)
+      const actualDate = new Date(log.actual_return_date)
+      const delayDays = Math.floor((actualDate.getTime() - returnDate.getTime()) / (1000 * 60 * 60 * 24))
+        
+      if (delayDays > 0) {
         yPos = checkAddPage(yPos, 10)
-        doc.text(`Actual Return Date:`, 20, yPos)
-        doc.text(new Date(log.actual_return_date).toLocaleDateString('en-IN'), 85, yPos)
+        doc.setTextColor(220, 38, 38) // Red for delay
+        doc.text(`Delay:`, 20, yPos)
+        doc.text(`${delayDays} day(s)`, 85, yPos)
+        doc.setTextColor(0, 0, 0)
         yPos += 8
-        
-        // Calculate delay
-        const returnDate = new Date(log.return_date)
-        const actualDate = new Date(log.actual_return_date)
-        const delayDays = Math.floor((actualDate.getTime() - returnDate.getTime()) / (1000 * 60 * 60 * 24))
-        
-        if (delayDays > 0) {
-          yPos = checkAddPage(yPos, 10)
-          doc.setTextColor(220, 38, 38) // Red for delay
-          doc.text(`Delay:`, 20, yPos)
-          doc.text(`${delayDays} day(s)`, 85, yPos)
-          doc.setTextColor(0, 0, 0)
-          yPos += 8
-        }
       }
     }
     
@@ -836,27 +847,55 @@ export default function HODLabsPage() {
         </TabsContent>
 
         <TabsContent value="logs" className="space-y-4">
-          {/* Search Input */}
-          <div className="flex items-center gap-2">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by lab, requester, purpose, or email..."
-              value={bookingLogsSearch}
-              onChange={(e) => setBookingLogsSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && loadBookingLogs()}
-              className="max-w-md"
-            />
-            <Button onClick={loadBookingLogs} size="sm">
-              Search
-            </Button>
-            {bookingLogsSearch && (
-              <Button onClick={() => { 
-                setBookingLogsSearch(''); 
-                setTimeout(loadBookingLogs, 100);
-              }} size="sm" variant="outline">
-                Clear
+          {/* Search and Date Filters */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by lab, requester, purpose, or email..."
+                value={bookingLogsSearch}
+                onChange={(e) => setBookingLogsSearch(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && loadBookingLogs()}
+                className="max-w-md"
+              />
+              <Button onClick={loadBookingLogs} size="sm">
+                Search
               </Button>
-            )}
+              {(bookingLogsSearch || bookingStartDate || bookingEndDate) && (
+                <Button onClick={() => { 
+                  setBookingLogsSearch('');
+                  setBookingStartDate('');
+                  setBookingEndDate('');
+                  setTimeout(loadBookingLogs, 100);
+                }} size="sm" variant="outline">
+                  Clear
+                </Button>
+              )}
+            </div>
+            
+            {/* Date Range Filter */}
+            <div className="flex items-center gap-3">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Date Range:</span>
+              <Input
+                type="date"
+                value={bookingStartDate}
+                onChange={(e) => setBookingStartDate(e.target.value)}
+                className="w-[170px]"
+                placeholder="From"
+              />
+              <span className="text-muted-foreground">to</span>
+              <Input
+                type="date"
+                value={bookingEndDate}
+                onChange={(e) => setBookingEndDate(e.target.value)}
+                className="w-[170px]"
+                placeholder="To"
+              />
+              <Button onClick={loadBookingLogs} size="sm" variant="secondary">
+                Apply Dates
+              </Button>
+            </div>
           </div>
 
           {loading ? (
@@ -876,7 +915,7 @@ export default function HODLabsPage() {
               {bookingLogs
                 .filter(log => selectedLab === 'all' || log.lab_name === selectedLab)
                 .map((log) => (
-                <Card key={log.id}>
+                <Card key={log.log_id}>
                   <CardContent className="p-4">
                     <div className="space-y-3">
                       {/* Header */}
@@ -951,7 +990,7 @@ export default function HODLabsPage() {
                           {log.lab_staff_name && (
                             <div className="flex items-center gap-2 text-sm">
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span className="text-muted-foreground">Approved by Lab Staff:</span>
+                              <span className="text-muted-foreground">Recommended by Lab Staff:</span>
                               <span className="font-medium">{log.lab_staff_name}</span>
                             </div>
                           )}
@@ -974,27 +1013,55 @@ export default function HODLabsPage() {
 
         {/* Component Logs Tab */}
         <TabsContent value="component-logs" className="space-y-4">
-          {/* Search Input */}
-          <div className="flex items-center gap-2">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by lab, requester, component, purpose, or email..."
-              value={componentLogsSearch}
-              onChange={(e) => setComponentLogsSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && loadComponentLogs()}
-              className="max-w-md"
-            />
-            <Button onClick={loadComponentLogs} size="sm">
-              Search
-            </Button>
-            {componentLogsSearch && (
-              <Button onClick={() => { 
-                setComponentLogsSearch(''); 
-                setTimeout(loadComponentLogs, 100);
-              }} size="sm" variant="outline">
-                Clear
+          {/* Search and Date Filters */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by lab, requester, component, purpose, or email..."
+                value={componentLogsSearch}
+                onChange={(e) => setComponentLogsSearch(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && loadComponentLogs()}
+                className="max-w-md"
+              />
+              <Button onClick={loadComponentLogs} size="sm">
+                Search
               </Button>
-            )}
+              {(componentLogsSearch || componentStartDate || componentEndDate) && (
+                <Button onClick={() => { 
+                  setComponentLogsSearch('');
+                  setComponentStartDate('');
+                  setComponentEndDate('');
+                  setTimeout(loadComponentLogs, 100);
+                }} size="sm" variant="outline">
+                  Clear
+                </Button>
+              )}
+            </div>
+            
+            {/* Date Range Filter */}
+            <div className="flex items-center gap-3">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Date Range:</span>
+              <Input
+                type="date"
+                value={componentStartDate}
+                onChange={(e) => setComponentStartDate(e.target.value)}
+                className="w-[170px]"
+                placeholder="From"
+              />
+              <span className="text-muted-foreground">to</span>
+              <Input
+                type="date"
+                value={componentEndDate}
+                onChange={(e) => setComponentEndDate(e.target.value)}
+                className="w-[170px]"
+                placeholder="To"
+              />
+              <Button onClick={loadComponentLogs} size="sm" variant="secondary">
+                Apply Dates
+              </Button>
+            </div>
           </div>
 
           {loading ? (
@@ -1015,7 +1082,7 @@ export default function HODLabsPage() {
               {componentLogs
                 .filter(log => selectedLab === 'all' || log.lab_name === selectedLab)
                 .map((log) => (
-                <Card key={log.id} className="hover:shadow-md transition-shadow">
+                <Card key={log.log_id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-6 space-y-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">

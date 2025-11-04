@@ -39,6 +39,7 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState<{ id?: number; first: string; middle: string; last: string; email: string; role: User["role"]; salutation: User['salutation']; department?: string | undefined } | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const [addUser, setAddUser] = useState<{ first: string; middle: string; last: string; email: string; role: string; salutation: User['salutation']; department?: string | undefined }>({ first: "", middle: "", last: "", email: "", role: "student", salutation: 'none', department: undefined })
+  const [addingUser, setAddingUser] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null)
   const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -130,22 +131,28 @@ export default function UsersPage() {
   }
 
   const downloadSample = async () => {
-    const { utils, writeFile }: any = await import("xlsx")
-    const wb = utils.book_new()
-    const ws = utils.aoa_to_sheet([["Name", "RollNumber"], ["JOHN DOE", "23ucs123"]])
-    utils.book_append_sheet(wb, ws, "Students")
-    writeFile(wb, "students-import-sample.xlsx")
+    // Create CSV content
+    const csvContent = "Name,RollNumber\nJOHN DOE,23ucs123\nJANE SMITH,23ucs124"
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = 'students-import-sample.csv'
+    link.click()
   }
 
   const importStudents = async (file: File) => {
     setImporting(true)
     try {
-      const XLSX = await import("xlsx")
-      const buf = await file.arrayBuffer()
-      const wb = XLSX.read(buf, { type: "array" })
-      const ws = wb.Sheets[wb.SheetNames[0]]
-      const rows: any[] = XLSX.utils.sheet_to_json(ws, { header: 1 })
-      const header: any[] = rows[0] || []
+      // Read CSV file
+      const text = await file.text()
+      const lines = text.split('\n').map(line => line.trim()).filter(line => line)
+      
+      if (lines.length < 2) {
+        throw new Error('CSV file must contain at least a header row and one data row')
+      }
+      
+      // Parse header
+      const header = lines[0].split(',').map(h => h.trim())
       const findCol = (pred: (v: string) => boolean, fallback: number) => {
         for (let i = 0; i < header.length; i++) {
           const v = String(header[i] ?? '').toLowerCase()
@@ -155,11 +162,24 @@ export default function UsersPage() {
       }
       const nameCol = findCol((v) => v.includes("name"), 0)
       const rollCol = findCol((v) => v.includes("roll"), nameCol === 0 ? 1 : 0)
-      const toCreate = rows
+      
+      // Parse data rows
+      const toCreate = lines
         .slice(1)
-        .filter((r) => (r[nameCol] || "").toString().trim())
-        .map((r) => ({ name: String(r[nameCol] || "").toUpperCase(), studentId: String(r[rollCol] || "").trim() }))
-      const res = await fetch("/api/admin/users/bulk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ department: department || null, rows: toCreate }) })
+        .map(line => {
+          const values = line.split(',').map(v => v.trim())
+          return {
+            name: String(values[nameCol] || "").toUpperCase(),
+            studentId: String(values[rollCol] || "").trim()
+          }
+        })
+        .filter(r => r.name)
+      
+      const res = await fetch("/api/admin/users/bulk", { 
+        method: "POST", 
+        headers: { "Content-Type": "application/json" }, 
+        body: JSON.stringify({ department: department || null, rows: toCreate }) 
+      })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || "Bulk import failed")
       const { created, reactivated = 0, skipped, users: createdUsers } = data
@@ -207,7 +227,7 @@ export default function UsersPage() {
                 <SelectItem value="faculty">Faculty</SelectItem>
                 <SelectItem value="lab_staff">Lab Staff</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="tnp">TNP</SelectItem>
+                <SelectItem value="others">Others</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -367,7 +387,7 @@ export default function UsersPage() {
                     <SelectItem value="student">Student</SelectItem>
                     <SelectItem value="faculty">Faculty</SelectItem>
                     <SelectItem value="lab_staff">Lab Staff</SelectItem>
-                    <SelectItem value="tnp">TNP</SelectItem>
+                    <SelectItem value="others">Others</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -436,7 +456,7 @@ export default function UsersPage() {
                   <SelectItem value="student">Student</SelectItem>
                   <SelectItem value="faculty">Faculty</SelectItem>
                   <SelectItem value="lab_staff">Lab Staff</SelectItem>
-                  <SelectItem value="tnp">TNP</SelectItem>
+                  <SelectItem value="others">Others</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -470,20 +490,23 @@ export default function UsersPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-            <Button disabled={!addUser.first.trim() || !addUser.email.trim()} onClick={async () => {
+            <Button variant="outline" onClick={() => setAddOpen(false)} disabled={addingUser}>Cancel</Button>
+            <Button disabled={!addUser.first.trim() || !addUser.email.trim() || addingUser} onClick={async () => {
               const fullName = [addUser.first, addUser.middle, addUser.last].filter(Boolean).join(" ").toUpperCase()
+              setAddingUser(true)
               try {
                 const res = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: fullName, email: addUser.email, role: addUser.role, salutation: addUser.salutation || 'none', department: addUser.department || null }) })
                 const data = await res.json()
                 if (!res.ok) throw new Error(data?.error || 'Failed to create user')
                 setUsers((prev) => [data.user, ...prev])
-                toast({ title: 'User created' })
+                toast({ title: 'User created', description: 'Welcome email sent to ' + addUser.email })
                 setAddOpen(false)
               } catch (e: any) {
                 toast({ title: 'Create failed', description: e?.message || '', variant: 'destructive' })
+              } finally {
+                setAddingUser(false)
               }
-            }}>Create</Button>
+            }}>{addingUser ? 'Creating...' : 'Create'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -492,10 +515,10 @@ export default function UsersPage() {
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
         <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
-            <DialogTitle>Import Students from Excel</DialogTitle>
+            <DialogTitle>Import Students from CSV</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <p className="text-sm text-muted-foreground">Upload .xlsx with two columns: Name and RollNumber. Names will be stored in UPPERCASE.</p>
+            <p className="text-sm text-muted-foreground">Upload .csv with two columns: Name and RollNumber. Names will be stored in UPPERCASE.</p>
             <div className="flex items-center gap-2">
               <Button type="button" variant="outline" onClick={downloadSample}>Download Sample</Button>
               <span className="text-xs text-muted-foreground">Sample includes header row.</span>
@@ -513,9 +536,9 @@ export default function UsersPage() {
               </Select>
             </div>
             <div className="flex items-center gap-3">
-              <input id="students-file-admin" type="file" className="hidden" accept=".xlsx" onChange={(e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) { setImportFileName(f.name); importStudents(f) } }} />
+              <input id="students-file-admin" type="file" className="hidden" accept=".csv" onChange={(e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) { setImportFileName(f.name); importStudents(f) } }} />
               <Button type="button" onClick={() => document.getElementById('students-file-admin')?.click()} disabled={importing}>
-                {importing ? 'Importing…' : 'Choose .xlsx file'}
+                {importing ? 'Importing…' : 'Choose .csv file'}
               </Button>
               <span className="text-xs text-muted-foreground truncate max-w-[220px]" title={importFileName}>{importFileName}</span>
             </div>

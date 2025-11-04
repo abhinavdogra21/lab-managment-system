@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyToken, hasRole } from "@/lib/auth"
 import { dbOperations } from "@/lib/database"
+import { logLabBookingActivity, getUserInfoForLogging } from "@/lib/activity-logger"
 
 // GET - Faculty: list my bookings
 export async function GET(req: NextRequest) {
@@ -27,5 +28,22 @@ export async function POST(req: NextRequest) {
     expectedStudents: body?.expectedStudents ?? null,
     equipmentNeeded: body?.equipmentNeeded ?? null,
   })
+  
+  // Log the activity
+  const userInfo = await getUserInfoForLogging(user.userId)
+  logLabBookingActivity({
+    bookingId: booking.id,
+    labId: booking.lab_id,
+    actorUserId: userInfo?.userId || null,
+    actorName: userInfo?.name || null,
+    actorEmail: userInfo?.email || null,
+    actorRole: userInfo?.role || null,
+    action: "created",
+    actionDescription: `Created lab booking for ${booking.purpose}`,
+    bookingSnapshot: booking,
+    ipAddress: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || null,
+    userAgent: req.headers.get("user-agent") || null,
+  }).catch(err => console.error("Activity logging failed:", err))
+  
   return NextResponse.json({ booking }, { status: 201 })
 }
