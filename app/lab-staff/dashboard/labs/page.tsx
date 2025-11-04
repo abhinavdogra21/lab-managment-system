@@ -7,8 +7,9 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
-import { Download, Package, Calendar, Users, Building, FileText, Filter, History, Eye, Search } from 'lucide-react'
+import { Download, Package, Calendar, Users, Building, FileText, Filter, History, Eye, Search, Plus, CheckCircle2, Clock, XCircle } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
@@ -32,6 +33,7 @@ interface Lab {
 
 interface BookingLog {
   id: number
+  log_id?: number
   requester_name: string
   requester_email: string
   requester_role: string
@@ -52,6 +54,7 @@ interface BookingLog {
 
 interface ComponentLog {
   id: number
+  log_id?: number
   requester_name: string
   requester_email: string
   requester_role: string
@@ -64,21 +67,51 @@ interface ComponentLog {
   actual_return_date: string | null
   hod_name: string | null
   hod_approved_at: string | null
-  items: Array<{ id: number; component_name: string; quantity: number }>
+  items: Array<{ id: number; component_name: string; quantity?: number; quantity_requested?: number }>
   created_at: string
 }
 
 export default function LabHeadLabsPage() {
   const { toast } = useToast()
+  
+  // Calculate default dates: Aug 1 (current year) to July 31 (next year)
+  const getDefaultDates = () => {
+    const today = new Date()
+    const currentYear = today.getFullYear()
+    const currentMonth = today.getMonth() // 0-11
+    
+    // If we're before August, use previous year's Aug 1
+    const startYear = currentMonth < 7 ? currentYear - 1 : currentYear
+    const endYear = startYear + 1
+    
+    const startDateDefault = `${startYear}-08-01`
+    const endDateDefault = `${endYear}-07-31`
+    
+    return { startDateDefault, endDateDefault }
+  }
+  
+  const { startDateDefault, endDateDefault } = getDefaultDates()
+  
   const [loading, setLoading] = useState(false)
   const [labs, setLabs] = useState<Lab[]>([])
   const [components, setComponents] = useState<LabComponent[]>([])
   const [bookingLogs, setBookingLogs] = useState<BookingLog[]>([])
   const [componentLogs, setComponentLogs] = useState<ComponentLog[]>([])
-  const [activeTab, setActiveTab] = useState<'components' | 'logs' | 'component-logs'>('components')
+  const [activeTab, setActiveTab] = useState<'inventory' | 'components' | 'logs' | 'component-logs'>('inventory')
   const [selectedLab, setSelectedLab] = useState<string>('all')
   const [bookingLogsSearch, setBookingLogsSearch] = useState('')
   const [componentLogsSearch, setComponentLogsSearch] = useState('')
+  const [bookingStartDate, setBookingStartDate] = useState(startDateDefault)
+  const [bookingEndDate, setBookingEndDate] = useState(endDateDefault)
+  const [componentStartDate, setComponentStartDate] = useState(startDateDefault)
+  const [componentEndDate, setComponentEndDate] = useState(endDateDefault)
+  
+  // Inventory management state
+  const [inventoryLab, setInventoryLab] = useState<string>('')
+  const [inventoryComponents, setInventoryComponents] = useState<LabComponent[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [addForm, setAddForm] = useState({ name: '', category: '', model: '', condition_status: 'working', quantity_total: 1 })
+  const [addLoading, setAddLoading] = useState(false)
   
   const uniqueLabs = labs.length > 0 
     ? labs.map(l => l.name).sort()
@@ -110,8 +143,13 @@ export default function LabHeadLabsPage() {
   const loadBookingLogs = async () => {
     setLoading(true)
     try {
-      const url = bookingLogsSearch 
-        ? `/api/lab-staff/labs/booking-logs?search=${encodeURIComponent(bookingLogsSearch)}`
+      const params = new URLSearchParams()
+      if (bookingLogsSearch) params.append('search', bookingLogsSearch)
+      if (bookingStartDate) params.append('startDate', bookingStartDate)
+      if (bookingEndDate) params.append('endDate', bookingEndDate)
+      
+      const url = params.toString() 
+        ? `/api/lab-staff/labs/booking-logs?${params.toString()}`
         : '/api/lab-staff/labs/booking-logs'
       const res = await fetch(url, { cache: 'no-store' })
       const data = await res.json()
@@ -130,8 +168,13 @@ export default function LabHeadLabsPage() {
   const loadComponentLogs = async () => {
     setLoading(true)
     try {
-      const url = componentLogsSearch 
-        ? `/api/lab-staff/labs/component-logs?search=${encodeURIComponent(componentLogsSearch)}`
+      const params = new URLSearchParams()
+      if (componentLogsSearch) params.append('search', componentLogsSearch)
+      if (componentStartDate) params.append('startDate', componentStartDate)
+      if (componentEndDate) params.append('endDate', componentEndDate)
+      
+      const url = params.toString() 
+        ? `/api/lab-staff/labs/component-logs?${params.toString()}`
         : '/api/lab-staff/labs/component-logs'
       const res = await fetch(url, { cache: 'no-store' })
       const data = await res.json()
@@ -152,10 +195,66 @@ export default function LabHeadLabsPage() {
       loadComponents()
     } else if (activeTab === 'logs') {
       loadBookingLogs()
-    } else {
+    } else if (activeTab === 'component-logs') {
       loadComponentLogs()
+    } else if (activeTab === 'inventory') {
+      loadComponents()
     }
   }, [activeTab])
+  
+  useEffect(() => {
+    if (inventoryLab && activeTab === 'inventory') {
+      loadInventoryComponents(Number(inventoryLab))
+    }
+  }, [inventoryLab])
+  
+  const loadInventoryComponents = async (labId: number) => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/lab-staff/components?lab_id=${labId}`, { cache: 'no-store' })
+      const data = await res.json()
+      if (res.ok) {
+        setInventoryComponents(data.components || [])
+      } else {
+        toast({ title: 'Error', description: data.error || 'Failed to load components', variant: 'destructive' })
+      }
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to load components', variant: 'destructive' })
+    } finally {
+      setLoading(false)
+    }
+  }
+  
+  const handleAddComponent = async () => {
+    if (!inventoryLab || !addForm.name.trim() || !Number.isFinite(Number(addForm.quantity_total))) {
+      toast({ title: 'Missing info', description: 'Select lab, enter name and quantity', variant: 'destructive' })
+      return
+    }
+    setAddLoading(true)
+    try {
+      const res = await fetch('/api/lab-staff/components', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lab_id: Number(inventoryLab),
+          name: addForm.name.trim(),
+          category: addForm.category || null,
+          model: addForm.model || null,
+          condition_status: addForm.condition_status,
+          quantity_total: Number(addForm.quantity_total)
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to add component')
+      toast({ title: 'Success', description: 'Component added successfully' })
+      setAddForm({ name: '', category: '', model: '', condition_status: 'working', quantity_total: 1 })
+      loadInventoryComponents(Number(inventoryLab))
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Failed to add component', variant: 'destructive' })
+    } finally {
+      setAddLoading(false)
+    }
+  }
 
   const generatePDF = async (log: BookingLog, viewOnly: boolean = false) => {
     const doc = new jsPDF()
@@ -383,7 +482,7 @@ export default function LabHeadLabsPage() {
     
     yPos = checkAddPage(yPos, 10)
     doc.text(`Role:`, 20, yPos)
-    doc.text(log.requester_role.toUpperCase(), 85, yPos)
+    doc.text((log.requester_role || 'Unknown').toUpperCase(), 85, yPos)
     yPos += 8
     
     yPos = checkAddPage(yPos, 20)
@@ -574,6 +673,10 @@ export default function LabHeadLabsPage() {
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-4">
         <TabsList>
+          <TabsTrigger value="inventory" className="gap-2">
+            <Package className="h-4 w-4" />
+            Manage Inventory
+          </TabsTrigger>
           <TabsTrigger value="components" className="gap-2">
             <Package className="h-4 w-4" />
             Components Inventory
@@ -587,6 +690,158 @@ export default function LabHeadLabsPage() {
             Component Issue Logs
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="inventory" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Select Lab</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Select value={inventoryLab} onValueChange={setInventoryLab}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Choose a lab to manage" />
+                </SelectTrigger>
+                <SelectContent>
+                  {labs.length === 0 ? (
+                    <div className="px-2 py-1 text-sm text-muted-foreground">No labs assigned</div>
+                  ) : (
+                    labs.map(l => (
+                      <SelectItem key={l.id} value={l.id.toString()}>{l.name}</SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+
+          {inventoryLab && (
+            <div className="grid lg:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Components in Lab</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {loading ? (
+                    <div className="text-sm text-muted-foreground">Loading...</div>
+                  ) : inventoryComponents.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No components yet.</div>
+                  ) : (
+                    <>
+                      <div>
+                        <Label htmlFor="search" className="flex items-center gap-2">
+                          <Search className="h-4 w-4" /> Search Components
+                        </Label>
+                        <Input
+                          id="search"
+                          type="text"
+                          placeholder="Search by name, model, or category..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                        {inventoryComponents
+                          .filter(c => {
+                            if (!searchQuery.trim()) return true
+                            const q = searchQuery.toLowerCase()
+                            return c.name.toLowerCase().includes(q) || 
+                                   c.model?.toLowerCase().includes(q) || 
+                                   c.category?.toLowerCase().includes(q)
+                          })
+                          .map(c => (
+                            <div key={c.id} className="p-3 border rounded">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="font-medium text-sm">{c.name} {c.model && `(${c.model})`}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {c.category || 'Uncategorized'} • {c.condition_status} • 
+                                    Available: {c.quantity_available}/{c.quantity_total}
+                                  </div>
+                                </div>
+                                <Badge variant={c.quantity_available > 0 ? 'default' : 'destructive'}>
+                                  {c.quantity_available}/{c.quantity_total}
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Plus className="h-4 w-4" /> Add Component
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <Label>Name</Label>
+                    <Input 
+                      value={addForm.name} 
+                      onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} 
+                      placeholder="Component name" 
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Category</Label>
+                      <Input 
+                        value={addForm.category} 
+                        onChange={(e) => setAddForm({ ...addForm, category: e.target.value })} 
+                        placeholder="e.g., Electronics" 
+                      />
+                    </div>
+                    <div>
+                      <Label>Model</Label>
+                      <Input 
+                        value={addForm.model} 
+                        onChange={(e) => setAddForm({ ...addForm, model: e.target.value })} 
+                        placeholder="Model no." 
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Condition</Label>
+                      <Select 
+                        value={addForm.condition_status} 
+                        onValueChange={(v) => setAddForm({ ...addForm, condition_status: v as any })}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="working">Working</SelectItem>
+                          <SelectItem value="dead">Dead</SelectItem>
+                          <SelectItem value="consumable">Consumable</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Quantity</Label>
+                      <Input 
+                        type="number" 
+                        min={1} 
+                        value={addForm.quantity_total} 
+                        onChange={(e) => setAddForm({ ...addForm, quantity_total: Number(e.target.value) })} 
+                      />
+                    </div>
+                  </div>
+                  <div className="pt-1">
+                    <Button onClick={handleAddComponent} disabled={addLoading} className="w-full">
+                      {addLoading ? 'Adding...' : 'Add Component'}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Note: If this lab has a Head Lab Staff, only the head can add components.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </TabsContent>
 
         <TabsContent value="components" className="space-y-4">
           {loading ? (
@@ -658,27 +913,55 @@ export default function LabHeadLabsPage() {
         </TabsContent>
 
         <TabsContent value="logs" className="space-y-4">
-          {/* Search Input */}
-          <div className="flex items-center gap-2">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by lab, requester, purpose, or email..."
-              value={bookingLogsSearch}
-              onChange={(e) => setBookingLogsSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && loadBookingLogs()}
-              className="max-w-md"
-            />
-            <Button onClick={loadBookingLogs} size="sm">
-              Search
-            </Button>
-            {bookingLogsSearch && (
-              <Button onClick={() => { 
-                setBookingLogsSearch(''); 
-                setTimeout(loadBookingLogs, 100);
-              }} size="sm" variant="outline">
-                Clear
+          {/* Search and Date Filters */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by lab, requester, purpose, or email..."
+                value={bookingLogsSearch}
+                onChange={(e) => setBookingLogsSearch(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && loadBookingLogs()}
+                className="max-w-md"
+              />
+              <Button onClick={loadBookingLogs} size="sm">
+                Search
               </Button>
-            )}
+              {(bookingLogsSearch || bookingStartDate !== startDateDefault || bookingEndDate !== endDateDefault) && (
+                <Button onClick={() => { 
+                  setBookingLogsSearch('');
+                  setBookingStartDate(startDateDefault);
+                  setBookingEndDate(endDateDefault);
+                  setTimeout(loadBookingLogs, 100);
+                }} size="sm" variant="outline">
+                  Clear
+                </Button>
+              )}
+            </div>
+            
+            {/* Date Range Filter */}
+            <div className="flex items-center gap-3">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Date Range:</span>
+              <Input
+                type="date"
+                value={bookingStartDate}
+                onChange={(e) => setBookingStartDate(e.target.value)}
+                className="w-[170px]"
+                placeholder="From"
+              />
+              <span className="text-muted-foreground">to</span>
+              <Input
+                type="date"
+                value={bookingEndDate}
+                onChange={(e) => setBookingEndDate(e.target.value)}
+                className="w-[170px]"
+                placeholder="To"
+              />
+              <Button onClick={loadBookingLogs} size="sm" variant="secondary">
+                Apply Dates
+              </Button>
+            </div>
           </div>
 
           {loading ? (
@@ -710,6 +993,97 @@ export default function LabHeadLabsPage() {
                         <p className="text-sm font-medium">Requested by:</p>
                         <p className="text-sm text-muted-foreground">{log.requester_name}</p>
                       </div>
+                      
+                      {/* Timeline */}
+                      <div className="border-t pt-4">
+                        <p className="text-sm font-semibold mb-3">Approval Timeline:</p>
+                        <div className="space-y-3">
+                          {/* Request Created */}
+                          <div className="flex gap-3">
+                            <div className="flex flex-col items-center">
+                              <div className="rounded-full bg-blue-500 p-1">
+                                <Clock className="h-3 w-3 text-white" />
+                              </div>
+                              {(log.faculty_name || log.lab_staff_name || log.hod_name) && (
+                                <div className="w-px h-8 bg-gray-300" />
+                              )}
+                            </div>
+                            <div className="flex-1 pb-2">
+                              <p className="text-sm font-medium">Request Created</p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(log.created_at).toLocaleString('en-IN')}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          {/* Faculty Approval */}
+                          {log.faculty_name && (
+                            <div className="flex gap-3">
+                              <div className="flex flex-col items-center">
+                                <div className="rounded-full bg-green-500 p-1">
+                                  <CheckCircle2 className="h-3 w-3 text-white" />
+                                </div>
+                                {(log.lab_staff_name || log.hod_name) && (
+                                  <div className="w-px h-8 bg-gray-300" />
+                                )}
+                              </div>
+                              <div className="flex-1 pb-2">
+                                <p className="text-sm font-medium">Recommended by Faculty</p>
+                                <p className="text-xs text-muted-foreground">{log.faculty_name}</p>
+                                {log.faculty_approved_at && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {new Date(log.faculty_approved_at).toLocaleString('en-IN')}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Lab Staff Approval */}
+                          {log.lab_staff_name && (
+                            <div className="flex gap-3">
+                              <div className="flex flex-col items-center">
+                                <div className="rounded-full bg-green-500 p-1">
+                                  <CheckCircle2 className="h-3 w-3 text-white" />
+                                </div>
+                                {log.hod_name && (
+                                  <div className="w-px h-8 bg-gray-300" />
+                                )}
+                              </div>
+                              <div className="flex-1 pb-2">
+                                <p className="text-sm font-medium">Recommended by Lab Staff</p>
+                                <p className="text-xs text-muted-foreground">{log.lab_staff_name}</p>
+                                {log.lab_staff_approved_at && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {new Date(log.lab_staff_approved_at).toLocaleString('en-IN')}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* HOD Final Approval */}
+                          {log.hod_name && (
+                            <div className="flex gap-3">
+                              <div className="flex flex-col items-center">
+                                <div className="rounded-full bg-green-600 p-1">
+                                  <CheckCircle2 className="h-3 w-3 text-white" />
+                                </div>
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-bold">APPROVED BY HOD</p>
+                                <p className="text-xs text-muted-foreground">{log.hod_name}</p>
+                                {log.hod_approved_at && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {new Date(log.hod_approved_at).toLocaleString('en-IN')}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" onClick={() => generatePDF(log, true)}>
                           <Eye className="mr-2 h-4 w-4" />
@@ -729,27 +1103,55 @@ export default function LabHeadLabsPage() {
         </TabsContent>
 
         <TabsContent value="component-logs" className="space-y-4">
-          {/* Search Input */}
-          <div className="flex items-center gap-2">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by lab, requester, component, purpose, or email..."
-              value={componentLogsSearch}
-              onChange={(e) => setComponentLogsSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && loadComponentLogs()}
-              className="max-w-md"
-            />
-            <Button onClick={loadComponentLogs} size="sm">
-              Search
-            </Button>
-            {componentLogsSearch && (
-              <Button onClick={() => { 
-                setComponentLogsSearch(''); 
-                setTimeout(loadComponentLogs, 100);
-              }} size="sm" variant="outline">
-                Clear
+          {/* Search and Date Filters */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by lab, requester, component, purpose, or email..."
+                value={componentLogsSearch}
+                onChange={(e) => setComponentLogsSearch(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && loadComponentLogs()}
+                className="max-w-md"
+              />
+              <Button onClick={loadComponentLogs} size="sm">
+                Search
               </Button>
-            )}
+              {(componentLogsSearch || componentStartDate !== startDateDefault || componentEndDate !== endDateDefault) && (
+                <Button onClick={() => { 
+                  setComponentLogsSearch('');
+                  setComponentStartDate(startDateDefault);
+                  setComponentEndDate(endDateDefault);
+                  setTimeout(loadComponentLogs, 100);
+                }} size="sm" variant="outline">
+                  Clear
+                </Button>
+              )}
+            </div>
+            
+            {/* Date Range Filter */}
+            <div className="flex items-center gap-3">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Date Range:</span>
+              <Input
+                type="date"
+                value={componentStartDate}
+                onChange={(e) => setComponentStartDate(e.target.value)}
+                className="w-[170px]"
+                placeholder="From"
+              />
+              <span className="text-muted-foreground">to</span>
+              <Input
+                type="date"
+                value={componentEndDate}
+                onChange={(e) => setComponentEndDate(e.target.value)}
+                className="w-[170px]"
+                placeholder="To"
+              />
+              <Button onClick={loadComponentLogs} size="sm" variant="secondary">
+                Apply Dates
+              </Button>
+            </div>
           </div>
 
           {loading ? (
@@ -786,11 +1188,115 @@ export default function LabHeadLabsPage() {
                       <div>
                         <p className="text-sm font-medium">Components:</p>
                         <ul className="text-sm text-muted-foreground list-disc list-inside">
-                          {log.items?.map((item) => (
-                            <li key={item.id}>{item.component_name} (Qty: {item.quantity})</li>
+                          {log.items?.map((item, index) => (
+                            <li key={`${log.id}-component-${item.id || index}-${item.component_name}`}>
+                              {item.component_name} (Qty: {item.quantity_requested || item.quantity || 0})
+                            </li>
                           ))}
                         </ul>
                       </div>
+                      
+                      {/* Timeline */}
+                      <div className="border-t pt-4">
+                        <p className="text-sm font-semibold mb-3">Request Timeline:</p>
+                        <div className="space-y-3">
+                          {/* Request Created */}
+                          <div className="flex gap-3">
+                            <div className="flex flex-col items-center">
+                              <div className="rounded-full bg-blue-500 p-1">
+                                <Clock className="h-3 w-3 text-white" />
+                              </div>
+                              <div className="w-px h-8 bg-gray-300" />
+                            </div>
+                            <div className="flex-1 pb-2">
+                              <p className="text-sm font-medium">Request Created</p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(log.created_at).toLocaleString('en-IN')}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          {/* HOD Approval */}
+                          {log.hod_name && (
+                            <div className="flex gap-3">
+                              <div className="flex flex-col items-center">
+                                <div className="rounded-full bg-green-600 p-1">
+                                  <CheckCircle2 className="h-3 w-3 text-white" />
+                                </div>
+                                <div className="w-px h-8 bg-gray-300" />
+                              </div>
+                              <div className="flex-1 pb-2">
+                                <p className="text-sm font-bold">APPROVED BY HOD</p>
+                                <p className="text-xs text-muted-foreground">{log.hod_name}</p>
+                                {log.hod_approved_at && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {new Date(log.hod_approved_at).toLocaleString('en-IN')}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Components Issued */}
+                          <div className="flex gap-3">
+                            <div className="flex flex-col items-center">
+                              <div className="rounded-full bg-purple-500 p-1">
+                                <Package className="h-3 w-3 text-white" />
+                              </div>
+                              {log.returned_at && (
+                                <div className="w-px h-8 bg-gray-300" />
+                              )}
+                            </div>
+                            <div className="flex-1 pb-2">
+                              <p className="text-sm font-medium">Components Issued</p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(log.issued_at).toLocaleString('en-IN')}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Expected return: {new Date(log.return_date).toLocaleDateString('en-IN')}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          {/* Components Returned */}
+                          {log.returned_at && (
+                            <div className="flex gap-3">
+                              <div className="flex flex-col items-center">
+                                <div className="rounded-full bg-green-500 p-1">
+                                  <CheckCircle2 className="h-3 w-3 text-white" />
+                                </div>
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-medium">Components Returned</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {new Date(log.returned_at).toLocaleString('en-IN')}
+                                </p>
+                                {log.actual_return_date && (
+                                  <>
+                                    <p className="text-xs text-muted-foreground">
+                                      Actual return date: {new Date(log.actual_return_date).toLocaleDateString('en-IN')}
+                                    </p>
+                                    {(() => {
+                                      const returnDate = new Date(log.return_date)
+                                      const actualDate = new Date(log.actual_return_date)
+                                      const delayDays = Math.floor((actualDate.getTime() - returnDate.getTime()) / (1000 * 60 * 60 * 24))
+                                      if (delayDays > 0) {
+                                        return (
+                                          <p className="text-xs text-red-600 font-medium">
+                                            Delay: {delayDays} day(s)
+                                          </p>
+                                        )
+                                      }
+                                      return null
+                                    })()}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" onClick={() => generateComponentLogPDF(log, true)}>
                           <Eye className="mr-2 h-4 w-4" />

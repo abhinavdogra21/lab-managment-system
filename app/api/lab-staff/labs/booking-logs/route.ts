@@ -13,30 +13,59 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search') || ''
+    const startDate = searchParams.get('startDate') || ''
+    const endDate = searchParams.get('endDate') || ''
 
-    // Build search condition
+    // Build search condition - search in activity logs and booking snapshot
     const searchCondition = search 
-      ? `AND (l.name LIKE ? OR requester.name LIKE ? OR br.purpose LIKE ? OR requester.email LIKE ?)`
+      ? `AND (l.name LIKE ? OR JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_name')) LIKE ? OR JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.purpose')) LIKE ? OR JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_email')) LIKE ?)`
       : ''
     const searchValue = `%${search}%`
+    
+    // Build date filter condition
+    const dateConditions: string[] = []
+    const dateParams: string[] = []
+    if (startDate) {
+      dateConditions.push('lbal.created_at >= ?')
+      dateParams.push(startDate)
+    }
+    if (endDate) {
+      dateConditions.push('lbal.created_at <= ?')
+      dateParams.push(`${endDate} 23:59:59`)
+    }
+    const dateCondition = dateConditions.length > 0 ? `AND ${dateConditions.join(' AND ')}` : ''
 
     if (user.role === 'admin') {
-      const params = search ? [searchValue, searchValue, searchValue, searchValue] : []
+      const params = [
+        ...(search ? [searchValue, searchValue, searchValue, searchValue] : []),
+        ...dateParams
+      ]
+      // Use activity logs to preserve deleted user information
       const res = await db.query(`
-        SELECT br.*, l.name AS lab_name, d.name AS department_name,
-          requester.name AS requester_name, requester.email AS requester_email, requester.role AS requester_role,
-          faculty.name AS faculty_name,
-          ls.name AS lab_staff_name,
-          hodu.name AS hod_name
-        FROM booking_requests br
-        JOIN labs l ON br.lab_id = l.id
+        SELECT DISTINCT
+          lbal.booking_id as id,
+          lbal.created_at,
+          l.name AS lab_name,
+          d.name AS department_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_name')) AS requester_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_email')) AS requester_email,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_role')) AS requester_role,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.booking_date')) AS booking_date,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.start_time')) AS start_time,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.end_time')) AS end_time,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.purpose')) AS purpose,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.status')) AS status,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.faculty_name')) AS faculty_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.faculty_approved_at')) AS faculty_approved_at,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.lab_staff_name')) AS lab_staff_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.lab_staff_approved_at')) AS lab_staff_approved_at,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.hod_name')) AS hod_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.hod_approved_at')) AS hod_approved_at
+        FROM lab_booking_activity_logs lbal
+        JOIN labs l ON lbal.lab_id = l.id
         JOIN departments d ON l.department_id = d.id
-        LEFT JOIN users requester ON br.requested_by = requester.id
-        LEFT JOIN users faculty ON br.faculty_approved_by = faculty.id
-        LEFT JOIN users ls ON br.lab_staff_approved_by = ls.id
-        LEFT JOIN users hodu ON d.hod_id = hodu.id
-        WHERE br.status = 'approved' ${searchCondition}
-        ORDER BY br.created_at DESC
+        WHERE lbal.action = 'approved_by_hod' ${searchCondition} ${dateCondition}
+        ORDER BY lbal.created_at DESC
       `, params)
       return NextResponse.json({ logs: res.rows || [] })
     }
@@ -48,25 +77,38 @@ export async function GET(request: NextRequest) {
     if (labIds.length === 0) return NextResponse.json({ logs: [] })
 
     const placeholders = labIds.map(() => '?').join(',')
-    const params = search 
-      ? [...labIds, searchValue, searchValue, searchValue, searchValue]
-      : labIds
+    const params = [
+      ...labIds, 
+      ...(search ? [searchValue, searchValue, searchValue, searchValue] : []),
+      ...dateParams
+    ]
+    // Use activity logs to preserve deleted user information
     const res = await db.query(
       `
-        SELECT br.*, l.name AS lab_name, d.name AS department_name,
-          requester.name AS requester_name, requester.email AS requester_email, requester.role AS requester_role,
-          faculty.name AS faculty_name,
-          ls.name AS lab_staff_name,
-          hodu.name AS hod_name
-        FROM booking_requests br
-        JOIN labs l ON br.lab_id = l.id
+        SELECT DISTINCT
+          lbal.booking_id as id,
+          lbal.created_at,
+          l.name AS lab_name,
+          d.name AS department_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_name')) AS requester_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_email')) AS requester_email,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_role')) AS requester_role,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.booking_date')) AS booking_date,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.start_time')) AS start_time,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.end_time')) AS end_time,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.purpose')) AS purpose,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.status')) AS status,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.faculty_name')) AS faculty_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.faculty_approved_at')) AS faculty_approved_at,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.lab_staff_name')) AS lab_staff_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.lab_staff_approved_at')) AS lab_staff_approved_at,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.hod_name')) AS hod_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.hod_approved_at')) AS hod_approved_at
+        FROM lab_booking_activity_logs lbal
+        JOIN labs l ON lbal.lab_id = l.id
         JOIN departments d ON l.department_id = d.id
-        LEFT JOIN users requester ON br.requested_by = requester.id
-        LEFT JOIN users faculty ON br.faculty_approved_by = faculty.id
-        LEFT JOIN users ls ON br.lab_staff_approved_by = ls.id
-        LEFT JOIN users hodu ON d.hod_id = hodu.id
-        WHERE br.status = 'approved' AND l.id IN (${placeholders}) ${searchCondition}
-        ORDER BY br.created_at DESC
+        WHERE lbal.action = 'approved_by_hod' AND l.id IN (${placeholders}) ${searchCondition} ${dateCondition}
+        ORDER BY lbal.created_at DESC
       `,
       params
     )

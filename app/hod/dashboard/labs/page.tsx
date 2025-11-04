@@ -32,6 +32,7 @@ interface Lab {
 
 interface BookingLog {
   id: number
+  log_id?: number
   requester_name: string
   requester_email: string
   requester_role: string
@@ -53,6 +54,7 @@ interface BookingLog {
 
 interface ComponentLog {
   id: number
+  log_id?: number
   requester_name: string
   requester_email: string
   requester_role: string
@@ -78,6 +80,25 @@ interface ComponentLog {
 
 export default function HODLabsPage() {
   const { toast } = useToast()
+  
+  // Calculate default dates: Aug 1 (current year) to July 31 (next year)
+  const getDefaultDates = () => {
+    const today = new Date()
+    const currentYear = today.getFullYear()
+    const currentMonth = today.getMonth() // 0-11
+    
+    // If we're before August, use previous year's Aug 1
+    const startYear = currentMonth < 7 ? currentYear - 1 : currentYear
+    const endYear = startYear + 1
+    
+    const startDateDefault = `${startYear}-08-01`
+    const endDateDefault = `${endYear}-07-31`
+    
+    return { startDateDefault, endDateDefault }
+  }
+  
+  const { startDateDefault, endDateDefault } = getDefaultDates()
+  
   const [loading, setLoading] = useState(false)
   const [labs, setLabs] = useState<Lab[]>([])
   const [components, setComponents] = useState<LabComponent[]>([])
@@ -87,10 +108,10 @@ export default function HODLabsPage() {
   const [selectedLab, setSelectedLab] = useState<string>('all')
   const [bookingLogsSearch, setBookingLogsSearch] = useState('')
   const [componentLogsSearch, setComponentLogsSearch] = useState('')
-  const [bookingStartDate, setBookingStartDate] = useState('')
-  const [bookingEndDate, setBookingEndDate] = useState('')
-  const [componentStartDate, setComponentStartDate] = useState('')
-  const [componentEndDate, setComponentEndDate] = useState('')
+  const [bookingStartDate, setBookingStartDate] = useState(startDateDefault)
+  const [bookingEndDate, setBookingEndDate] = useState(endDateDefault)
+  const [componentStartDate, setComponentStartDate] = useState(startDateDefault)
+  const [componentEndDate, setComponentEndDate] = useState(endDateDefault)
   
   // Get unique labs for filter - prioritize labs list, fallback to components/logs
   const uniqueLabs = labs.length > 0 
@@ -861,11 +882,11 @@ export default function HODLabsPage() {
               <Button onClick={loadBookingLogs} size="sm">
                 Search
               </Button>
-              {(bookingLogsSearch || bookingStartDate || bookingEndDate) && (
+              {(bookingLogsSearch || bookingStartDate !== startDateDefault || bookingEndDate !== endDateDefault) && (
                 <Button onClick={() => { 
                   setBookingLogsSearch('');
-                  setBookingStartDate('');
-                  setBookingEndDate('');
+                  setBookingStartDate(startDateDefault);
+                  setBookingEndDate(endDateDefault);
                   setTimeout(loadBookingLogs, 100);
                 }} size="sm" variant="outline">
                   Clear
@@ -1027,11 +1048,11 @@ export default function HODLabsPage() {
               <Button onClick={loadComponentLogs} size="sm">
                 Search
               </Button>
-              {(componentLogsSearch || componentStartDate || componentEndDate) && (
+              {(componentLogsSearch || componentStartDate !== startDateDefault || componentEndDate !== endDateDefault) && (
                 <Button onClick={() => { 
                   setComponentLogsSearch('');
-                  setComponentStartDate('');
-                  setComponentEndDate('');
+                  setComponentStartDate(startDateDefault);
+                  setComponentEndDate(endDateDefault);
                   setTimeout(loadComponentLogs, 100);
                 }} size="sm" variant="outline">
                   Clear

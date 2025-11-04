@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -19,7 +20,7 @@ interface LabStat {
   quantity_total: number
   quantity_available: number
   times_requested: number
-  total_quantity_issued: number
+  total_quantity_requested: number
   utilization_percentage: number
 }
 
@@ -30,7 +31,7 @@ interface ComponentStat {
   quantity_total: number
   quantity_available: number
   times_requested: number
-  total_quantity_issued: number
+  total_quantity_requested: number
   utilization_percentage: number
   labs_count: number
 }
@@ -42,6 +43,24 @@ interface Lab {
 }
 
 export default function HODAnalyticsPage() {
+  // Calculate default dates: Aug 1 (current year) to July 31 (next year)
+  const getDefaultDates = () => {
+    const today = new Date()
+    const currentYear = today.getFullYear()
+    const currentMonth = today.getMonth() // 0-11
+    
+    // If we're before August, use previous year's Aug 1
+    const startYear = currentMonth < 7 ? currentYear - 1 : currentYear
+    const endYear = startYear + 1
+    
+    const startDateDefault = `${startYear}-08-01`
+    const endDateDefault = `${endYear}-07-31`
+    
+    return { startDateDefault, endDateDefault }
+  }
+  
+  const { startDateDefault, endDateDefault } = getDefaultDates()
+  
   const [labStats, setLabStats] = useState<LabStat[]>([])
   const [componentStats, setComponentStats] = useState<ComponentStat[]>([])
   const [allLabs, setAllLabs] = useState<Lab[]>([])
@@ -49,6 +68,8 @@ export default function HODAnalyticsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [sortOrder, setSortOrder] = useState<"highest" | "lowest">("highest")
   const [selectedLab, setSelectedLab] = useState<string>("all")
+  const [startDate, setStartDate] = useState(startDateDefault)
+  const [endDate, setEndDate] = useState(endDateDefault)
 
   useEffect(() => {
     fetchData()
@@ -57,7 +78,15 @@ export default function HODAnalyticsPage() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const res = await fetch('/api/hod/analytics/component-utilization')
+      const params = new URLSearchParams()
+      if (startDate) params.append('startDate', startDate)
+      if (endDate) params.append('endDate', endDate)
+      
+      const url = params.toString() 
+        ? `/api/hod/analytics/component-utilization?${params.toString()}`
+        : '/api/hod/analytics/component-utilization'
+        
+      const res = await fetch(url)
       const data = await res.json()
       setLabStats(data.labStats || [])
       setComponentStats(data.componentStats || [])
@@ -67,6 +96,10 @@ export default function HODAnalyticsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleApplyFilters = () => {
+    fetchData()
   }
 
   // Get unique labs for filter (from allLabs to include labs with no components)
@@ -127,54 +160,95 @@ export default function HODAnalyticsPage() {
             Filters
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
-          <div>
-            <Label htmlFor="search">Search Component</Label>
-            <Input
-              id="search"
-              placeholder="Search by component or lab name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="mt-1.5"
-            />
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <Label htmlFor="startDate">From Date</Label>
+              <Input
+                id="startDate"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="endDate">To Date</Label>
+              <Input
+                id="endDate"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="mt-1.5"
+              />
+            </div>
           </div>
-          <div>
-            <Label htmlFor="sort">Sort Order</Label>
-            <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "highest" | "lowest")}>
-              <SelectTrigger id="sort" className="mt-1.5">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="highest">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4" />
-                    Highest to Lowest
-                  </div>
-                </SelectItem>
-                <SelectItem value="lowest">
-                  <div className="flex items-center gap-2">
-                    <TrendingDown className="h-4 w-4" />
-                    Lowest to Highest
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="lab">Filter by Lab</Label>
-            <Select value={selectedLab} onValueChange={setSelectedLab}>
-              <SelectTrigger id="lab" className="mt-1.5">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Labs</SelectItem>
-                {uniqueLabs.map((lab) => (
-                  <SelectItem key={lab} value={lab}>
-                    {lab}
+          <div className="grid gap-4 md:grid-cols-3">
+            <div>
+              <Label htmlFor="search">Search Component</Label>
+              <Input
+                id="search"
+                placeholder="Search by component or lab name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="sort">Sort Order</Label>
+              <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "highest" | "lowest")}>
+                <SelectTrigger id="sort" className="mt-1.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="highest">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4" />
+                      Highest to Lowest
+                    </div>
                   </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  <SelectItem value="lowest">
+                    <div className="flex items-center gap-2">
+                      <TrendingDown className="h-4 w-4" />
+                      Lowest to Highest
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="lab">Filter by Lab</Label>
+              <Select value={selectedLab} onValueChange={setSelectedLab}>
+                <SelectTrigger id="lab" className="mt-1.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Labs</SelectItem>
+                  {uniqueLabs.map((lab) => (
+                    <SelectItem key={lab} value={lab}>
+                      {lab}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={handleApplyFilters} disabled={loading}>
+              Apply Date Filters
+            </Button>
+            {(startDate !== startDateDefault || endDate !== endDateDefault) && (
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setStartDate(startDateDefault)
+                  setEndDate(endDateDefault)
+                  setTimeout(fetchData, 100)
+                }}
+              >
+                Reset to Default Dates
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -187,7 +261,7 @@ export default function HODAnalyticsPage() {
             Lab-wise Component Utilization
           </CardTitle>
           <CardDescription>
-            Component usage breakdown by lab. Utilization capped at 100%. Formula: MIN((Total Quantity Issued / Total Available) × 100, 100)
+            Component usage breakdown by lab. Formula: (Total Quantity Requested / Total Quantity Available) × 100. Shows how much of the available inventory has been requested.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -211,7 +285,7 @@ export default function HODAnalyticsPage() {
                     <TableHead className="text-right">Total Qty</TableHead>
                     <TableHead className="text-right">Available Qty</TableHead>
                     <TableHead className="text-right">Times Requested</TableHead>
-                    <TableHead className="text-right">Total Qty Issued</TableHead>
+                    <TableHead className="text-right">Total Qty Requested</TableHead>
                     <TableHead className="text-right">Utilization %</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -230,7 +304,7 @@ export default function HODAnalyticsPage() {
                       <TableCell className="text-right">
                         <Badge variant="secondary">{stat.times_requested}</Badge>
                       </TableCell>
-                      <TableCell className="text-right">{stat.total_quantity_issued}</TableCell>
+                      <TableCell className="text-right">{stat.total_quantity_requested}</TableCell>
                       <TableCell className="text-right">
                         <Badge variant={getUtilizationColor(stat.utilization_percentage)}>
                           {stat.utilization_percentage}%
@@ -296,13 +370,13 @@ export default function HODAnalyticsPage() {
                     <TableHead className="text-right">Total Qty</TableHead>
                     <TableHead className="text-right">Available Qty</TableHead>
                     <TableHead className="text-right">Times Requested</TableHead>
-                    <TableHead className="text-right">Total Qty Issued</TableHead>
+                    <TableHead className="text-right">Total Qty Requested</TableHead>
                     <TableHead className="text-right">Utilization %</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredComponentStats.map((stat) => (
-                    <TableRow key={stat.component_id}>
+                  {filteredComponentStats.map((stat, index) => (
+                    <TableRow key={stat.component_id ? `comp-${stat.component_id}` : `comp-null-${stat.component_name}-${index}`}>
                       <TableCell className="font-medium">{stat.component_name}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{stat.category || 'N/A'}</Badge>
@@ -313,7 +387,7 @@ export default function HODAnalyticsPage() {
                       <TableCell className="text-right">
                         <Badge variant="secondary">{stat.times_requested}</Badge>
                       </TableCell>
-                      <TableCell className="text-right">{stat.total_quantity_issued}</TableCell>
+                      <TableCell className="text-right">{stat.total_quantity_requested}</TableCell>
                       <TableCell className="text-right">
                         <Badge variant={getUtilizationColor(stat.utilization_percentage)}>
                           {stat.utilization_percentage}%

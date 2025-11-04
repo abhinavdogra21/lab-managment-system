@@ -10,6 +10,11 @@ export async function GET(request: NextRequest) {
     }
 
     const db = Database.getInstance()
+    
+    // Get date filters from query params
+    const { searchParams } = new URL(request.url)
+    const startDate = searchParams.get('startDate')
+    const endDate = searchParams.get('endDate')
 
     // Get HOD's departments
     let departmentIds: number[] = []
@@ -25,112 +30,129 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Get lab-wise component utilization
+    // Build date filter condition
+    let dateCondition = ''
+    const dateParams: string[] = []
+    if (startDate) {
+      dateCondition += ' AND cal.created_at >= ?'
+      dateParams.push(startDate)
+    }
+    if (endDate) {
+      dateCondition += ' AND cal.created_at <= ?'
+      dateParams.push(`${endDate} 23:59:59`)
+    }
+
+    // Get lab-wise component utilization from activity logs
     let labStatsQuery
+    let labStatsParams: any[] = []
+    
     if (user.role === 'admin') {
       labStatsQuery = `
         SELECT 
           l.id as lab_id,
           l.name as lab_name,
           d.name as department_name,
-          c.id as component_id,
-          c.name as component_name,
+          JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_id') as component_id,
+          JSON_UNQUOTE(JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_name')) as component_name,
           c.quantity_total,
           c.quantity_available,
-          COUNT(DISTINCT cr.id) as times_requested,
-          SUM(cri.quantity_requested) as total_quantity_issued,
+          COUNT(DISTINCT cal.entity_id) as times_requested,
+          COALESCE(SUM(JSON_EXTRACT(cal.entity_snapshot, '$.items[0].quantity_requested')), 0) as total_quantity_requested,
           CASE 
-            WHEN c.quantity_total > 0 THEN LEAST(ROUND((SUM(cri.quantity_requested) / c.quantity_total) * 100, 2), 100)
+            WHEN c.quantity_total > 0 THEN ROUND((COALESCE(SUM(JSON_EXTRACT(cal.entity_snapshot, '$.items[0].quantity_requested')), 0) / c.quantity_total) * 100, 2)
             ELSE 0
           END as utilization_percentage
-        FROM component_request_items cri
-        JOIN component_requests cr ON cri.request_id = cr.id AND cr.status = 'approved' AND cr.issued_at IS NOT NULL
-        JOIN components c ON cri.component_id = c.id
-        JOIN labs l ON c.lab_id = l.id
+        FROM component_activity_logs cal
+        JOIN labs l ON cal.lab_id = l.id
         JOIN departments d ON l.department_id = d.id
-        GROUP BY l.id, c.id
-        ORDER BY utilization_percentage DESC, times_requested DESC, total_quantity_issued DESC
+        INNER JOIN components c ON c.id = JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_id')
+        WHERE cal.action = 'issued' AND JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_id') IS NOT NULL ${dateCondition}
+        GROUP BY l.id, l.name, d.name, JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_id'), JSON_UNQUOTE(JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_name')), c.quantity_total, c.quantity_available
+        ORDER BY utilization_percentage DESC, times_requested DESC, total_quantity_requested DESC
       `
+      labStatsParams = [...dateParams]
     } else {
       labStatsQuery = `
         SELECT 
           l.id as lab_id,
           l.name as lab_name,
           d.name as department_name,
-          c.id as component_id,
-          c.name as component_name,
+          JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_id') as component_id,
+          JSON_UNQUOTE(JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_name')) as component_name,
           c.quantity_total,
           c.quantity_available,
-          COUNT(DISTINCT cr.id) as times_requested,
-          SUM(cri.quantity_requested) as total_quantity_issued,
+          COUNT(DISTINCT cal.entity_id) as times_requested,
+          COALESCE(SUM(JSON_EXTRACT(cal.entity_snapshot, '$.items[0].quantity_requested')), 0) as total_quantity_requested,
           CASE 
-            WHEN c.quantity_total > 0 THEN LEAST(ROUND((SUM(cri.quantity_requested) / c.quantity_total) * 100, 2), 100)
+            WHEN c.quantity_total > 0 THEN ROUND((COALESCE(SUM(JSON_EXTRACT(cal.entity_snapshot, '$.items[0].quantity_requested')), 0) / c.quantity_total) * 100, 2)
             ELSE 0
           END as utilization_percentage
-        FROM component_request_items cri
-        JOIN component_requests cr ON cri.request_id = cr.id AND cr.status = 'approved' AND cr.issued_at IS NOT NULL
-        JOIN components c ON cri.component_id = c.id
-        JOIN labs l ON c.lab_id = l.id
+        FROM component_activity_logs cal
+        JOIN labs l ON cal.lab_id = l.id
         JOIN departments d ON l.department_id = d.id
-        WHERE d.id IN (${departmentIds.join(',')})
-        GROUP BY l.id, c.id
-        ORDER BY utilization_percentage DESC, times_requested DESC, total_quantity_issued DESC
+        INNER JOIN components c ON c.id = JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_id')
+        WHERE cal.action = 'issued' AND d.id IN (${departmentIds.join(',')}) AND JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_id') IS NOT NULL ${dateCondition}
+        GROUP BY l.id, l.name, d.name, JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_id'), JSON_UNQUOTE(JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_name')), c.quantity_total, c.quantity_available
+        ORDER BY utilization_percentage DESC, times_requested DESC, total_quantity_requested DESC
       `
+      labStatsParams = [...dateParams]
     }
 
-    const labStats = await db.query(labStatsQuery)
+    const labStats = await db.query(labStatsQuery, labStatsParams)
 
-    // Get overall component utilization (across all labs)
+    // Get overall component utilization (across all labs) from activity logs
     let componentStatsQuery
+    let componentStatsParams: any[] = []
+    
     if (user.role === 'admin') {
       componentStatsQuery = `
         SELECT 
-          c.id as component_id,
-          c.name as component_name,
-          c.category,
+          JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_id') as component_id,
+          JSON_UNQUOTE(JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_name')) as component_name,
+          c.category as category,
           c.quantity_total,
           c.quantity_available,
-          COUNT(DISTINCT cr.id) as times_requested,
-          SUM(cri.quantity_requested) as total_quantity_issued,
+          COUNT(DISTINCT cal.entity_id) as times_requested,
+          COALESCE(SUM(JSON_EXTRACT(cal.entity_snapshot, '$.items[0].quantity_requested')), 0) as total_quantity_requested,
           CASE 
-            WHEN c.quantity_total > 0 THEN LEAST(ROUND((SUM(cri.quantity_requested) / c.quantity_total) * 100, 2), 100)
+            WHEN c.quantity_total > 0 THEN ROUND((COALESCE(SUM(JSON_EXTRACT(cal.entity_snapshot, '$.items[0].quantity_requested')), 0) / c.quantity_total) * 100, 2)
             ELSE 0
           END as utilization_percentage,
-          COUNT(DISTINCT l.id) as labs_count
-        FROM component_request_items cri
-        JOIN component_requests cr ON cri.request_id = cr.id AND cr.status = 'approved' AND cr.issued_at IS NOT NULL
-        JOIN components c ON cri.component_id = c.id
-        JOIN labs l ON c.lab_id = l.id
-        GROUP BY c.id
-        ORDER BY utilization_percentage DESC, times_requested DESC, total_quantity_issued DESC
+          COUNT(DISTINCT cal.lab_id) as labs_count
+        FROM component_activity_logs cal
+        INNER JOIN components c ON c.id = JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_id')
+        WHERE cal.action = 'issued' AND JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_id') IS NOT NULL ${dateCondition}
+        GROUP BY JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_id'), JSON_UNQUOTE(JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_name')), c.category, c.quantity_total, c.quantity_available
+        ORDER BY utilization_percentage DESC, times_requested DESC, total_quantity_requested DESC
       `
+      componentStatsParams = [...dateParams]
     } else {
       componentStatsQuery = `
         SELECT 
-          c.id as component_id,
-          c.name as component_name,
-          c.category,
+          JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_id') as component_id,
+          JSON_UNQUOTE(JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_name')) as component_name,
+          c.category as category,
           c.quantity_total,
           c.quantity_available,
-          COUNT(DISTINCT cr.id) as times_requested,
-          SUM(cri.quantity_requested) as total_quantity_issued,
+          COUNT(DISTINCT cal.entity_id) as times_requested,
+          COALESCE(SUM(JSON_EXTRACT(cal.entity_snapshot, '$.items[0].quantity_requested')), 0) as total_quantity_requested,
           CASE 
-            WHEN c.quantity_total > 0 THEN LEAST(ROUND((SUM(cri.quantity_requested) / c.quantity_total) * 100, 2), 100)
+            WHEN c.quantity_total > 0 THEN ROUND((COALESCE(SUM(JSON_EXTRACT(cal.entity_snapshot, '$.items[0].quantity_requested')), 0) / c.quantity_total) * 100, 2)
             ELSE 0
           END as utilization_percentage,
-          COUNT(DISTINCT l.id) as labs_count
-        FROM component_request_items cri
-        JOIN component_requests cr ON cri.request_id = cr.id AND cr.status = 'approved' AND cr.issued_at IS NOT NULL
-        JOIN components c ON cri.component_id = c.id
-        JOIN labs l ON c.lab_id = l.id
+          COUNT(DISTINCT cal.lab_id) as labs_count
+        FROM component_activity_logs cal
+        JOIN labs l ON cal.lab_id = l.id
         JOIN departments d ON l.department_id = d.id
-        WHERE d.id IN (${departmentIds.join(',')})
-        GROUP BY c.id
-        ORDER BY utilization_percentage DESC, times_requested DESC, total_quantity_issued DESC
+        INNER JOIN components c ON c.id = JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_id')
+        WHERE cal.action = 'issued' AND d.id IN (${departmentIds.join(',')}) AND JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_id') IS NOT NULL ${dateCondition}
+        GROUP BY JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_id'), JSON_UNQUOTE(JSON_EXTRACT(cal.entity_snapshot, '$.items[0].component_name')), c.category, c.quantity_total, c.quantity_available
+        ORDER BY utilization_percentage DESC, times_requested DESC, total_quantity_requested DESC
       `
+      componentStatsParams = [...dateParams]
     }
 
-    const componentStats = await db.query(componentStatsQuery)
+    const componentStats = await db.query(componentStatsQuery, componentStatsParams)
 
     // Get all labs in the department (to show labs with no components)
     let allLabsQuery
