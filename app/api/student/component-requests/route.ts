@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
     // Fetch request details for email
     const requestDetails = await db.query(
       `SELECT r.*, l.name as lab_name, u.name as requester_name, u.email as requester_email,
-              f.name as faculty_name, f.email as faculty_email
+              f.name as faculty_name, f.email as faculty_email, f.salutation as faculty_salutation
        FROM component_requests r
        JOIN labs l ON l.id = r.lab_id
        JOIN users u ON u.id = r.requester_id
@@ -179,7 +179,9 @@ export async function POST(req: NextRequest) {
         items: itemsDetails.rows,
         returnDate: return_date,
         requestId: created,
-        recipientRole: 'Faculty'
+        recipientRole: 'Faculty',
+        recipientName: request.faculty_name,
+        recipientSalutation: request.faculty_salutation
       })
       
       await sendEmail({

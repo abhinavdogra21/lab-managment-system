@@ -14,6 +14,23 @@ export default function LabStaffDashboardPage() {
 		pendingIssues: 0
 	})
 
+	const getSalutationPrefix = (salutation?: string) => {
+		if (!salutation || salutation === 'none') return ''
+		const salutationMap: Record<string, string> = {
+			'prof': 'Prof.',
+			'dr': 'Dr.',
+			'mr': 'Mr.',
+			'mrs': 'Mrs.'
+		}
+		return salutationMap[salutation.toLowerCase()] || ''
+	}
+
+	const getDisplayName = () => {
+		if (!currentUser) return ''
+		const prefix = getSalutationPrefix(currentUser.salutation)
+		return prefix ? `${prefix} ${currentUser.name}` : currentUser.name
+	}
+
 	useEffect(() => {
 		const userData = localStorage.getItem("user")
 		if (userData) {
@@ -33,7 +50,7 @@ export default function LabStaffDashboardPage() {
 			<div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
 				<div>
 					<h1 className="text-2xl font-bold">Lab Staff Dashboard</h1>
-					<p className="text-muted-foreground">Welcome back, {currentUser.name}</p>
+					<p className="text-muted-foreground">Welcome back, {getDisplayName()}</p>
 				</div>
 				<Button asChild>
 					<Link href="/lab-staff/dashboard/inventory">

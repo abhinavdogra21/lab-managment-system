@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
     try {
       const details = await db.query(
         `SELECT u.name as student_name, u.email as student_email,
-                f.name as faculty_name, f.email as faculty_email,
+                f.name as faculty_name, f.email as faculty_email, f.salutation as faculty_salutation,
                 l.name as lab_name
          FROM users u
          JOIN users f ON f.id = ?
@@ -156,7 +156,9 @@ export async function POST(request: NextRequest) {
           startTime: start_time,
           endTime: end_time,
           purpose: purpose,
-          requestId: result.insertId!
+          requestId: result.insertId!,
+          recipientName: req.faculty_name,
+          recipientSalutation: req.faculty_salutation
         })
 
         await sendEmail({

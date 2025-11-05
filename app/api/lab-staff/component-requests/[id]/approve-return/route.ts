@@ -158,7 +158,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     try {
       const details = await db.query(
         `SELECT r.*, l.name as lab_name,
-                u.name as requester_name, u.email as requester_email,
+                u.name as requester_name, u.email as requester_email, u.salutation as requester_salutation,
                 r.initiator_role
          FROM component_requests r
          JOIN labs l ON l.id = r.lab_id
@@ -171,6 +171,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         const req = details.rows[0]
         const emailData = emailTemplates.returnApproved({
           requesterName: req.requester_name,
+          requesterSalutation: req.requester_salutation,
           requesterRole: req.initiator_role === 'student' ? 'Student' : 'Faculty',
           labName: req.lab_name,
           requestId: requestId

@@ -20,6 +20,7 @@ interface DashboardHeaderProps {
     email: string
     role: string
     department: string
+    salutation?: string
   }
   onMenuClick: () => void
 }
@@ -32,6 +33,22 @@ interface DashboardHeaderProps {
  */
 export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
   const router = useRouter()
+  
+  const getSalutationPrefix = (salutation?: string) => {
+    if (!salutation || salutation === 'none') return ''
+    const salutationMap: Record<string, string> = {
+      'prof': 'Prof.',
+      'dr': 'Dr.',
+      'mr': 'Mr.',
+      'mrs': 'Mrs.'
+    }
+    return salutationMap[salutation.toLowerCase()] || ''
+  }
+
+  const getDisplayName = () => {
+    const prefix = getSalutationPrefix(user.salutation)
+    return prefix ? `${prefix} ${user.name}` : user.name
+  }
   
   const getRoleDisplayName = (role: string) => {
     const roleMap: Record<string, string> = {
@@ -96,7 +113,7 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-2 h-auto py-2 px-3">
               <div className="hidden md:flex flex-col items-end">
-                <p className="text-sm font-medium leading-none">{user.name}</p>
+                <p className="text-sm font-medium leading-none">{getDisplayName()}</p>
                 <p className="text-xs leading-none text-muted-foreground mt-0.5">
                   {getRoleDisplayName(user.role)}
                 </p>
@@ -109,7 +126,7 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
           <DropdownMenuContent className="w-56" align="end" forceMount>
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium leading-none">{user.name}</p>
+                <p className="text-sm font-medium leading-none">{getDisplayName()}</p>
                 <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
                 <p className="text-xs leading-none text-muted-foreground">
                   {getRoleDisplayName(user.role)} • {user.department}

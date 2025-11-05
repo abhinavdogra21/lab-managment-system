@@ -259,6 +259,11 @@ export default function LabHeadLabsPage() {
   const generatePDF = async (log: BookingLog, viewOnly: boolean = false) => {
     const doc = new jsPDF()
     
+    // Page border
+    doc.setDrawColor(3, 77, 162)
+    doc.setLineWidth(1)
+    doc.rect(10, 10, 190, 277)
+    
     // Add LNMIIT logo
     try {
       const logoImg = new Image()
@@ -267,17 +272,15 @@ export default function LabHeadLabsPage() {
         logoImg.onload = resolve
         logoImg.onerror = resolve
       })
-      doc.addImage(logoImg, 'PNG', 15, 10, 40, 20)
+      doc.addImage(logoImg, 'PNG', 15, 12, 40, 20)
     } catch (error) {
       console.error('Logo loading failed:', error)
     }
 
     // Header
-    doc.setFontSize(16)
+    doc.setFontSize(14)
     doc.setFont('helvetica', 'bold')
-    doc.text('LNMIIT', 105, 20, { align: 'center' })
-    doc.setFontSize(12)
-    doc.text('The LNM Institute of Information Technology', 105, 27, { align: 'center' })
+    doc.text('The LNM Institute of Information Technology, Jaipur', 105, 22, { align: 'center' })
     
     doc.setFontSize(14)
     doc.text('Lab Booking Approval Certificate', 105, 40, { align: 'center' })
@@ -403,8 +406,7 @@ export default function LabHeadLabsPage() {
     doc.line(15, yPos, 195, yPos)
     doc.setFontSize(9)
     doc.setTextColor(100, 100, 100)
-    doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, 15, yPos + 7)
-    doc.text(`Booking ID: ${log.id}`, 195, yPos + 7, { align: 'right' })
+    doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, 105, yPos + 7, { align: 'center' })
     doc.text('This is a computer-generated document and does not require a signature.', 105, yPos + 14, { align: 'center' })
     
     if (viewOnly) {
@@ -423,13 +425,26 @@ export default function LabHeadLabsPage() {
     const pageHeight = doc.internal.pageSize.height
     const marginBottom = 20
     
+    // Add page border function
+    const addPageBorder = () => {
+      const pageWidth = doc.internal.pageSize.width
+      const pageHeight = doc.internal.pageSize.height
+      doc.setDrawColor(3, 77, 162)
+      doc.setLineWidth(1)
+      doc.rect(10, 10, pageWidth - 20, pageHeight - 20)
+    }
+    
     const checkAddPage = (currentY: number, spaceNeeded: number = 20) => {
       if (currentY + spaceNeeded > pageHeight - marginBottom) {
         doc.addPage()
+        addPageBorder()
         return 20
       }
       return currentY
     }
+    
+    // Add initial page border
+    addPageBorder()
     
     try {
       const logoImg = new Image()
@@ -438,25 +453,23 @@ export default function LabHeadLabsPage() {
         logoImg.onload = resolve
         logoImg.onerror = resolve
       })
-      doc.addImage(logoImg, 'PNG', 15, 10, 40, 20)
+      doc.addImage(logoImg, 'PNG', 15, 12, 40, 20)
     } catch (error) {
       console.error('Logo loading failed:', error)
     }
 
-    doc.setFontSize(16)
+    doc.setFontSize(14)
     doc.setFont('helvetica', 'bold')
-    doc.text('LNMIIT', 105, 20, { align: 'center' })
-    doc.setFontSize(12)
-    doc.text('The LNM Institute of Information Technology', 105, 27, { align: 'center' })
+    doc.text('The LNM Institute of Information Technology, Jaipur', 105, 22, { align: 'center' })
     
     doc.setFontSize(14)
     const docTitle = log.returned_at ? 'Component Return Certificate' : 'Component Issue Certificate'
-    doc.text(docTitle, 105, 40, { align: 'center' })
+    doc.text(docTitle, 105, 32, { align: 'center' })
     
     doc.setLineWidth(0.5)
-    doc.line(15, 45, 195, 45)
+    doc.line(15, 38, 195, 38)
     
-    let yPos = 60
+    let yPos = 50
     doc.setFontSize(12)
     doc.setFont('helvetica', 'bold')
     doc.text('Request Details:', 15, yPos)
@@ -621,8 +634,7 @@ export default function LabHeadLabsPage() {
     doc.line(15, yPos, 195, yPos)
     doc.setFontSize(9)
     doc.setTextColor(100, 100, 100)
-    doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, 15, yPos + 7)
-    doc.text(`Request ID: ${log.id}`, 195, yPos + 7, { align: 'right' })
+    doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, 105, yPos + 7, { align: 'center' })
     doc.text('This is a computer-generated document and does not require a signature.', 105, yPos + 14, { align: 'center' })
     
     if (viewOnly) {
@@ -1166,7 +1178,7 @@ export default function LabHeadLabsPage() {
                     <CardHeader>
                       <div className="flex items-start justify-between">
                         <div className="space-y-1">
-                          <CardTitle className="text-lg">{log.lab_name} - Request #{log.id}</CardTitle>
+                          <CardTitle className="text-lg">{log.lab_name}</CardTitle>
                           <p className="text-sm text-muted-foreground">
                             Issued: {new Date(log.issued_at).toLocaleDateString('en-IN')}
                           </p>

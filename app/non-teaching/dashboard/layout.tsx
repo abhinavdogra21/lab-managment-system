@@ -9,6 +9,7 @@ interface User {
 	role: string
 	department: string
 	studentId?: string
+	salutation?: string
 }
 
 export default function DashboardRouteLayout({ children }: { children: React.ReactNode }) {

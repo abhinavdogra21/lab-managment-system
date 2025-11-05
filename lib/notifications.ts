@@ -133,16 +133,32 @@ export const emailTemplates = {
     returnDate: string
     requestId: number
     recipientRole?: string  // Optional: 'Faculty', 'Lab Staff', or leave blank for generic
+    recipientName?: string
+    recipientSalutation?: string
   }) => {
     // Format the return date properly
     const formattedDate = formatDate(data.returnDate)
     
-    // Personalized greeting based on recipient role
-    const greeting = data.recipientRole === 'Faculty' 
+    // Personalized greeting based on recipient info
+    let greeting = data.recipientRole === 'Faculty' 
       ? 'Dear Faculty Member'
       : data.recipientRole === 'Lab Staff'
       ? 'Dear Lab Staff'
       : 'Dear Team'
+    
+    if (data.recipientName) {
+      if (data.recipientSalutation && data.recipientSalutation !== 'none') {
+        const salutationMap: Record<string, string> = {
+          'prof': 'Prof.',
+          'dr': 'Dr.',
+          'mr': 'Mr.',
+          'mrs': 'Mrs.'
+        }
+        greeting = `Dear ${salutationMap[data.recipientSalutation] || ''} ${data.recipientName}`
+      } else {
+        greeting = `Dear ${data.recipientName}`
+      }
+    }
     
     return {
     subject: `New Component Request #${data.requestId} - LNMIIT Lab Management`,
@@ -153,10 +169,6 @@ export const emailTemplates = {
           <p>A new component request has been submitted and requires your attention.</p>
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
-            <tr style="background: #f0f9ff;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
-            </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
               <td style="padding: 10px; border: 1px solid #ddd;">${data.requesterName} (${data.requesterRole})</td>
@@ -232,10 +244,6 @@ export const emailTemplates = {
             <p>A component request has been <b>approved by ${data.approverName} (${data.approverRole})</b> and is now forwarded to you for review and approval.</p>
             
             <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
-              <tr style="background: #f0f9ff;">
-                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
-                <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
-              </tr>
               <tr>
                 <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
                 <td style="padding: 10px; border: 1px solid #ddd;">${data.requesterName} (${data.requesterRole})</td>
@@ -302,8 +310,6 @@ export const emailTemplates = {
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
             <tr style="background: #f0fdf4;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
@@ -348,8 +354,6 @@ export const emailTemplates = {
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
             <tr style="background: #fee2e2;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
@@ -400,8 +404,6 @@ export const emailTemplates = {
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
             <tr style="background: #d1fae5;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
@@ -454,6 +456,7 @@ export const emailTemplates = {
 
   componentIssued: (data: {
     requesterName: string
+    requesterSalutation?: string
     requesterRole: string
     labName: string
     requestId: number
@@ -463,18 +466,28 @@ export const emailTemplates = {
     // Format the return date properly
     const formattedDate = formatDate(data.returnDate)
     
+    // Format salutation and greeting for requester
+    let greeting = `Dear <b>${data.requesterName}</b>`
+    if (data.requesterSalutation && data.requesterSalutation !== 'none') {
+      const salutationMap: Record<string, string> = {
+        'prof': 'Prof.',
+        'dr': 'Dr.',
+        'mr': 'Mr.',
+        'mrs': 'Mrs.'
+      }
+      greeting = `Dear <b>${salutationMap[data.requesterSalutation] || ''} ${data.requesterName}</b>`
+    }
+    
     return {
     subject: `Components Issued - Request #${data.requestId} - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
-          <p>Dear <b>${data.requesterName}</b>,</p>
+          <p>${greeting},</p>
           <p>Your requested components have been <b>issued</b> and are ready for collection.</p>
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
             <tr style="background: #dbeafe;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
@@ -520,18 +533,35 @@ export const emailTemplates = {
     requesterRole: string
     labName: string
     requestId: number
-  }) => ({
+    recipientName?: string
+    recipientSalutation?: string
+  }) => {
+    // Format salutation and greeting for recipient (lab staff)
+    let greeting = "Dear Lab Staff"
+    if (data.recipientName) {
+      if (data.recipientSalutation && data.recipientSalutation !== 'none') {
+        const salutationMap: Record<string, string> = {
+          'prof': 'Prof.',
+          'dr': 'Dr.',
+          'mr': 'Mr.',
+          'mrs': 'Mrs.'
+        }
+        greeting = `Dear ${salutationMap[data.recipientSalutation] || ''} ${data.recipientName}`
+      } else {
+        greeting = `Dear ${data.recipientName}`
+      }
+    }
+    
+    return {
     subject: `Return Request - Request #${data.requestId} - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
-          <p>Dear Lab Staff,</p>
+          <p>${greeting},</p>
           <p>A user has requested to return components for the following request:</p>
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
             <tr style="background: #fff7ed;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
@@ -549,25 +579,38 @@ export const emailTemplates = {
         </td>
       </tr>
     `)
-  }),
+    }
+  },
 
   returnApproved: (data: {
     requesterName: string
+    requesterSalutation?: string
     requesterRole: string
     labName: string
     requestId: number
-  }) => ({
+  }) => {
+    // Format salutation and greeting for requester
+    let greeting = `Dear <b>${data.requesterName}</b>`
+    if (data.requesterSalutation && data.requesterSalutation !== 'none') {
+      const salutationMap: Record<string, string> = {
+        'prof': 'Prof.',
+        'dr': 'Dr.',
+        'mr': 'Mr.',
+        'mrs': 'Mrs.'
+      }
+      greeting = `Dear <b>${salutationMap[data.requesterSalutation] || ''} ${data.requesterName}</b>`
+    }
+    
+    return {
     subject: `Return Approved - Request #${data.requestId} - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
-          <p>Dear <b>${data.requesterName}</b>,</p>
+          <p>${greeting},</p>
           <p>Your component return has been <b>verified and approved</b>.</p>
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
             <tr style="background: #f0fdf4;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
@@ -583,7 +626,8 @@ export const emailTemplates = {
         </td>
       </tr>
     `)
-  }),
+    }
+  },
 
   extensionRequested: (data: {
     requesterName: string
@@ -603,8 +647,6 @@ export const emailTemplates = {
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
             <tr style="background: #f5f3ff;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
@@ -651,8 +693,6 @@ export const emailTemplates = {
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
             <tr style="background: #f0fdf4;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
@@ -689,8 +729,6 @@ export const emailTemplates = {
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
             <tr style="background: #fee2e2;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
@@ -763,8 +801,6 @@ export const emailTemplates = {
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
             <tr style="background: #fef3c7;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
@@ -800,23 +836,39 @@ export const emailTemplates = {
     endTime: string
     purpose: string
     requestId: number
+    recipientName?: string
+    recipientSalutation?: string
   }) => {
     const formattedDate = formatDate(data.bookingDate)
     const formattedStartTime = formatTimeTo12Hour(data.startTime)
     const formattedEndTime = formatTimeTo12Hour(data.endTime)
+    
+    // Format salutation and greeting
+    let greeting = "Dear Faculty/Lab Staff"
+    if (data.recipientName) {
+      if (data.recipientSalutation && data.recipientSalutation !== 'none') {
+        const salutationMap: Record<string, string> = {
+          'prof': 'Prof.',
+          'dr': 'Dr.',
+          'mr': 'Mr.',
+          'mrs': 'Mrs.'
+        }
+        greeting = `Dear ${salutationMap[data.recipientSalutation] || ''} ${data.recipientName}`
+      } else {
+        greeting = `Dear ${data.recipientName}`
+      }
+    }
     
     return {
     subject: `New Lab Booking Request #${data.requestId} - ${data.labName} - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
-          <p>Dear Faculty/Lab Staff,</p>
+          <p>${greeting},</p>
           <p>A new lab booking request has been submitted and requires your review.</p>
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
             <tr style="background: #dbeafe;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
@@ -851,6 +903,7 @@ export const emailTemplates = {
 
   labBookingApproved: (data: {
     requesterName: string
+    requesterSalutation?: string
     labName: string
     bookingDate: string
     startTime: string
@@ -863,18 +916,28 @@ export const emailTemplates = {
     const formattedStartTime = formatTimeTo12Hour(data.startTime)
     const formattedEndTime = formatTimeTo12Hour(data.endTime)
     
+    // Format salutation and greeting for requester
+    let greeting = `Dear <b>${data.requesterName}</b>`
+    if (data.requesterSalutation && data.requesterSalutation !== 'none') {
+      const salutationMap: Record<string, string> = {
+        'prof': 'Prof.',
+        'dr': 'Dr.',
+        'mr': 'Mr.',
+        'mrs': 'Mrs.'
+      }
+      greeting = `Dear <b>${salutationMap[data.requesterSalutation] || ''} ${data.requesterName}</b>`
+    }
+    
     return {
     subject: `Lab Booking Request #${data.requestId} Approved - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
-          <p>Dear <b>${data.requesterName}</b>,</p>
+          <p>${greeting},</p>
           <p>Good news! Your lab booking request has been approved by ${data.approverRole}.</p>
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
             <tr style="background: #d4edda;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
@@ -901,6 +964,7 @@ export const emailTemplates = {
 
   labBookingRejected: (data: {
     requesterName: string
+    requesterSalutation?: string
     labName: string
     bookingDate: string
     startTime: string
@@ -913,18 +977,28 @@ export const emailTemplates = {
     const formattedStartTime = formatTimeTo12Hour(data.startTime)
     const formattedEndTime = formatTimeTo12Hour(data.endTime)
     
+    // Format salutation and greeting for requester
+    let greeting = `Dear <b>${data.requesterName}</b>`
+    if (data.requesterSalutation && data.requesterSalutation !== 'none') {
+      const salutationMap: Record<string, string> = {
+        'prof': 'Prof.',
+        'dr': 'Dr.',
+        'mr': 'Mr.',
+        'mrs': 'Mrs.'
+      }
+      greeting = `Dear <b>${salutationMap[data.requesterSalutation] || ''} ${data.requesterName}</b>`
+    }
+    
     return {
     subject: `Lab Booking Request #${data.requestId} Rejected - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
-          <p>Dear <b>${data.requesterName}</b>,</p>
+          <p>${greeting},</p>
           <p>We regret to inform you that your lab booking request has been rejected.</p>
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
             <tr style="background: #fee2e2;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
@@ -980,8 +1054,6 @@ export const emailTemplates = {
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
             <tr style="background: #fef3c7;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Request ID:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">#${data.requestId}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>

@@ -919,7 +919,13 @@ export const dbOperations = {
         labData.location || null,
       ]
       const result = await db.query(query, values)
-      const sel = await db.query(`SELECT * FROM labs WHERE id = ?`, [result.insertId])
+      const sel = await db.query(
+        `SELECT l.*, d.name as department_name 
+         FROM labs l 
+         LEFT JOIN departments d ON l.department_id = d.id 
+         WHERE l.id = ?`, 
+        [result.insertId]
+      )
       return sel.rows[0]
     } catch (e) {
       console.warn("createLab fallback (DB not ready):", e)

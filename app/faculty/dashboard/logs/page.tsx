@@ -196,16 +196,28 @@ export default function FacultyLogsPage() {
   const generateComponentLogPDF = async (log: ComponentLog, viewOnly: boolean = false) => {
     const doc = new jsPDF()
     const pageHeight = doc.internal.pageSize.height
+    const pageWidth = doc.internal.pageSize.width
     const marginBottom = 20
+    
+    // Helper function to add page border
+    const addPageBorder = () => {
+      doc.setDrawColor(0, 0, 0)
+      doc.setLineWidth(1)
+      doc.rect(10, 10, pageWidth - 20, pageHeight - 20)
+    }
     
     // Helper function to check if we need a new page
     const checkAddPage = (currentY: number, spaceNeeded: number = 20) => {
       if (currentY + spaceNeeded > pageHeight - marginBottom) {
         doc.addPage()
+        addPageBorder() // Add border to new page
         return 20 // Reset to top of new page
       }
       return currentY
     }
+    
+    // Add border to first page
+    addPageBorder()
     
     // Add LNMIIT logo
     try {
@@ -215,30 +227,28 @@ export default function FacultyLogsPage() {
         logoImg.onload = resolve
         logoImg.onerror = resolve
       })
-      doc.addImage(logoImg, 'PNG', 15, 10, 40, 20)
+      doc.addImage(logoImg, 'PNG', 15, 12, 40, 20)
     } catch (error) {
       console.error('Logo loading failed:', error)
     }
 
     // Header
-    doc.setFontSize(16)
-    doc.setFont('helvetica', 'bold')
-    doc.text('LNMIIT', 105, 20, { align: 'center' })
-    doc.setFontSize(12)
-    doc.text('The LNM Institute of Information Technology', 105, 27, { align: 'center' })
-    
     doc.setFontSize(14)
+    doc.setFont('helvetica', 'bold')
+    doc.text('The LNM Institute of Information Technology, Jaipur', 105, 22, { align: 'center' })
+    
+    doc.setFontSize(13)
     const docTitle = log.returned_at 
       ? 'Component Return Certificate' 
       : 'Component Issue Certificate'
-    doc.text(docTitle, 105, 40, { align: 'center' })
+    doc.text(docTitle, 105, 32, { align: 'center' })
     
     // Horizontal line
     doc.setLineWidth(0.5)
-    doc.line(15, 45, 195, 45)
+    doc.line(15, 38, 195, 38)
     
     // Request Details
-    let yPos = 60
+    let yPos = 50
     doc.setFontSize(12)
     doc.setFont('helvetica', 'bold')
     doc.text('Request Details:', 15, yPos)
@@ -384,14 +394,14 @@ export default function FacultyLogsPage() {
       yPos += 3
     }
     
-    // HOD Final Approval
+    // HoD Final Approval
     if (log.hod_name) {
       yPos = checkAddPage(yPos, 20)
       doc.setFont('helvetica', 'bold')
       doc.text('✓', 20, yPos)
       doc.setFont('helvetica', 'normal')
       doc.setFont('helvetica', 'bold')
-      doc.text(`APPROVED BY HOD:`, 25, yPos)
+      doc.text(`APPROVED BY HoD:`, 25, yPos)
       doc.setFont('helvetica', 'normal')
       doc.text(log.hod_name, 85, yPos)
       yPos += 7
@@ -429,8 +439,7 @@ export default function FacultyLogsPage() {
     doc.line(15, yPos, 195, yPos)
     doc.setFontSize(9)
     doc.setTextColor(100, 100, 100)
-    doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, 15, yPos + 7)
-    doc.text(`Request ID: ${log.log_id}`, 195, yPos + 7, { align: 'right' })
+    doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, 105, yPos + 7, { align: 'center' })
     doc.text('This is a computer-generated document and does not require a signature.', 105, yPos + 14, { align: 'center' })
     
     // Save or view PDF
@@ -454,14 +463,27 @@ export default function FacultyLogsPage() {
     const pageHeight = doc.internal.pageSize.height
     const marginBottom = 20
     
+    // Add page border function
+    const addPageBorder = () => {
+      const pageWidth = doc.internal.pageSize.width
+      const pageHeight = doc.internal.pageSize.height
+      doc.setDrawColor(3, 77, 162)
+      doc.setLineWidth(1)
+      doc.rect(10, 10, pageWidth - 20, pageHeight - 20)
+    }
+    
     // Helper function to check if we need a new page
     const checkAddPage = (currentY: number, spaceNeeded: number = 20) => {
       if (currentY + spaceNeeded > pageHeight - marginBottom) {
         doc.addPage()
+        addPageBorder()
         return 20 // Reset to top of new page
       }
       return currentY
     }
+    
+    // Add initial page border
+    addPageBorder()
     
     // Add LNMIIT logo
     try {
@@ -471,27 +493,25 @@ export default function FacultyLogsPage() {
         logoImg.onload = resolve
         logoImg.onerror = resolve
       })
-      doc.addImage(logoImg, 'PNG', 15, 10, 40, 20)
+      doc.addImage(logoImg, 'PNG', 15, 12, 40, 20)
     } catch (error) {
       console.error('Logo loading failed:', error)
     }
 
     // Header
-    doc.setFontSize(16)
+    doc.setFontSize(14)
     doc.setFont('helvetica', 'bold')
-    doc.text('LNMIIT', 105, 20, { align: 'center' })
-    doc.setFontSize(12)
-    doc.text('The LNM Institute of Information Technology', 105, 27, { align: 'center' })
+    doc.text('The LNM Institute of Information Technology, Jaipur', 105, 22, { align: 'center' })
     
     doc.setFontSize(14)
-    doc.text('Lab Booking Certificate', 105, 40, { align: 'center' })
+    doc.text('Lab Booking Certificate', 105, 32, { align: 'center' })
     
     // Horizontal line
     doc.setLineWidth(0.5)
-    doc.line(15, 45, 195, 45)
+    doc.line(15, 38, 195, 38)
     
     // Booking Details
-    let yPos = 60
+    let yPos = 50
     doc.setFontSize(12)
     doc.setFont('helvetica', 'bold')
     doc.text('Booking Details:', 15, yPos)
@@ -618,14 +638,14 @@ export default function FacultyLogsPage() {
       yPos += 3
     }
     
-    // HOD Final Approval
+    // HoD Final Approval
     if (log.hod_name) {
       yPos = checkAddPage(yPos, 20)
       doc.setFont('helvetica', 'bold')
       doc.text('✓', 20, yPos)
       doc.setFont('helvetica', 'normal')
       doc.setFont('helvetica', 'bold')
-      doc.text(`APPROVED BY HOD:`, 25, yPos)
+      doc.text(`APPROVED BY HoD:`, 25, yPos)
       doc.setFont('helvetica', 'normal')
       doc.text(log.hod_name, 85, yPos)
       yPos += 7
@@ -668,8 +688,7 @@ export default function FacultyLogsPage() {
     doc.line(15, yPos, 195, yPos)
     doc.setFontSize(9)
     doc.setTextColor(100, 100, 100)
-    doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, 15, yPos + 7)
-    doc.text(`Booking ID: ${log.log_id}`, 195, yPos + 7, { align: 'right' })
+    doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, 105, yPos + 7, { align: 'center' })
     doc.text('This is a computer-generated document and does not require a signature.', 105, yPos + 14, { align: 'center' })
     
     // Save or view PDF
@@ -698,7 +717,7 @@ export default function FacultyLogsPage() {
       case 'pending_lab_staff':
         return <Badge className="bg-blue-100 text-blue-800">Pending Lab Staff</Badge>
       case 'pending_hod':
-        return <Badge className="bg-purple-100 text-purple-800">Pending HOD</Badge>
+        return <Badge className="bg-purple-100 text-purple-800">Pending HoD</Badge>
       default:
         return <Badge variant="outline">{status}</Badge>
     }
@@ -895,7 +914,7 @@ export default function FacultyLogsPage() {
                           {log.hod_name && (
                             <div className="flex items-center gap-2 text-sm">
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span className="text-muted-foreground">Approved by HOD:</span>
+                              <span className="text-muted-foreground">Approved by HoD:</span>
                               <span className="font-medium">{log.hod_name}</span>
                             </div>
                           )}
@@ -1090,7 +1109,7 @@ export default function FacultyLogsPage() {
                         {log.hod_name && (
                           <div className="flex items-center gap-2 text-sm">
                             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <span className="text-muted-foreground font-bold">APPROVED BY HOD:</span>
+                            <span className="text-muted-foreground font-bold">APPROVED BY HoD:</span>
                             <span className="font-medium">{log.hod_name}</span>
                           </div>
                         )}

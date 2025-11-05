@@ -208,6 +208,13 @@ export default function HODLabsPage() {
   const generatePDF = async (log: BookingLog, viewOnly: boolean = false) => {
     const doc = new jsPDF()
     
+    // Add page border
+    const pageWidth = doc.internal.pageSize.width
+    const pageHeight = doc.internal.pageSize.height
+    doc.setDrawColor(3, 77, 162)
+    doc.setLineWidth(1)
+    doc.rect(10, 10, pageWidth - 20, pageHeight - 20)
+    
     // Add LNMIIT logo
     try {
       const logoImg = new Image()
@@ -216,30 +223,24 @@ export default function HODLabsPage() {
         logoImg.onload = resolve
         logoImg.onerror = resolve // Continue even if logo fails
       })
-      doc.addImage(logoImg, 'PNG', 15, 10, 40, 20)
+      doc.addImage(logoImg, 'PNG', 15, 12, 40, 20)
     } catch (error) {
       console.error('Logo loading failed:', error)
     }
 
     // Header
-    doc.setFontSize(16)
-    doc.setFont('helvetica', 'bold')
-    doc.text('LNMIIT', 105, 20, { align: 'center' })
-    doc.setFontSize(12)
-    doc.text('The LNM Institute of Information Technology', 105, 27, { align: 'center' })
-    
-    doc.setFontSize(14)
-    doc.text('Lab Booking Approval Certificate', 105, 40, { align: 'center' })
+
+
     
     // Horizontal line
     doc.setLineWidth(0.5)
-    doc.line(15, 45, 195, 45)
+    doc.line(15, 38, 195, 38)
     
     // Booking Details
     doc.setFontSize(11)
     doc.setFont('helvetica', 'normal')
     
-    let yPos = 55
+    let yPos = 50
     
     // Booking Information
     doc.setFont('helvetica', 'bold')
@@ -362,8 +363,7 @@ export default function HODLabsPage() {
     doc.line(15, yPos, 195, yPos)
     doc.setFontSize(9)
     doc.setTextColor(100, 100, 100)
-    doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, 15, yPos + 7)
-    doc.text(`Booking ID: ${log.id}`, 195, yPos + 7, { align: 'right' })
+    doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, 105, yPos + 7, { align: 'center' })
     doc.text('This is a computer-generated document and does not require a signature.', 105, yPos + 14, { align: 'center' })
     
     // Save or view PDF
@@ -469,14 +469,27 @@ export default function HODLabsPage() {
     const pageHeight = doc.internal.pageSize.height
     const marginBottom = 20
     
+    // Add page border function
+    const addPageBorder = () => {
+      const pageWidth = doc.internal.pageSize.width
+      const pageHeight = doc.internal.pageSize.height
+      doc.setDrawColor(3, 77, 162)
+      doc.setLineWidth(1)
+      doc.rect(10, 10, pageWidth - 20, pageHeight - 20)
+    }
+    
     // Helper function to check if we need a new page
     const checkAddPage = (currentY: number, spaceNeeded: number = 20) => {
       if (currentY + spaceNeeded > pageHeight - marginBottom) {
         doc.addPage()
+        addPageBorder()
         return 20 // Reset to top of new page
       }
       return currentY
     }
+    
+    // Add initial page border
+    addPageBorder()
     
     // Add LNMIIT logo
     try {
@@ -486,30 +499,28 @@ export default function HODLabsPage() {
         logoImg.onload = resolve
         logoImg.onerror = resolve
       })
-      doc.addImage(logoImg, 'PNG', 15, 10, 40, 20)
+      doc.addImage(logoImg, 'PNG', 15, 12, 40, 20)
     } catch (error) {
       console.error('Logo loading failed:', error)
     }
 
     // Header
-    doc.setFontSize(16)
+    doc.setFontSize(14)
     doc.setFont('helvetica', 'bold')
-    doc.text('LNMIIT', 105, 20, { align: 'center' })
-    doc.setFontSize(12)
-    doc.text('The LNM Institute of Information Technology', 105, 27, { align: 'center' })
+    doc.text('The LNM Institute of Information Technology, Jaipur', 55, 25, )
     
     doc.setFontSize(14)
     const docTitle = log.returned_at 
       ? 'Component Return Certificate' 
       : 'Component Issue Certificate'
-    doc.text(docTitle, 105, 40, { align: 'center' })
+    doc.text(docTitle, 105, 32, { align: 'center' })
     
     // Horizontal line
     doc.setLineWidth(0.5)
-    doc.line(15, 45, 195, 45)
+    doc.line(15, 38, 195, 38)
     
     // Request Details
-    let yPos = 60
+    let yPos = 50
     doc.setFontSize(12)
     doc.setFont('helvetica', 'bold')
     doc.text('Request Details:', 15, yPos)
@@ -700,8 +711,7 @@ export default function HODLabsPage() {
     doc.line(15, yPos, 195, yPos)
     doc.setFontSize(9)
     doc.setTextColor(100, 100, 100)
-    doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, 15, yPos + 7)
-    doc.text(`Request ID: ${log.id}`, 195, yPos + 7, { align: 'right' })
+    doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, 105, yPos + 7, { align: 'center' })
     doc.text('This is a computer-generated document and does not require a signature.', 105, yPos + 14, { align: 'center' })
     
     // Save or view PDF

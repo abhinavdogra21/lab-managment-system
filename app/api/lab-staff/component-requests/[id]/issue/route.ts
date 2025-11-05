@@ -89,7 +89,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // Send email to requester
     const details = await db.query(
       `SELECT r.*, l.name as lab_name,
-              u.name as requester_name, u.email as requester_email,
+              u.name as requester_name, u.email as requester_email, u.salutation as requester_salutation,
               CASE 
                 WHEN fac.salutation IS NOT NULL 
                 THEN CONCAT(UPPER(fac.salutation), '. ', fac.name)
@@ -127,6 +127,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       
       const emailData = emailTemplates.componentIssued({
         requesterName: requestDetails.requester_name,
+        requesterSalutation: requestDetails.requester_salutation,
         requesterRole: requestDetails.initiator_role === 'faculty' ? 'Faculty' : 'Student',
         labName: requestDetails.lab_name,
         requestId: requestId,

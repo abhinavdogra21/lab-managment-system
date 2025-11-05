@@ -155,7 +155,7 @@ export async function POST(
     // Send email notification to student
     try {
       const studentDetails = await db.query(
-        `SELECT u.name as student_name, u.email as student_email,
+        `SELECT u.name as student_name, u.email as student_email, u.salutation as student_salutation,
                 l.name as lab_name,
                 br.booking_date, br.start_time, br.end_time,
                 hod.name as hod_name
@@ -173,12 +173,13 @@ export async function POST(
         if (action === 'approve') {
           const emailData = emailTemplates.labBookingApproved({
             requesterName: student.student_name,
+            requesterSalutation: student.student_salutation,
             labName: student.lab_name,
             bookingDate: student.booking_date,
             startTime: student.start_time,
             endTime: student.end_time,
             requestId: requestId,
-            approverRole: 'HOD',
+            approverRole: 'HoD',
             nextStep: undefined // Final approval
           })
 
@@ -189,13 +190,14 @@ export async function POST(
         } else {
           const emailData = emailTemplates.labBookingRejected({
             requesterName: student.student_name,
+            requesterSalutation: student.student_salutation,
             labName: student.lab_name,
             bookingDate: student.booking_date,
             startTime: student.start_time,
             endTime: student.end_time,
             requestId: requestId,
             reason: remarks || 'No reason provided',
-            rejectedBy: student.hod_name || 'HOD'
+            rejectedBy: student.hod_name || 'HoD'
           })
 
           await sendEmail({

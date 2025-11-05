@@ -53,7 +53,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       // Send email notification to student and lab staff
       try {
         const details = await db.query(
-          `SELECT u.name as student_name, u.email as student_email,
+          `SELECT u.name as student_name, u.email as student_email, u.salutation as student_salutation,
                   l.name as lab_name, l.id as lab_id,
                   br.booking_date, br.start_time, br.end_time
            FROM booking_requests br
@@ -69,6 +69,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           // Email to student
           const studentEmailData = emailTemplates.labBookingApproved({
             requesterName: booking.student_name,
+            requesterSalutation: booking.student_salutation,
             labName: booking.lab_name,
             bookingDate: booking.booking_date,
             startTime: booking.start_time,
@@ -85,31 +86,34 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
           // Email to head lab staff only
           const labStaff = await db.query(
-            `SELECT u.email, u.name
+            `SELECT u.email, u.name, u.salutation
              FROM users u
              JOIN labs l ON l.staff_id = u.id
              WHERE u.role = 'lab_staff' AND l.id = ?`,
             [booking.lab_id]
           )
           
-          const labStaffEmails = labStaff.rows.map(staff => staff.email)
-          
-          if (labStaffEmails.length > 0) {
-            const labStaffEmailData = emailTemplates.labBookingCreated({
-              requesterName: booking.student_name,
-              requesterRole: 'Student',
-              labName: booking.lab_name,
-              bookingDate: booking.booking_date,
-              startTime: booking.start_time,
-              endTime: booking.end_time,
-              purpose: req.purpose || 'Not specified',
-              requestId: id
-            })
+          if (labStaff.rows.length > 0) {
+            // Send to each lab staff with their specific salutation
+            for (const staff of labStaff.rows) {
+              const labStaffEmailData = emailTemplates.labBookingCreated({
+                requesterName: booking.student_name,
+                requesterRole: 'Student',
+                labName: booking.lab_name,
+                bookingDate: booking.booking_date,
+                startTime: booking.start_time,
+                endTime: booking.end_time,
+                purpose: req.purpose || 'Not specified',
+                requestId: id,
+                recipientName: staff.name,
+                recipientSalutation: staff.salutation
+              })
 
-            await sendEmail({
-              to: labStaffEmails,
-              ...labStaffEmailData
-            }).catch(err => console.error('Lab staff email send failed:', err))
+              await sendEmail({
+                to: [staff.email],
+                ...labStaffEmailData
+              }).catch(err => console.error('Lab staff email send failed:', err))
+            }
           }
         }
       } catch (emailError) {
@@ -145,7 +149,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       // Send email notification to student
       try {
         const details = await db.query(
-          `SELECT u.name as student_name, u.email as student_email,
+          `SELECT u.name as student_name, u.email as student_email, u.salutation as student_salutation,
                   l.name as lab_name,
                   br.booking_date, br.start_time, br.end_time,
                   f.name as faculty_name
@@ -161,6 +165,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           const booking = details.rows[0]
           const emailData = emailTemplates.labBookingRejected({
             requesterName: booking.student_name,
+            requesterSalutation: booking.student_salutation,
             labName: booking.lab_name,
             bookingDate: booking.booking_date,
             startTime: booking.start_time,

@@ -53,8 +53,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid credentials or role" }, { status: 401 })
       }
 
-      // For HOD users, get the actual name and salutation of the person assigned as HOD for this department
+      // Format display name with salutation for all users
       let displayName = dbUser.name
+      let userSalutation = dbUser.salutation || 'none'
+      
+      // For HoD users, get the actual name and salutation of the person assigned as HoD for this department
       if (dbUser.role === 'hod') {
         try {
           const db = Database.getInstance()
@@ -62,14 +65,14 @@ export async function POST(request: NextRequest) {
             "SELECT u.name, u.salutation FROM departments d JOIN users u ON d.hod_id = u.id WHERE d.code = ?",
             [dbUser.department]
           )
-          console.log("HOD name lookup result:", result.rows)
+          console.log("HoD name lookup result:", result.rows)
           if (result.rows.length > 0 && result.rows[0].name) {
-            const salutation = result.rows[0].salutation ? result.rows[0].salutation.toUpperCase() + '. ' : ''
-            displayName = salutation + result.rows[0].name
-            console.log("Updated display name to:", displayName)
+            displayName = result.rows[0].name
+            userSalutation = result.rows[0].salutation || 'none'
+            console.log("Updated HoD info - name:", displayName, "salutation:", userSalutation)
           }
         } catch (error) {
-          console.log("Could not fetch HOD name, using default:", error)
+          console.log("Could not fetch HoD name, using default:", error)
           // Fall back to default name if query fails
         }
       }
@@ -79,6 +82,7 @@ export async function POST(request: NextRequest) {
         email: dbUser.email,
         role: String(dbUser.role),  // Keep database role format (lab_staff) for middleware
         name: displayName,
+        salutation: userSalutation,
         department: dbUser.department,
       }
       const token = encodeURIComponent(JSON.stringify(tokenPayload))
@@ -87,7 +91,8 @@ export async function POST(request: NextRequest) {
         user: {
           id: String(dbUser.id),
           email: dbUser.email,
-          name: displayName,  // Use the dynamic name
+          name: displayName,
+          salutation: userSalutation,
           role: String(dbUser.role).replace(/_/g, "-"),
           department: dbUser.department,
           studentId: dbUser.student_id || null,

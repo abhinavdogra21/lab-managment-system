@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     // Send email notification to lab staff
     try {
       const details = await db.query(
-        `SELECT u.name as faculty_name, l.name as lab_name
+        `SELECT u.name as faculty_name, u.salutation as faculty_salutation, l.name as lab_name
          FROM users u
          JOIN labs l ON l.id = ?
          WHERE u.id = ?`,
@@ -72,33 +72,36 @@ export async function POST(request: NextRequest) {
       if (details.rows.length > 0) {
         const req = details.rows[0]
         
-        // Get head lab staff email for this lab
+        // Get head lab staff email, name, and salutation for this lab
         const labStaff = await db.query(
-          `SELECT u.email 
+          `SELECT u.email, u.name, u.salutation
            FROM users u
            JOIN labs l ON l.staff_id = u.id
            WHERE u.role = 'lab_staff' AND l.id = ?`,
           [lab_id]
         )
         
-        const labStaffEmails = labStaff.rows.map(staff => staff.email)
-        
-        if (labStaffEmails.length > 0) {
-          const emailData = emailTemplates.labBookingCreated({
-            requesterName: req.faculty_name,
-            requesterRole: 'Faculty',
-            labName: req.lab_name,
-            bookingDate: booking_date,
-            startTime: start_time,
-            endTime: end_time,
-            purpose: purpose,
-            requestId: result.insertId!
-          })
+        if (labStaff.rows.length > 0) {
+          // Send to each lab staff with their specific salutation
+          for (const staff of labStaff.rows) {
+            const emailData = emailTemplates.labBookingCreated({
+              requesterName: req.faculty_name,
+              requesterRole: 'Faculty',
+              labName: req.lab_name,
+              bookingDate: booking_date,
+              startTime: start_time,
+              endTime: end_time,
+              purpose: purpose,
+              requestId: result.insertId!,
+              recipientName: staff.name,
+              recipientSalutation: staff.salutation
+            })
 
-          await sendEmail({
-            to: labStaffEmails,
-            ...emailData
-          }).catch(err => console.error('Email send failed:', err))
+            await sendEmail({
+              to: [staff.email],
+              ...emailData
+            }).catch(err => console.error('Email send failed:', err))
+          }
         }
       }
     } catch (emailError) {
