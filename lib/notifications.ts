@@ -216,9 +216,12 @@ export const emailTemplates = {
 
   componentRequestForwarded: (data: {
     recipientRole: string  // 'Lab Staff', 'HOD', or 'Faculty'
+    recipientName?: string
+    recipientSalutation?: string
     requesterName: string
     requesterRole: string  // 'Student' or 'Faculty'
     approverName: string   // Who approved and forwarded it
+    approverSalutation?: string
     approverRole: string   // Their role
     labName: string
     purpose: string
@@ -228,12 +231,31 @@ export const emailTemplates = {
   }) => {
     const formattedDate = formatDate(data.returnDate)
     
-    // Personalized greeting based on recipient role
-    const greeting = data.recipientRole === 'Faculty' 
-      ? `Dear Faculty Member`
-      : data.recipientRole === 'HOD'
-      ? `Dear HOD`
-      : `Dear Lab Staff`
+    // Personalized greeting based on recipient with salutation
+    let greeting = `Dear ${data.recipientRole}`
+    if (data.recipientName && data.recipientSalutation && data.recipientSalutation !== 'none') {
+      const salutationMap: Record<string, string> = {
+        'prof': 'Prof.',
+        'dr': 'Dr.',
+        'mr': 'Mr.',
+        'mrs': 'Mrs.'
+      }
+      greeting = `Dear <b>${salutationMap[data.recipientSalutation] || ''} ${data.recipientName}</b>`
+    } else if (data.recipientName) {
+      greeting = `Dear <b>${data.recipientName}</b>`
+    }
+    
+    // Format approver name with salutation
+    let approverDisplay = data.approverName
+    if (data.approverSalutation && data.approverSalutation !== 'none') {
+      const salutationMap: Record<string, string> = {
+        'prof': 'Prof.',
+        'dr': 'Dr.',
+        'mr': 'Mr.',
+        'mrs': 'Mrs.'
+      }
+      approverDisplay = `${salutationMap[data.approverSalutation] || ''} ${data.approverName}`
+    }
     
     return {
       subject: `Component Request #${data.requestId} - Awaiting Your Approval - LNMIIT Lab Management`,
@@ -241,7 +263,7 @@ export const emailTemplates = {
         <tr>
           <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
             <p>${greeting},</p>
-            <p>A component request has been <b>approved by ${data.approverName} (${data.approverRole})</b> and is now forwarded to you for review and approval.</p>
+            <p>A component request has been <b>approved by ${approverDisplay} (${data.approverRole})</b> and is now forwarded to you for review and approval.</p>
             
             <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
               <tr>
@@ -382,9 +404,12 @@ export const emailTemplates = {
   }),
 
   componentRequestApprovedForLabStaff: (data: {
+    labStaffName?: string
+    labStaffSalutation?: string
     requesterName: string
     requesterRole: string
     approverName: string
+    approverSalutation?: string
     labName: string
     purpose: string
     items: Array<{ name: string; quantity: number }>
@@ -394,12 +419,38 @@ export const emailTemplates = {
     // Format the return date properly
     const formattedDate = formatDate(data.returnDate)
     
+    // Personalized greeting for lab staff with salutation
+    let greeting = `Dear Lab Staff`
+    if (data.labStaffName && data.labStaffSalutation && data.labStaffSalutation !== 'none') {
+      const salutationMap: Record<string, string> = {
+        'prof': 'Prof.',
+        'dr': 'Dr.',
+        'mr': 'Mr.',
+        'mrs': 'Mrs.'
+      }
+      greeting = `Dear <b>${salutationMap[data.labStaffSalutation] || ''} ${data.labStaffName}</b>`
+    } else if (data.labStaffName) {
+      greeting = `Dear <b>${data.labStaffName}</b>`
+    }
+    
+    // Format approver name with salutation
+    let approverDisplay = data.approverName
+    if (data.approverSalutation && data.approverSalutation !== 'none') {
+      const salutationMap: Record<string, string> = {
+        'prof': 'Prof.',
+        'dr': 'Dr.',
+        'mr': 'Mr.',
+        'mrs': 'Mrs.'
+      }
+      approverDisplay = `${salutationMap[data.approverSalutation] || ''} ${data.approverName}`
+    }
+    
     return {
     subject: `HOD Approved - Issue Components for Request #${data.requestId} - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
-          <p>Dear Lab Staff,</p>
+          <p>${greeting},</p>
           <p>A component request has been <b>approved by HOD</b> and is ready to be issued to the requester.</p>
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
@@ -415,7 +466,7 @@ export const emailTemplates = {
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Approved by:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.approverName} (HOD)</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${approverDisplay} (HOD)</td>
             </tr>
             <tr style="background: #d1fae5;">
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Purpose:</strong></td>

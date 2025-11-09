@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowRight, Building2, ChevronLeft, Package, Search, User } from "lucide-react"
+import { ArrowRight, Building2, ChevronLeft, Package, Search, User, CheckCircle2 } from "lucide-react"
 import Link from "next/link"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 interface Department { id: number; name: string; code: string }
 interface Faculty { id: number; name: string; email: string; department_name?: string }
@@ -19,6 +20,7 @@ interface ComponentItem { id: number; name: string; category: string | null; mod
 export default function RequestComponentsPage() {
   const { toast } = useToast()
   const [currentStep, setCurrentStep] = useState(1)
+  const [successDialog, setSuccessDialog] = useState<{ open: boolean; message: string }>({ open: false, message: '' })
   const [departments, setDepartments] = useState<Department[]>([])
   const [faculties, setFaculties] = useState<Faculty[]>([])
   const [labs, setLabs] = useState<Lab[]>([])
@@ -114,7 +116,10 @@ export default function RequestComponentsPage() {
       })
       const text = await res.text()
       if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
-      toast({ title: 'Request submitted', description: 'Your component request has been raised.' })
+      setSuccessDialog({ 
+        open: true, 
+        message: '✓ Component request submitted successfully! Your request has been sent to the mentor faculty for approval. You will be notified of the status.'
+      })
       // Reset
       setCurrentStep(1); setSelectedDepartment(''); setSelectedFaculty(''); setSelectedLab(''); setComponents([]); setQuantities({}); setPurpose(''); setReturnDate('')
     } catch (e: any) {
@@ -278,6 +283,25 @@ export default function RequestComponentsPage() {
           </Card>
         )}
       </div>
+
+      <Dialog open={successDialog.open} onOpenChange={(open) => setSuccessDialog({ ...successDialog, open })}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full bg-green-100">
+              <CheckCircle2 className="w-6 h-6 text-green-600" />
+            </div>
+            <DialogTitle className="text-center text-xl">Success!</DialogTitle>
+            <DialogDescription className="text-center pt-2">
+              {successDialog.message}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-center pt-4">
+            <Button onClick={() => setSuccessDialog({ open: false, message: '' })} className="w-24">
+              OK
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

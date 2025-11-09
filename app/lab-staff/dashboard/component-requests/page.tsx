@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { Check, Package, PackageCheck, X, Search, ChevronDown, ChevronUp, Clock, User, Users, Building, CheckCircle2 } from "lucide-react"
+import { Check, Package, PackageCheck, X, Search, ChevronDown, ChevronUp, Clock, User, Users, Building, CheckCircle2, Bell } from "lucide-react"
 import Link from "next/link"
 
 interface RequestItem { 
@@ -53,9 +54,11 @@ export default function LabStaffComponentRequestsPage() {
   const [remarks, setRemarks] = useState<Record<number, string>>({})
   const [returnRemarks, setReturnRemarks] = useState<Record<number, string>>({})
   const [extensionRemarks, setExtensionRemarks] = useState<Record<number, string>>({})
+  const [reminderRemarks, setReminderRemarks] = useState<Record<number, string>>({})
   const [searchQuery, setSearchQuery] = useState("")
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'issued' | 'return-pending' | 'returned' | 'rejected'>('all')
   const [expandedTimelines, setExpandedTimelines] = useState<Set<number>>(new Set())
+  const [successDialog, setSuccessDialog] = useState<{ open: boolean; message: string }>({ open: false, message: '' })
 
   const toggleTimeline = (id: number) => {
     setExpandedTimelines(prev => {
@@ -133,7 +136,13 @@ export default function LabStaffComponentRequestsPage() {
       const res = await fetch(`/api/lab-staff/component-requests/${id}/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, remarks: remarks[id] || null }) })
       const text = await res.text()
       if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
-      toast({ title: 'Updated', description: `Request ${action}d successfully.` })
+      
+      // Show success dialog
+      const successMessage = action === 'approve' 
+        ? '✓ Component request approved successfully! The requester has been notified and can now proceed.'
+        : '✓ Component request rejected successfully. The requester has been notified with your remarks.'
+      setSuccessDialog({ open: true, message: successMessage })
+      
       setRemarks(prev => { const p = { ...prev }; delete p[id]; return p })
       load()
     } catch (e: any) {
@@ -166,7 +175,8 @@ export default function LabStaffComponentRequestsPage() {
       })
       const text = await res.text()
       if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
-      toast({ title: 'Success', description: `Components marked as issued to ${role}` })
+      
+      setSuccessDialog({ open: true, message: `✓ Components marked as issued to ${role} successfully! The components are now tracked.` })
       load()
     } catch (e: any) {
       toast({ title: 'Issue failed', description: e?.message || 'Could not issue components', variant: 'destructive' })
@@ -196,7 +206,8 @@ export default function LabStaffComponentRequestsPage() {
       })
       const text = await res.text()
       if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
-      toast({ title: 'Success', description: 'Return approved. Components marked as returned.' })
+      
+      setSuccessDialog({ open: true, message: '✓ Return approved successfully! Components are now available in inventory.' })
       setReturnRemarks(prev => { const next = { ...prev }; delete next[id]; return next })
       load()
     } catch (e: any) {
@@ -232,7 +243,12 @@ export default function LabStaffComponentRequestsPage() {
       })
       const text = await res.text()
       if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
-      toast({ title: 'Success', description: `Extension ${action}d successfully` })
+      
+      const successMessage = approved
+        ? '✓ Extension approved successfully! The new deadline has been updated and the requester notified.'
+        : '✓ Extension rejected successfully. The requester has been notified with your remarks.'
+      setSuccessDialog({ open: true, message: successMessage })
+      
       setExtensionRemarks(prev => ({ ...prev, [id]: '' }))
       load()
     } catch (e: any) {
@@ -243,6 +259,23 @@ export default function LabStaffComponentRequestsPage() {
         newSet.delete(id)
         return newSet
       })
+    }
+  }
+
+  const sendReminder = async (requestId: number) => {
+    try {
+      const res = await fetch(`/api/lab-staff/component-requests/${requestId}/send-reminder`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ remarks: reminderRemarks[requestId] || '' })
+      })
+      const text = await res.text()
+      if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
+      const data = JSON.parse(text)
+      setSuccessDialog({ open: true, message: `✓ ${data.message || 'Reminder email sent successfully!'}` })
+      setReminderRemarks(prev => ({ ...prev, [requestId]: '' }))
+    } catch (e: any) {
+      toast({ title: 'Failed to send reminder', description: e?.message || 'Could not send reminder email', variant: 'destructive' })
     }
   }
 
@@ -511,10 +544,29 @@ export default function LabStaffComponentRequestsPage() {
 
                 {/* Issue/Return Status */}
                 {r.issued_at && !r.return_requested_at && (
-                  <div className="p-2 bg-green-50 border border-green-200 rounded text-sm">
-                    <p className="font-medium text-green-900">✓ Issued to {r.initiator_role === 'faculty' ? 'Faculty' : 'Student'}</p>
-                    <p className="text-green-700 text-xs">Issued: {new Date(r.issued_at).toLocaleDateString()}</p>
-                    {r.return_date && <p className="text-green-700 text-xs">Expected return: {new Date(r.return_date).toLocaleDateString()}</p>}
+                  <div className="space-y-2">
+                    <div className="p-2 bg-green-50 border border-green-200 rounded text-sm">
+                      <p className="font-medium text-green-900">✓ Issued to {r.initiator_role === 'faculty' ? 'Faculty' : 'Student'}</p>
+                      <p className="text-green-700 text-xs">Issued: {new Date(r.issued_at).toLocaleDateString()}</p>
+                      {r.return_date && <p className="text-green-700 text-xs">Expected return: {new Date(r.return_date).toLocaleDateString()}</p>}
+                    </div>
+                    <div className="space-y-2">
+                      <Textarea
+                        placeholder="Add a note/reminder message (optional)..."
+                        value={reminderRemarks[r.id] || ''}
+                        onChange={(e) => setReminderRemarks(prev => ({ ...prev, [r.id]: e.target.value }))}
+                        className="min-h-[60px] text-sm"
+                      />
+                      <Button 
+                        variant="outline" 
+                        className="w-full" 
+                        onClick={() => sendReminder(r.id)}
+                        disabled={processingIds.has(r.id)}
+                      >
+                        <Bell className="h-4 w-4 mr-2" />
+                        Send Return Reminder
+                      </Button>
+                    </div>
                   </div>
                 )}
 
@@ -672,6 +724,28 @@ export default function LabStaffComponentRequestsPage() {
           ))}
         </div>
       )}
+
+      {/* Success Dialog */}
+      <Dialog open={successDialog.open} onOpenChange={(open) => setSuccessDialog({ ...successDialog, open })}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center justify-center mb-4">
+              <div className="rounded-full bg-green-100 p-3">
+                <CheckCircle2 className="h-8 w-8 text-green-600" />
+              </div>
+            </div>
+            <DialogTitle className="text-center text-xl">Success!</DialogTitle>
+            <DialogDescription className="text-center text-base pt-2">
+              {successDialog.message}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-center pt-4">
+            <Button onClick={() => setSuccessDialog({ open: false, message: '' })} className="w-full sm:w-auto">
+              OK
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

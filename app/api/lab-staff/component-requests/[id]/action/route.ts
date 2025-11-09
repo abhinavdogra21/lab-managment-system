@@ -92,8 +92,8 @@ export async function POST(
       const details = await db.query(
         `SELECT r.*, l.name as lab_name, l.department_id,
                 u.name as requester_name, u.email as requester_email,
-                ls.name as lab_staff_name,
-                d.hod_email
+                ls.name as lab_staff_name, ls.salutation as lab_staff_salutation,
+                d.hod_email, d.hod_name, d.hod_salutation
          FROM component_requests r
          JOIN labs l ON l.id = r.lab_id
          JOIN users u ON u.id = r.requester_id
@@ -102,23 +102,23 @@ export async function POST(
          WHERE r.id = ?`,
         [Number(user.userId), requestId]
       )
-      const req = details.rows[0]
+      const requestDetails = details.rows[0]
       
       // Email to requester
-      if (req && req.requester_email) {
+      if (requestDetails && requestDetails.requester_email) {
         const emailData = emailTemplates.componentRequestApproved({
-          requesterName: req.requester_name,
-          approverName: req.lab_staff_name || 'Lab Staff',
+          requesterName: requestDetails.requester_name,
+          approverName: requestDetails.lab_staff_name || 'Lab Staff',
           approverRole: 'Lab Staff',
-          labName: req.lab_name,
+          labName: requestDetails.lab_name,
           requestId: requestId,
           remarks: remarks || undefined
         })
-        await sendEmail({ to: req.requester_email, ...emailData }).catch(err => console.error('Email failed:', err))
+        await sendEmail({ to: requestDetails.requester_email, ...emailData }).catch(err => console.error('Email failed:', err))
       }
       
       // Email to HOD (forwarding the approved request)
-      if (req && req.hod_email) {
+      if (requestDetails && requestDetails.hod_email) {
         const itemsDetails = await db.query(
           `SELECT c.name, cri.quantity_requested as quantity
            FROM component_request_items cri
@@ -128,17 +128,20 @@ export async function POST(
         )
         const emailData = emailTemplates.componentRequestForwarded({
           recipientRole: 'HOD',
-          requesterName: req.requester_name,
-          requesterRole: req.initiator_role === 'faculty' ? 'Faculty' : 'Student',
-          approverName: req.lab_staff_name || 'Lab Staff',
+          recipientName: requestDetails.hod_name || '',
+          recipientSalutation: requestDetails.hod_salutation || 'none',
+          requesterName: requestDetails.requester_name,
+          requesterRole: requestDetails.initiator_role === 'faculty' ? 'Faculty' : 'Student',
+          approverName: requestDetails.lab_staff_name || 'Lab Staff',
+          approverSalutation: requestDetails.lab_staff_salutation || 'none',
           approverRole: 'Lab Staff',
-          labName: req.lab_name,
-          purpose: req.purpose || 'Not specified',
+          labName: requestDetails.lab_name,
+          purpose: requestDetails.purpose || 'Not specified',
           items: itemsDetails.rows,
-          returnDate: req.return_date,
+          returnDate: requestDetails.return_date,
           requestId: requestId
         })
-        await sendEmail({ to: req.hod_email, ...emailData }).catch(err => console.error('Email failed:', err))
+        await sendEmail({ to: requestDetails.hod_email, ...emailData }).catch(err => console.error('Email failed:', err))
       }
       
       // Log the activity
@@ -190,18 +193,18 @@ export async function POST(
          WHERE r.id = ?`,
         [Number(user.userId), requestId]
       )
-      const req = details.rows[0]
+      const requestDetails = details.rows[0]
       
-      if (req && req.requester_email) {
+      if (requestDetails && requestDetails.requester_email) {
         const emailData = emailTemplates.componentRequestRejected({
-          requesterName: req.requester_name,
-          rejecterName: req.lab_staff_name || 'Lab Staff',
+          requesterName: requestDetails.requester_name,
+          rejecterName: requestDetails.lab_staff_name || 'Lab Staff',
           rejecterRole: 'Lab Staff',
-          labName: req.lab_name,
+          labName: requestDetails.lab_name,
           requestId: requestId,
           reason: remarks || undefined
         })
-        await sendEmail({ to: req.requester_email, ...emailData }).catch(err => console.error('Email failed:', err))
+        await sendEmail({ to: requestDetails.requester_email, ...emailData }).catch(err => console.error('Email failed:', err))
       }
       
       // Log the activity

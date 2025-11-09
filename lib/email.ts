@@ -50,8 +50,28 @@ export async function sendMail(options: MailOptions) {
   console.warn("SMTP not configured; skipping email send.", options.subject)
     return { skipped: true }
   }
+  
+  // If in testing mode, redirect all emails to admin email
+  const testingMode = process.env.TESTING_MODE === 'true'
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.GMAIL_USER
+  
+  let actualTo = options.to
+  let modifiedSubject = options.subject
+  
+  if (testingMode && adminEmail) {
+    const originalRecipients = Array.isArray(options.to) ? options.to.join(', ') : options.to
+    actualTo = adminEmail
+    modifiedSubject = `[TEST - Original To: ${originalRecipients}] ${options.subject}`
+    console.log(`📧 Testing mode: Redirecting email to ${adminEmail} instead of ${originalRecipients}`)
+  }
+  
   const from = process.env.SMTP_FROM || process.env.SMTP_USER!
-  const info = await transporter.sendMail({ from, ...options })
+  const info = await transporter.sendMail({ 
+    from, 
+    to: actualTo,
+    subject: modifiedSubject,
+    html: options.html
+  })
   return { messageId: info.messageId }
 }
 

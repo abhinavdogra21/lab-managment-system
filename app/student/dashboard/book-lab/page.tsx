@@ -11,8 +11,9 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, ArrowRight, Clock, MapPin, User, Building2, ChevronLeft } from "lucide-react"
+import { CalendarIcon, ArrowRight, Clock, MapPin, User, Building2, ChevronLeft, CheckCircle2 } from "lucide-react"
 import { format } from "date-fns"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 interface Department {
   id: number
@@ -55,6 +56,7 @@ export default function BookLabPage() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
+  const [successDialog, setSuccessDialog] = useState<{ open: boolean; message: string }>({ open: false, message: '' })
   
   // Data states
   const [departments, setDepartments] = useState<Department[]>([])
@@ -254,7 +256,10 @@ export default function BookLabPage() {
 
   if (!res.ok) throw new Error(data?.error || "Failed to submit request")
 
-  toast({ title: "Request raised successfully!", description: "Your lab booking request has been submitted and is pending approval." })
+  setSuccessDialog({ 
+    open: true, 
+    message: '✓ Lab booking request submitted successfully! Your request has been sent to the faculty supervisor for approval. You will be notified once it is reviewed.'
+  })
       
       // Reset form
       setCurrentStep(1)
@@ -620,6 +625,25 @@ export default function BookLabPage() {
           </Card>
         )}
       </div>
+
+      <Dialog open={successDialog.open} onOpenChange={(open) => setSuccessDialog({ ...successDialog, open })}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full bg-green-100">
+              <CheckCircle2 className="w-6 h-6 text-green-600" />
+            </div>
+            <DialogTitle className="text-center text-xl">Success!</DialogTitle>
+            <DialogDescription className="text-center pt-2">
+              {successDialog.message}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-center pt-4">
+            <Button onClick={() => setSuccessDialog({ open: false, message: '' })} className="w-24">
+              OK
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

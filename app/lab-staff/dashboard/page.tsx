@@ -36,12 +36,42 @@ export default function LabStaffDashboardPage() {
 		if (userData) {
 			setCurrentUser(JSON.parse(userData))
 		}
-		// Load some demo stats
-		setStats({
-			totalEquipment: 45,
-			pendingIssues: 3
-		})
+		// Load real stats from API
+		loadStats()
 	}, [])
+
+	const loadStats = async () => {
+		try {
+			// Fetch total equipment count from components API
+			const componentsRes = await fetch('/api/lab-staff/labs/components')
+			if (componentsRes.ok) {
+				const componentsData = await componentsRes.json()
+				const totalEquipment = componentsData.components?.length || 0
+				
+				// Fetch pending component requests
+				const requestsRes = await fetch('/api/lab-staff/component-requests')
+				if (requestsRes.ok) {
+					const requestsData = await requestsRes.json()
+					// Count requests with status 'pending_lab_staff'
+					const pendingIssues = requestsData.requests?.filter((r: any) => 
+						r.status === 'pending_lab_staff' || r.status === 'pending_faculty' || r.status === 'pending_hod'
+					).length || 0
+					
+					setStats({
+						totalEquipment,
+						pendingIssues
+					})
+				}
+			}
+		} catch (error) {
+			console.error('Failed to load stats:', error)
+			// Keep default values if API fails
+			setStats({
+				totalEquipment: 0,
+				pendingIssues: 0
+			})
+		}
+	}
 
 	if (!currentUser) return null
 

@@ -49,7 +49,14 @@ const DAYS_OF_WEEK = [
 ]
 
 const TIME_SLOTS = [
-  '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'
+  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', 
+  '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', 
+  '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'
+]
+
+// Hourly time slots for the weekly view (simplified display)
+const HOURLY_VIEW_SLOTS = [
+  '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
 ]
 
 export default function TimetablePage() {
@@ -132,16 +139,41 @@ export default function TimetablePage() {
     
     DAYS_OF_WEEK.forEach(day => {
       weekView[day.value] = {}
-      TIME_SLOTS.forEach(time => {
+      HOURLY_VIEW_SLOTS.forEach(time => {
         weekView[day.value][time] = []
       })
     })
     
     filteredEntries.forEach(entry => {
-      const timeSlot = entry.time_slot_start.substring(0, 5) // Extract HH:MM
-      if (weekView[entry.day_of_week] && weekView[entry.day_of_week][timeSlot]) {
-        weekView[entry.day_of_week][timeSlot].push(entry)
+      const entryStart = entry.time_slot_start.substring(0, 5) // Extract HH:MM
+      const entryEnd = entry.time_slot_end.substring(0, 5) // Extract HH:MM
+      
+      // Convert time to comparable format (minutes from midnight)
+      const timeToMinutes = (time: string) => {
+        const [hours, minutes] = time.split(':').map(Number)
+        return hours * 60 + minutes
       }
+      
+      const startMinutes = timeToMinutes(entryStart)
+      const endMinutes = timeToMinutes(entryEnd)
+      
+      // Show entry in hourly blocks it spans
+      HOURLY_VIEW_SLOTS.forEach(hourSlot => {
+        const hourMinutes = timeToMinutes(hourSlot)
+        const nextHourMinutes = hourMinutes + 60
+        
+        // Check if this hourly block overlaps with the entry's time range
+        // Entry overlaps if: entry_start < hour_end AND entry_end > hour_start
+        if (startMinutes < nextHourMinutes && endMinutes > hourMinutes) {
+          if (weekView[entry.day_of_week] && weekView[entry.day_of_week][hourSlot]) {
+            // Only add once per time slot (avoid duplicates)
+            const alreadyAdded = weekView[entry.day_of_week][hourSlot].some(e => e.id === entry.id)
+            if (!alreadyAdded) {
+              weekView[entry.day_of_week][hourSlot].push(entry)
+            }
+          }
+        }
+      })
     })
     
     return weekView
@@ -262,14 +294,26 @@ export default function TimetablePage() {
       
       // Reload to avoid filter/view mismatches and ensure latest state
       await loadTimetableEntries()
+      
+      // Show success message but keep dialog open for manual close
+      const successMsg = entryDialogMode === "create" 
+        ? "✓ Entry created successfully! You can close this dialog or add another entry."
+        : "✓ Entry updated successfully! You can close this dialog now."
+      
+      setFormError(successMsg) // Reuse formError for success message (we'll style it green)
+      
+      toast({ 
+        title: entryDialogMode === "create" ? "Entry Created" : "Entry Updated",
+        description: "Timetable has been updated successfully",
+        variant: "default"
+      })
+      
+      // Reset form only if creating (so user can add more entries easily)
       if (entryDialogMode === "create") {
-        toast({ title: "Timetable entry created" })
-      } else {
-        toast({ title: "Timetable entry updated" })
+        resetEntryForm()
       }
       
-  setFormError(null)
-  setEntryDialogOpen(false)
+      // Don't auto-close the dialog - let user close it manually
     } catch (error: any) {
       console.error("Save entry error:", error)
   const msg = error?.message || "Failed to save timetable entry"
@@ -467,7 +511,7 @@ export default function TimetablePage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {TIME_SLOTS.map(timeSlot => (
+                      {HOURLY_VIEW_SLOTS.map(timeSlot => (
                         <TableRow key={timeSlot} className="border-b">
                           <TableCell className="font-medium text-xs bg-muted/30 sticky left-0 z-10 border-r p-2">
                             {timeSlot}
@@ -634,42 +678,24 @@ export default function TimetablePage() {
             </div>
             <div>
               <Label className="text-xs">Start Time <span className="text-red-600">*</span></Label>
-              <Select 
+              <Input 
+                type="time"
                 value={entryForm.time_slot_start} 
-                onValueChange={(v) => { setFormError(null); setEntryForm(s => ({ ...s, time_slot_start: v })) }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Start Time" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIME_SLOTS.map(time => (
-                    <SelectItem key={time} value={time}>
-                      {time}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(e) => { setFormError(null); setEntryForm(s => ({ ...s, time_slot_start: e.target.value })) }}
+                className="w-full"
+              />
             </div>
             <div>
               <Label className="text-xs">End Time <span className="text-red-600">*</span></Label>
-              <Select 
+              <Input 
+                type="time"
                 value={entryForm.time_slot_end} 
-                onValueChange={(v) => { setFormError(null); setEntryForm(s => ({ ...s, time_slot_end: v })) }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select End Time" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIME_SLOTS.map(time => (
-                    <SelectItem key={time} value={time}>
-                      {time}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(e) => { setFormError(null); setEntryForm(s => ({ ...s, time_slot_end: e.target.value })) }}
+                className="w-full"
+              />
             </div>
             <div className="md:col-span-2">
-              <Label className="text-xs">Details (Optional)</Label>
+              <Label className="text-xs">Details</Label>
               <Input 
                 value={entryForm.notes || ""} 
                 onChange={(e) => setEntryForm(s => ({ ...s, notes: e.target.value }))} 
@@ -682,7 +708,7 @@ export default function TimetablePage() {
               Cancel
             </Button>
             {formError ? (
-              <div aria-live="polite" className="text-sm text-red-600 mr-auto">
+              <div aria-live="polite" className={`text-sm mr-auto ${formError.startsWith('✓') ? 'text-green-600 font-medium' : 'text-red-600'}`}>
                 {formError}
               </div>
             ) : null}

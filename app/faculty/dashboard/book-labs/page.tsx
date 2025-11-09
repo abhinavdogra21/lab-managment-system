@@ -11,8 +11,9 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, ArrowRight, Clock, User, Building2, ChevronLeft } from "lucide-react"
+import { CalendarIcon, ArrowRight, Clock, User, Building2, ChevronLeft, CheckCircle2 } from "lucide-react"
 import { format } from "date-fns"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 interface Lab { id: number; name: string; code: string; department_id: number; capacity: number; location: string }
 interface TimeSlot { start_time: string; end_time: string; is_available: boolean; display?: string }
@@ -21,6 +22,7 @@ interface BookedSlotItem { start_time: string; end_time: string; time_range: str
 export default function FacultyBookLabsPage() {
 	const { toast } = useToast()
 	const [currentStep, setCurrentStep] = useState(1)
+	const [successDialog, setSuccessDialog] = useState<{ open: boolean; message: string }>({ open: false, message: '' })
 	const [labs, setLabs] = useState<Lab[]>([])
 	const [selectedLab, setSelectedLab] = useState<string>("")
 	const [selectedDate, setSelectedDate] = useState<Date>()
@@ -115,7 +117,10 @@ export default function FacultyBookLabsPage() {
 			setStartTime("")
 			setEndTime("")
 			setPurpose("")
-			toast({ title: 'Request raised successfully!', description: 'Your lab booking request has been submitted and is pending Lab Staff review.' })
+			setSuccessDialog({ 
+				open: true, 
+				message: '✓ Lab booking request submitted successfully! Your request has been sent to Lab Staff for review and will then proceed to HOD for final approval.'
+			})
 		} catch (e: any) {
 			toast({ title: 'Submission failed', description: e?.message || 'Failed to submit request', variant: 'destructive' })
 		} finally { setLoading(false) }
@@ -305,6 +310,25 @@ export default function FacultyBookLabsPage() {
 					</Card>
 				)}
 			</div>
+
+			<Dialog open={successDialog.open} onOpenChange={(open) => setSuccessDialog({ ...successDialog, open })}>
+				<DialogContent>
+					<DialogHeader>
+						<div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full bg-green-100">
+							<CheckCircle2 className="w-6 h-6 text-green-600" />
+						</div>
+						<DialogTitle className="text-center text-xl">Success!</DialogTitle>
+						<DialogDescription className="text-center pt-2">
+							{successDialog.message}
+						</DialogDescription>
+					</DialogHeader>
+					<div className="flex justify-center pt-4">
+						<Button onClick={() => setSuccessDialog({ open: false, message: '' })} className="w-24">
+							OK
+						</Button>
+					</div>
+				</DialogContent>
+			</Dialog>
 		</div>
 	)
 }

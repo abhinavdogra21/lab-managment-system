@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { Calendar, Clock, Check, X, ArrowLeft, User, Building, CheckCircle2, Users, ChevronDown, ChevronUp } from 'lucide-react'
 import Link from 'next/link'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 interface RequestItem {
   id: number
@@ -275,6 +276,7 @@ export default function HODApprovePage() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<number | null>(null)
+  const [successDialog, setSuccessDialog] = useState<{ open: boolean; message: string }>({ open: false, message: '' })
   const [pendingItems, setPendingItems] = useState<RequestItem[]>([])
   const [approvedItems, setApprovedItems] = useState<RequestItem[]>([])
   const [rejectedItems, setRejectedItems] = useState<RequestItem[]>([])
@@ -393,11 +395,10 @@ export default function HODApprovePage() {
 
       if (res.ok) {
         const data = await res.json()
-        toast({
-          title: "Success",
-          description: data.message || `Request ${action}d successfully`,
-          variant: "default"
-        })
+        const successMessage = action === 'approve' 
+          ? '✓ Lab booking request approved successfully! The booking is now confirmed and the requester has been notified.'
+          : '✓ Lab booking request rejected successfully. The requester has been notified with your remarks.'
+        setSuccessDialog({ open: true, message: successMessage })
 
         setRemarks(prev => {
           const newRemarks = { ...prev }
@@ -633,7 +634,10 @@ export default function HODApprovePage() {
         })
         const text = await res.text()
         if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
-        toast({ title: 'Updated', description: `Request ${action}d successfully.` })
+        const successMessage = action === 'approve' 
+          ? '✓ Component request approved successfully! The request is now approved and the requester has been notified.'
+          : '✓ Component request rejected successfully. The requester has been notified with your remarks.'
+        setSuccessDialog({ open: true, message: successMessage })
         setRemarks(prev => { const p = { ...prev }; delete p[id]; return p })
         await loadAll()
         setActiveTab(action === 'approve' ? 'approved' : 'rejected')
@@ -1250,6 +1254,25 @@ export default function HODApprovePage() {
           <HODComponentsApprovals />
         </TabsContent>
       </Tabs>
+
+      <Dialog open={successDialog.open} onOpenChange={(open) => setSuccessDialog({ ...successDialog, open })}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full bg-green-100">
+              <CheckCircle2 className="w-6 h-6 text-green-600" />
+            </div>
+            <DialogTitle className="text-center text-xl">Success!</DialogTitle>
+            <DialogDescription className="text-center pt-2">
+              {successDialog.message}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-center pt-4">
+            <Button onClick={() => setSuccessDialog({ open: false, message: '' })} className="w-24">
+              OK
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

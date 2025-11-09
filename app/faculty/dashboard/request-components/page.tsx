@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowRight, ChevronLeft, Package, Search } from "lucide-react"
+import { ArrowRight, ChevronLeft, Package, Search, CheckCircle2 } from "lucide-react"
 import Link from "next/link"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 interface Lab { id: number; name: string; code: string; department_id: number; capacity: number; location: string }
 interface ComponentItem { id: number; name: string; category: string | null; model: string | null; condition_status: 'working'|'dead'|'consumable'; quantity_total: number; quantity_available: number }
@@ -16,6 +17,7 @@ interface ComponentItem { id: number; name: string; category: string | null; mod
 export default function FacultyRequestComponentsPage() {
   const { toast } = useToast()
   const [currentStep, setCurrentStep] = useState(1)
+  const [successDialog, setSuccessDialog] = useState<{ open: boolean; message: string }>({ open: false, message: '' })
   const [labs, setLabs] = useState<Lab[]>([])
   const [components, setComponents] = useState<ComponentItem[]>([])
   const [labsLoading, setLabsLoading] = useState(true)
@@ -106,7 +108,10 @@ export default function FacultyRequestComponentsPage() {
       })
       const text = await res.text()
       if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
-      toast({ title: 'Request submitted', description: 'Your component request has been raised and sent to Lab Staff.' })
+      setSuccessDialog({ 
+        open: true, 
+        message: '✓ Component request submitted successfully! Your request has been sent to Lab Staff for review and approval.'
+      })
       // Reset
       setCurrentStep(1); setSelectedLab(''); setComponents([]); setQuantities({}); setPurpose(''); setReturnDate('')
     } catch (e: any) {
@@ -280,6 +285,25 @@ export default function FacultyRequestComponentsPage() {
           </Card>
         )}
       </div>
+
+      <Dialog open={successDialog.open} onOpenChange={(open) => setSuccessDialog({ ...successDialog, open })}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full bg-green-100">
+              <CheckCircle2 className="w-6 h-6 text-green-600" />
+            </div>
+            <DialogTitle className="text-center text-xl">Success!</DialogTitle>
+            <DialogDescription className="text-center pt-2">
+              {successDialog.message}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-center pt-4">
+            <Button onClick={() => setSuccessDialog({ open: false, message: '' })} className="w-24">
+              OK
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

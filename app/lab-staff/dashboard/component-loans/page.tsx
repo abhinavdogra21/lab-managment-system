@@ -5,14 +5,16 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { Calendar, Check, Clock, X } from "lucide-react"
+import { Calendar, Check, Clock, X, Bell, CheckCircle2 } from "lucide-react"
 
 export default function ComponentLoansPage() {
   const { toast } = useToast()
   const [active, setActive] = useState<'pending'|'issued'|'return_requested'|'overdue5'>('pending')
   const [loading, setLoading] = useState(false)
   const [loans, setLoans] = useState<any[]>([])
+  const [successDialog, setSuccessDialog] = useState<{ open: boolean; message: string }>({ open: false, message: '' })
 
   const load = async () => {
     setLoading(true)
@@ -36,10 +38,45 @@ export default function ComponentLoansPage() {
       const res = await fetch(`/api/lab-staff/component-loans/${id}/action`, { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ action }) })
       const text = await res.text()
       if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
-      toast({ title: 'Updated', description: `Action ${action} successful.` })
+      
+      // Show success dialog based on action
+      let successMessage = ''
+      switch(action) {
+        case 'approve':
+          successMessage = '✓ Component loan approved successfully! The requester has been notified.'
+          break
+        case 'reject':
+          successMessage = '✓ Component loan rejected successfully. The requester has been notified.'
+          break
+        case 'approve_extension':
+          successMessage = '✓ Extension approved successfully! The due date has been updated.'
+          break
+        case 'reject_extension':
+          successMessage = '✓ Extension rejected successfully. The requester has been notified.'
+          break
+        case 'approve_return':
+          successMessage = '✓ Component return confirmed successfully! Components are now available.'
+          break
+        default:
+          successMessage = '✓ Action completed successfully!'
+      }
+      
+      setSuccessDialog({ open: true, message: successMessage })
       await load()
     } catch (e: any) {
       toast({ title: 'Action failed', description: e?.message || 'Could not update loan', variant: 'destructive' })
+    }
+  }
+
+  const sendReminder = async (id: number) => {
+    try {
+      const res = await fetch(`/api/lab-staff/component-loans/${id}/send-reminder`, { method: 'POST' })
+      const text = await res.text()
+      if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
+      const data = JSON.parse(text)
+      setSuccessDialog({ open: true, message: `✓ ${data.message || 'Reminder email sent successfully!'}` })
+    } catch (e: any) {
+      toast({ title: 'Failed to send reminder', description: e?.message || 'Could not send reminder email', variant: 'destructive' })
     }
   }
 
@@ -129,6 +166,11 @@ export default function ComponentLoansPage() {
                         <Button className="flex-1" variant="destructive" onClick={() => act(l.id, 'reject_extension')}><X className="h-4 w-4 mr-1"/>Reject Extension</Button>
                       </>
                     )}
+                    {l.extension_status !== 'pending' && (
+                      <Button variant="outline" className="w-full" onClick={() => sendReminder(l.id)}>
+                        <Bell className="h-4 w-4 mr-2"/>Send Return Reminder
+                      </Button>
+                    )}
                   </div>
                 </CardContent></Card>
               ))}
@@ -173,12 +215,39 @@ export default function ComponentLoansPage() {
                     {badge(l.status)}
                   </div>
                   <div className="text-sm flex items-center gap-2"><Clock className="h-3 w-3" /> Due: {l.due_date}</div>
+                  <div className="flex gap-2 pt-2">
+                    <Button variant="outline" className="w-full" onClick={() => sendReminder(l.id)}>
+                      <Bell className="h-4 w-4 mr-2"/>Send Return Reminder
+                    </Button>
+                  </div>
                 </CardContent></Card>
               ))}
             </div>
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Success Dialog */}
+      <Dialog open={successDialog.open} onOpenChange={(open) => setSuccessDialog({ ...successDialog, open })}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center justify-center mb-4">
+              <div className="rounded-full bg-green-100 p-3">
+                <CheckCircle2 className="h-8 w-8 text-green-600" />
+              </div>
+            </div>
+            <DialogTitle className="text-center text-xl">Success!</DialogTitle>
+            <DialogDescription className="text-center text-base pt-2">
+              {successDialog.message}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-center pt-4">
+            <Button onClick={() => setSuccessDialog({ open: false, message: '' })} className="w-full sm:w-auto">
+              OK
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

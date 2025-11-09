@@ -86,8 +86,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const details = await db.query(
         `SELECT r.*, l.name as lab_name, l.staff_id,
                 u.name as requester_name, u.email as requester_email,
-                hod.name as hod_name,
-                ls.email as lab_staff_email
+                hod.name as hod_name, hod.salutation as hod_salutation,
+                ls.name as lab_staff_name, ls.email as lab_staff_email, ls.salutation as lab_staff_salutation
          FROM component_requests r
          JOIN labs l ON l.id = r.lab_id
          JOIN users u ON u.id = r.requester_id
@@ -111,19 +111,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         await sendEmail({ to: req.requester_email, ...emailData }).catch(err => console.error('Email failed:', err))
       }
       
+      // Fetch items for email and logging
+      const itemsDetails = await db.query(
+        `SELECT c.name, cri.quantity_requested as quantity
+         FROM component_request_items cri
+         JOIN components c ON c.id = cri.component_id
+         WHERE cri.request_id = ?`,
+        [requestId]
+      )
+      
       // Email to lab staff (notify them to issue components)
       if (req && req.lab_staff_email) {
-        const itemsDetails = await db.query(
-          `SELECT c.name, cri.quantity_requested as quantity
-           FROM component_request_items cri
-           JOIN components c ON c.id = cri.component_id
-           WHERE cri.request_id = ?`,
-          [requestId]
-        )
         const emailData = emailTemplates.componentRequestApprovedForLabStaff({
+          labStaffName: req.lab_staff_name || '',
+          labStaffSalutation: req.lab_staff_salutation || 'none',
           requesterName: req.requester_name,
           requesterRole: req.initiator_role === 'faculty' ? 'Faculty' : 'Student',
           approverName: req.hod_name || 'HOD',
+          approverSalutation: req.hod_salutation || 'none',
           labName: req.lab_name,
           purpose: req.purpose || 'Not specified',
           items: itemsDetails.rows,
