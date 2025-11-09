@@ -69,7 +69,6 @@ export default function TimetablePage() {
   const [timetableEntries, setTimetableEntries] = useState<TimetableEntry[]>([])
   
   // Filter states
-  const [selectedLab, setSelectedLab] = useState<string>("all")
   const [selectedDay, setSelectedDay] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
   
@@ -125,55 +124,83 @@ export default function TimetablePage() {
 
   // Filter entries based on selected filters
   const filteredEntries = timetableEntries.filter(entry => {
-    const labMatch = selectedLab === "all" || entry.lab_id.toString() === selectedLab
     const dayMatch = selectedDay === "all" || entry.day_of_week.toString() === selectedDay
     const searchMatch = searchTerm === "" || 
       (entry.notes && entry.notes.toLowerCase().includes(searchTerm.toLowerCase()))
     
-    return labMatch && dayMatch && searchMatch
+    return dayMatch && searchMatch
   })
 
-  // Group entries by day and time for grid view
+  // Group entries by day and time for grid view with proper spanning
   const getWeeklyView = () => {
-    const weekView: { [key: string]: { [key: string]: TimetableEntry[] } } = {}
+    interface CellData {
+      entry: TimetableEntry | null
+      isStart: boolean
+      rowSpan: number
+      labName: string
+    }
     
+    const weekView: { [day: number]: { [time: string]: CellData } } = {}
+    
+    // Initialize grid
     DAYS_OF_WEEK.forEach(day => {
       weekView[day.value] = {}
       HOURLY_VIEW_SLOTS.forEach(time => {
-        weekView[day.value][time] = []
+        weekView[day.value][time] = {
+          entry: null,
+          isStart: false,
+          rowSpan: 0,
+          labName: ''
+        }
       })
     })
     
+    // Convert time to comparable format (minutes from midnight)
+    const timeToMinutes = (time: string) => {
+      const [hours, minutes] = time.split(':').map(Number)
+      return hours * 60 + minutes
+    }
+    
+    // Place each entry in the grid
     filteredEntries.forEach(entry => {
-      const entryStart = entry.time_slot_start.substring(0, 5) // Extract HH:MM
-      const entryEnd = entry.time_slot_end.substring(0, 5) // Extract HH:MM
-      
-      // Convert time to comparable format (minutes from midnight)
-      const timeToMinutes = (time: string) => {
-        const [hours, minutes] = time.split(':').map(Number)
-        return hours * 60 + minutes
-      }
-      
+      const entryStart = entry.time_slot_start.substring(0, 5)
+      const entryEnd = entry.time_slot_end.substring(0, 5)
       const startMinutes = timeToMinutes(entryStart)
       const endMinutes = timeToMinutes(entryEnd)
+      const labName = getLabName(entry.lab_id)
       
-      // Show entry in hourly blocks it spans
+      // Find which hourly slots this entry spans
+      const spannedSlots: string[] = []
       HOURLY_VIEW_SLOTS.forEach(hourSlot => {
         const hourMinutes = timeToMinutes(hourSlot)
         const nextHourMinutes = hourMinutes + 60
         
-        // Check if this hourly block overlaps with the entry's time range
         // Entry overlaps if: entry_start < hour_end AND entry_end > hour_start
         if (startMinutes < nextHourMinutes && endMinutes > hourMinutes) {
-          if (weekView[entry.day_of_week] && weekView[entry.day_of_week][hourSlot]) {
-            // Only add once per time slot (avoid duplicates)
-            const alreadyAdded = weekView[entry.day_of_week][hourSlot].some(e => e.id === entry.id)
-            if (!alreadyAdded) {
-              weekView[entry.day_of_week][hourSlot].push(entry)
-            }
-          }
+          spannedSlots.push(hourSlot)
         }
       })
+      
+      // Mark the first slot as the start with rowSpan
+      if (spannedSlots.length > 0 && weekView[entry.day_of_week]) {
+        const firstSlot = spannedSlots[0]
+        weekView[entry.day_of_week][firstSlot] = {
+          entry: entry,
+          isStart: true,
+          rowSpan: spannedSlots.length,
+          labName: labName
+        }
+        
+        // Mark subsequent slots as occupied (not start)
+        for (let i = 1; i < spannedSlots.length; i++) {
+          weekView[entry.day_of_week][spannedSlots[i]] = {
+            entry: entry,
+            isStart: false,
+            rowSpan: 0,
+            labName: labName
+          }
+        }
+      }
     })
     
     return weekView
@@ -438,22 +465,6 @@ export default function TimetablePage() {
                 </div>
               </div>
               <div>
-                <Label className="text-xs">Lab</Label>
-                <Select value={selectedLab} onValueChange={setSelectedLab}>
-                  <SelectTrigger className="text-sm">
-                    <SelectValue placeholder="Select Lab" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Labs</SelectItem>
-                    {labs.map(lab => (
-                      <SelectItem key={lab.id} value={lab.id.toString()}>
-                        {lab.code === lab.name ? lab.name : `${lab.code} - ${lab.name}`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
                 <Label className="text-xs">Day</Label>
                 <Select value={selectedDay} onValueChange={setSelectedDay}>
                   <SelectTrigger className="text-sm">
@@ -500,45 +511,102 @@ export default function TimetablePage() {
               <div className="overflow-auto max-h-[70vh]">
                 <div className="min-w-[1200px]">
                   <Table>
-                    <TableHeader className="sticky top-0 bg-background border-b">
+                    <TableHeader className="sticky top-0 bg-background border-b z-20">
                       <TableRow>
-                        <TableHead className="w-16 text-xs font-medium bg-muted/50 sticky left-0 z-10 border-r">Time</TableHead>
+                        <TableHead className="w-20 text-xs font-medium bg-muted/50 sticky left-0 z-30 border-r">Time</TableHead>
                         {DAYS_OF_WEEK.map(day => (
-                          <TableHead key={day.value} className="text-center min-w-[160px] text-xs font-medium">
+                          <TableHead key={day.value} className="text-center min-w-[180px] text-xs font-medium bg-muted/50">
                             {day.label}
                           </TableHead>
                         ))}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {HOURLY_VIEW_SLOTS.map(timeSlot => (
-                        <TableRow key={timeSlot} className="border-b">
-                          <TableCell className="font-medium text-xs bg-muted/30 sticky left-0 z-10 border-r p-2">
-                            {timeSlot}
+                      {HOURLY_VIEW_SLOTS.map((timeSlot, rowIndex) => (
+                        <TableRow key={timeSlot} className="border-b h-16">
+                          <TableCell className="font-medium text-xs bg-muted/30 sticky left-0 z-10 border-r p-2 align-top">
+                            <div className="font-semibold">{timeSlot}</div>
                           </TableCell>
                           {DAYS_OF_WEEK.map(day => {
-                            const entries = weekView[day.value]?.[timeSlot] || []
-                            return (
-                              <TableCell key={day.value} className="p-1 align-top min-h-[60px] max-w-[160px]">
-                                <div className="space-y-1">
-                                  {entries.map(entry => (
-                                    <div 
-                                      key={entry.id}
-                                      className="bg-blue-50 border border-blue-200 rounded p-1.5 text-xs space-y-1 hover:bg-blue-100 cursor-pointer transition-colors"
-                                      onClick={() => openEditEntry(entry)}
-                                    >
-                                      <div className="font-medium text-blue-900 truncate">
-                                        {getLabName(entry.lab_id)}
+                            const cellData = weekView[day.value]?.[timeSlot]
+                            if (!cellData) return <TableCell key={day.value} className="p-1" />
+                            
+                            // Skip rendering cell content if this is a continuation cell (not the start)
+                            // But we still need to check if we should skip the TD element itself
+                            const entry = cellData.entry
+                            
+                            // If this is a continuation of a spanning cell, don't render TD at all
+                            if (entry && !cellData.isStart) {
+                              // Find the start slot for this entry to check if it's truly spanning
+                              const entryStartTime = entry.time_slot_start.substring(0, 5)
+                              const currentSlotIndex = HOURLY_VIEW_SLOTS.indexOf(timeSlot)
+                              
+                              // Check if there's a previous slot with this same entry as the start
+                              let isPartOfSpan = false
+                              for (let i = 0; i < currentSlotIndex; i++) {
+                                const prevSlot = HOURLY_VIEW_SLOTS[i]
+                                const prevCellData = weekView[day.value]?.[prevSlot]
+                                if (prevCellData?.entry?.id === entry.id && prevCellData?.isStart) {
+                                  isPartOfSpan = true
+                                  break
+                                }
+                              }
+                              
+                              // If this is part of a rowSpan from above, don't render the TD
+                              if (isPartOfSpan) {
+                                return null
+                              }
+                            }
+                            
+                            // Render the entry cell with proper rowSpan
+                            if (entry && cellData.isStart) {
+                              return (
+                                <TableCell 
+                                  key={day.value} 
+                                  className="p-2 align-top border-l border-r relative"
+                                  rowSpan={cellData.rowSpan}
+                                >
+                                  <div 
+                                    className="h-full bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-400 rounded-lg p-3 hover:from-blue-100 hover:to-blue-200 cursor-pointer transition-all shadow-sm hover:shadow-md"
+                                    onClick={() => openEditEntry(entry)}
+                                  >
+                                    <div className="space-y-2">
+                                      {/* Lab Name */}
+                                      <div className="font-bold text-blue-900 text-sm leading-tight">
+                                        {cellData.labName}
                                       </div>
-                                      <div className="text-blue-700 line-clamp-2 leading-tight">
-                                        {entry.notes || 'Lab Session'}
+                                      
+                                      {/* Notes/Description */}
+                                      {entry.notes && (
+                                        <div className="text-blue-700 text-xs leading-tight break-words">
+                                          {entry.notes}
+                                        </div>
+                                      )}
+                                      
+                                      {/* Time Range Badge */}
+                                      <div className="flex items-center gap-1 pt-1">
+                                        <Clock className="h-3 w-3 text-blue-600" />
+                                        <span className="text-blue-600 font-semibold text-xs">
+                                          {entry.time_slot_start.substring(0,5)} - {entry.time_slot_end.substring(0,5)}
+                                        </span>
                                       </div>
-                                      <div className="text-blue-500 text-xs">
-                                        {entry.time_slot_start.substring(0,5)} - {entry.time_slot_end.substring(0,5)}
-                                      </div>
+                                      
+                                      {/* Duration Indicator */}
+                                      {cellData.rowSpan > 1 && (
+                                        <div className="text-blue-500 text-[10px] font-medium bg-blue-200/50 px-2 py-0.5 rounded-full inline-block">
+                                          {cellData.rowSpan} hour{cellData.rowSpan > 1 ? 's' : ''}
+                                        </div>
+                                      )}
                                     </div>
-                                  ))}
-                                </div>
+                                  </div>
+                                </TableCell>
+                              )
+                            }
+                            
+                            // Empty cell
+                            return (
+                              <TableCell key={day.value} className="p-2 bg-gray-50/30">
+                                <div className="h-full min-h-[48px]" />
                               </TableCell>
                             )
                           })}
