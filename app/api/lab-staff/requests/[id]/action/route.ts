@@ -164,9 +164,14 @@ export async function POST(
           ...studentEmailData
         }).catch(err => console.error('Email send failed:', err))
 
-        // Email to HoD with salutation
+        // Email to HoD with salutation - Get HOD for this lab's department
         const hod = await db.query(
-          `SELECT email, name, salutation FROM users WHERE role = 'hod' LIMIT 1`
+          `SELECT u.email, u.name, u.salutation, u.department
+           FROM users u
+           JOIN labs l ON l.department_id = (SELECT id FROM departments WHERE code = u.department)
+           WHERE u.role = 'hod' AND l.id = ?
+           LIMIT 1`,
+          [updatedRequest.lab_id]
         )
         
         if (hod.rows.length > 0) {
@@ -229,9 +234,14 @@ export async function POST(
           ...studentEmailData
         }).catch(err => console.error('Email send failed:', err))
 
-        // Email to HOD
+        // Email to HOD - Get HOD for this lab's department
         const hod = await db.query(
-          `SELECT email FROM users WHERE role = 'hod' LIMIT 1`
+          `SELECT u.email, u.name, u.salutation
+           FROM users u
+           JOIN labs l ON l.department_id = (SELECT id FROM departments WHERE code = u.department)
+           WHERE u.role = 'hod' AND l.id = ?
+           LIMIT 1`,
+          [updatedRequest.lab_id]
         )
         
         if (hod.rows.length > 0) {
@@ -243,7 +253,9 @@ export async function POST(
             startTime: updatedRequest.start_time,
             endTime: updatedRequest.end_time,
             purpose: updatedRequest.purpose || 'Not specified',
-            requestId: Number(id)
+            requestId: Number(id),
+            recipientName: hod.rows[0].name,
+            recipientSalutation: hod.rows[0].salutation
           })
 
           await sendEmail({

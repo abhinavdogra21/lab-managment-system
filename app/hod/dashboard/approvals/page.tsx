@@ -374,11 +374,7 @@ export default function HODApprovePage() {
       : remarks[requestId]?.trim() || ''
 
     if (action === 'reject' && (!requestRemarks || requestRemarks === '')) {
-      toast({
-        title: "Error",
-        description: "Please provide remarks for rejection",
-        variant: "destructive"
-      })
+      alert('⚠️ Remarks Required\n\nPlease provide remarks before rejecting the request.\n\nRemarks help explain the reason for rejection to the requester.')
       return
     }
 
@@ -620,7 +616,7 @@ export default function HODApprovePage() {
       }
       
       if (action === 'reject' && !remarks[id]) {
-        toast({ title: 'Remarks required', description: 'Please add remarks for rejection.', variant: 'destructive' })
+        alert('⚠️ Remarks Required\n\nPlease provide remarks before rejecting the request.\n\nRemarks help explain the reason for rejection to the requester.')
         return
       }
       try {

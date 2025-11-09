@@ -161,7 +161,7 @@ export const emailTemplates = {
     }
     
     return {
-    subject: `New Component Request #${data.requestId} - LNMIIT Lab Management`,
+    subject: `New Component Request - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
@@ -258,7 +258,7 @@ export const emailTemplates = {
     }
     
     return {
-      subject: `Component Request #${data.requestId} - Awaiting Your Approval - LNMIIT Lab Management`,
+      subject: `Component Request - Awaiting Your Approval - LNMIIT Lab Management`,
       html: createEmailTemplate(`
         <tr>
           <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
@@ -323,7 +323,7 @@ export const emailTemplates = {
     requestId: number
     remarks?: string
   }) => ({
-    subject: `Component Request #${data.requestId} Approved - LNMIIT Lab Management`,
+    subject: `Component Request Approved - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
@@ -367,7 +367,7 @@ export const emailTemplates = {
     requestId: number
     reason?: string
   }) => ({
-    subject: `Component Request #${data.requestId} Rejected - LNMIIT Lab Management`,
+    subject: `Component Request Rejected - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
@@ -446,7 +446,7 @@ export const emailTemplates = {
     }
     
     return {
-    subject: `HOD Approved - Issue Components for Request #${data.requestId} - LNMIIT Lab Management`,
+    subject: `HOD Approved - Issue Components - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
@@ -530,7 +530,7 @@ export const emailTemplates = {
     }
     
     return {
-    subject: `Components Issued - Request #${data.requestId} - LNMIIT Lab Management`,
+    subject: `Components Issued - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
@@ -604,7 +604,7 @@ export const emailTemplates = {
     }
     
     return {
-    subject: `Return Request - Request #${data.requestId} - LNMIIT Lab Management`,
+    subject: `Return Request - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
@@ -653,7 +653,7 @@ export const emailTemplates = {
     }
     
     return {
-    subject: `Return Approved - Request #${data.requestId} - LNMIIT Lab Management`,
+    subject: `Return Approved - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
@@ -688,46 +688,78 @@ export const emailTemplates = {
     currentReturnDate: string
     requestedReturnDate: string
     reason: string
-  }) => ({
-    subject: `Extension Request - Request #${data.requestId} - LNMIIT Lab Management`,
-    html: createEmailTemplate(`
-      <tr>
-        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
-          <p>Dear Lab Staff,</p>
-          <p>A deadline extension has been requested for the following component request:</p>
-          
-          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
-            <tr style="background: #f5f3ff;">
-            </tr>
-            <tr>
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.requesterName} (${data.requesterRole})</td>
-            </tr>
-            <tr style="background: #f5f3ff;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
-            </tr>
-            <tr>
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Current Return Date:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.currentReturnDate}</td>
-            </tr>
-            <tr style="background: #f5f3ff;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requested New Date:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.requestedReturnDate}</td>
-            </tr>
-            <tr>
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Reason:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.reason}</td>
-            </tr>
-          </table>
+    labStaffName?: string
+    labStaffSalutation?: string
+  }) => {
+    // Format salutation
+    let greeting = 'Dear Lab Staff'
+    if (data.labStaffName && data.labStaffSalutation && data.labStaffSalutation !== 'none') {
+      const salutationMap: Record<string, string> = {
+        'prof': 'Prof.',
+        'dr': 'Dr.',
+        'mr': 'Mr.',
+        'mrs': 'Mrs.'
+      }
+      const title = salutationMap[data.labStaffSalutation.toLowerCase()] || ''
+      greeting = `Dear ${title} ${data.labStaffName}`
+    } else if (data.labStaffName) {
+      greeting = `Dear ${data.labStaffName}`
+    }
 
-          <p style="padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107;">
-            <strong>⚡ Action Required:</strong> Please review and approve or reject this extension request.
-          </p>
-        </td>
-      </tr>
-    `)
-  }),
+    // Format dates properly
+    const currentDate = new Date(data.currentReturnDate)
+    const requestedDate = new Date(data.requestedReturnDate)
+    
+    const formatDate = (date: Date) => {
+      return date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      })
+    }
+
+    return {
+      subject: `Extension Request - LNMIIT Lab Management`,
+      html: createEmailTemplate(`
+        <tr>
+          <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+            <p><b>${greeting}</b>,</p>
+            <p>A deadline extension has been requested for the following component request:</p>
+            
+            <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+              <tr style="background: #f5f3ff;">
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${data.requesterName} (${data.requesterRole})</td>
+              </tr>
+              <tr style="background: #f5f3ff;">
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Current Return Date:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${formatDate(currentDate)}</td>
+              </tr>
+              <tr style="background: #f5f3ff;">
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requested New Date:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${formatDate(requestedDate)}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Reason:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${data.reason}</td>
+              </tr>
+            </table>
+
+            <p style="padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107;">
+              <strong>⚡ Action Required:</strong> Please review and approve or reject this extension request.
+            </p>
+          </td>
+        </tr>
+      `)
+    }
+  },
 
   extensionApproved: (data: {
     requesterName: string
@@ -735,7 +767,7 @@ export const emailTemplates = {
     requestId: number
     newReturnDate: string
   }) => ({
-    subject: `Extension Approved - Request #${data.requestId} - LNMIIT Lab Management`,
+    subject: `Extension Approved - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
@@ -771,7 +803,7 @@ export const emailTemplates = {
     requestId: number
     remarks: string
   }) => ({
-    subject: `Extension Rejected - Request #${data.requestId} - LNMIIT Lab Management`,
+    subject: `Extension Rejected - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
@@ -843,7 +875,7 @@ export const emailTemplates = {
     notifyEmail: string
     notifyRole: string
   }) => ({
-    subject: `Request #${data.requestId} Withdrawn - LNMIIT Lab Management`,
+    subject: `Component Request Withdrawn - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
@@ -911,7 +943,7 @@ export const emailTemplates = {
     }
     
     return {
-    subject: `New Lab Booking Request #${data.requestId} - ${data.labName} - LNMIIT Lab Management`,
+    subject: `New Lab Booking Request - ${data.labName} - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
@@ -980,7 +1012,7 @@ export const emailTemplates = {
     }
     
     return {
-    subject: `Lab Booking Request #${data.requestId} Approved - LNMIIT Lab Management`,
+    subject: `Lab Booking Request Approved - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
@@ -1041,7 +1073,7 @@ export const emailTemplates = {
     }
     
     return {
-    subject: `Lab Booking Request #${data.requestId} Rejected - LNMIIT Lab Management`,
+    subject: `Lab Booking Request Rejected - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
@@ -1096,7 +1128,7 @@ export const emailTemplates = {
     const formattedEndTime = formatTimeTo12Hour(data.endTime)
     
     return {
-    subject: `Lab Booking Request #${data.requestId} Withdrawn - LNMIIT Lab Management`,
+    subject: `Lab Booking Request Withdrawn - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">

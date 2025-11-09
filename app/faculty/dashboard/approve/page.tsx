@@ -131,7 +131,7 @@ export default function FacultyApprovePage() {
     
     const requestRemarks = typeof overrideRemarks === 'string' ? overrideRemarks.trim() : (remarks[requestId] || '').trim()
     if (action === 'reject' && !requestRemarks) {
-      toast({ title: 'Error', description: 'Please provide remarks for rejection', variant: 'destructive' })
+      alert('⚠️ Remarks Required\n\nPlease provide remarks before rejecting the request.\n\nRemarks help explain the reason for rejection to the student.')
       return
     }
     try {
@@ -275,7 +275,7 @@ export default function FacultyApprovePage() {
       }
       
       if (action === 'reject' && !remarks[id]) {
-        toast({ title: 'Remarks required', description: 'Please add remarks for rejection.', variant: 'destructive' })
+        alert('⚠️ Remarks Required\n\nPlease provide remarks before rejecting the request.\n\nRemarks help explain the reason for rejection to the student.')
         return
       }
       try {

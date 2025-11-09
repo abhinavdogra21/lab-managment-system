@@ -70,7 +70,9 @@ export async function POST(
       const details = await db.query(
         `SELECT r.*, l.name as lab_name,
                 u.name as requester_name,
-                ls.email as lab_staff_email
+                ls.email as lab_staff_email,
+                ls.name as lab_staff_name,
+                ls.salutation as lab_staff_salutation
          FROM component_requests r
          JOIN labs l ON l.id = r.lab_id
          JOIN users u ON u.id = r.requester_id
@@ -88,7 +90,9 @@ export async function POST(
           requestId: requestId,
           currentReturnDate: req.return_date,
           requestedReturnDate: new_return_date,
-          reason: reason || 'No reason provided'
+          reason: reason || 'No reason provided',
+          labStaffName: req.lab_staff_name,
+          labStaffSalutation: req.lab_staff_salutation
         })
 
         await sendEmail({

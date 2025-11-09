@@ -74,6 +74,7 @@ export default function MyComponentRequestsPage() {
   const [extendRequestId, setExtendRequestId] = useState<number | null>(null)
   const [newReturnDate, setNewReturnDate] = useState('')
   const [extensionReason, setExtensionReason] = useState('')
+  const [successDialog, setSuccessDialog] = useState<{ open: boolean; message: string }>({ open: false, message: '' })
 
   useEffect(() => { loadRequests() }, [])
 
@@ -103,7 +104,11 @@ export default function MyComponentRequestsPage() {
         const errorMsg = (() => { try { return JSON.parse(text)?.error } catch { return text } })()
         throw new Error(errorMsg || 'Failed to request return')
       }
-      toast({ title: 'Success', description: 'Return request submitted. Waiting for lab staff approval.' })
+      
+      setSuccessDialog({ 
+        open: true, 
+        message: `✓ Return request submitted successfully!\n\nYour request to return the components has been sent to the lab staff.\n\nThe lab staff will verify the returned components and approve the return in the system.` 
+      })
       loadRequests()
     } catch (e: any) {
       toast({ title: 'Request failed', description: e?.message || 'Could not request return', variant: 'destructive' })
@@ -167,7 +172,19 @@ export default function MyComponentRequestsPage() {
         const errorMsg = (() => { try { return JSON.parse(text)?.error } catch { return text } })()
         throw new Error(errorMsg || 'Failed to request extension')
       }
-      toast({ title: 'Extension requested', description: 'Lab staff will review your extension request' })
+      
+      // Format the date properly
+      const formattedDate = new Date(newReturnDate).toLocaleDateString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      })
+      
+      setSuccessDialog({ 
+        open: true, 
+        message: `✓ Extension request submitted successfully!\n\nRequested new return date: ${formattedDate}\n\nLab staff will review your extension request and notify you of their decision.` 
+      })
       setExtendDialogOpen(false)
       setExtendRequestId(null)
       setNewReturnDate('')
@@ -526,23 +543,49 @@ export default function MyComponentRequestsPage() {
               />
             </div>
             <div>
-              <Label htmlFor="extensionReason">Reason for Extension (Optional)</Label>
+              <Label htmlFor="extensionReason">
+                Reason for Extension <span className="text-red-500">*</span>
+              </Label>
               <Textarea
                 id="extensionReason"
                 value={extensionReason}
                 onChange={(e) => setExtensionReason(e.target.value)}
                 placeholder="Explain why you need more time..."
                 rows={3}
+                required
               />
             </div>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setExtendDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleExtendDeadline} disabled={!newReturnDate || loading}>
+              <Button 
+                onClick={handleExtendDeadline} 
+                disabled={!newReturnDate || !extensionReason.trim() || loading}
+              >
                 {loading ? 'Requesting...' : 'Request Extension'}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Success Dialog */}
+      <Dialog open={successDialog.open} onOpenChange={(open) => setSuccessDialog({ open, message: '' })}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-green-600">
+              <CheckCircle className="h-5 w-5" />
+              Success
+            </DialogTitle>
+          </DialogHeader>
+          <div className="whitespace-pre-line text-sm text-muted-foreground">
+            {successDialog.message}
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={() => setSuccessDialog({ open: false, message: '' })}>
+              OK
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -114,11 +114,7 @@ export default function LabStaffApprovePage() {
       : remarks[requestId]?.trim()
     
     if (action === 'reject' && !requestRemarks) {
-      toast({
-        title: "Error",
-        description: "Please provide remarks for rejection",
-        variant: "destructive"
-      })
+      alert('⚠️ Remarks Required\n\nPlease provide remarks before rejecting the request.\n\nRemarks help explain the reason for rejection to the requester.')
       return
     }
 

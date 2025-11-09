@@ -127,7 +127,8 @@ export default function LabStaffComponentRequestsPage() {
     }
     
     if (action === 'reject' && !remarks[id]) {
-      toast({ title: 'Remarks required', description: 'Please add remarks for rejection.', variant: 'destructive' }); return
+      alert('⚠️ Remarks Required\n\nPlease provide remarks before rejecting the request.\n\nRemarks help explain the reason for rejection to the requester.')
+      return
     }
     try {
       // Mark as processing
@@ -229,7 +230,7 @@ export default function LabStaffComponentRequestsPage() {
     
     const action = approved ? 'approve' : 'reject'
     if (!approved && !extensionRemarks[id]?.trim()) {
-      toast({ title: 'Remarks required', description: 'Please provide a reason for rejection', variant: 'destructive' })
+      alert('⚠️ Remarks Required\n\nPlease provide remarks before rejecting the extension request.\n\nRemarks help explain the reason for rejection to the requester.')
       return
     }
     if (!confirm(`${approved ? 'Approve' : 'Reject'} this deadline extension request?`)) return

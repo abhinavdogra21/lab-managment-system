@@ -62,10 +62,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     try {
       const details = await db.query(
         `SELECT r.*, l.name as lab_name,
-                u.name as requester_name
+                u.name as requester_name,
+                ls.name as lab_staff_name,
+                ls.salutation as lab_staff_salutation
          FROM component_requests r
          JOIN labs l ON l.id = r.lab_id
          JOIN users u ON u.id = r.requester_id
+         LEFT JOIN users ls ON ls.id = l.staff_id
          WHERE r.id = ?`,
         [requestId]
       )
@@ -89,7 +92,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             requesterName: req.requester_name,
             requesterRole: 'Student',
             labName: req.lab_name,
-            requestId: requestId
+            requestId: requestId,
+            recipientName: req.lab_staff_name,
+            recipientSalutation: req.lab_staff_salutation
           })
 
           await sendEmail({
