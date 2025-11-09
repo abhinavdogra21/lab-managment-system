@@ -69,6 +69,7 @@ export default function TimetablePage() {
   const [timetableEntries, setTimetableEntries] = useState<TimetableEntry[]>([])
   
   // Filter states
+  const [selectedLab, setSelectedLab] = useState<string>("")
   const [selectedDay, setSelectedDay] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
   
@@ -98,6 +99,19 @@ export default function TimetablePage() {
     loadTimetableEntries()
   }, [])
 
+  // Set default lab to CP1 when labs are loaded
+  useEffect(() => {
+    if (labs.length > 0 && !selectedLab) {
+      const cp1Lab = labs.find(lab => lab.code === 'CP1')
+      if (cp1Lab) {
+        setSelectedLab(cp1Lab.id.toString())
+      } else {
+        // If CP1 not found, use the first lab
+        setSelectedLab(labs[0].id.toString())
+      }
+    }
+  }, [labs, selectedLab])
+
   const loadLabs = async () => {
     try {
       const res = await fetch("/api/admin/labs")
@@ -124,11 +138,12 @@ export default function TimetablePage() {
 
   // Filter entries based on selected filters
   const filteredEntries = timetableEntries.filter(entry => {
+    const labMatch = selectedLab === "" || entry.lab_id.toString() === selectedLab
     const dayMatch = selectedDay === "all" || entry.day_of_week.toString() === selectedDay
     const searchMatch = searchTerm === "" || 
       (entry.notes && entry.notes.toLowerCase().includes(searchTerm.toLowerCase()))
     
-    return dayMatch && searchMatch
+    return labMatch && dayMatch && searchMatch
   })
 
   // Group entries by day and time for grid view with proper spanning
@@ -452,6 +467,21 @@ export default function TimetablePage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div>
+                <Label className="text-xs">Lab</Label>
+                <Select value={selectedLab} onValueChange={setSelectedLab}>
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="Select Lab" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {labs.map(lab => (
+                      <SelectItem key={lab.id} value={lab.id.toString()}>
+                        {lab.code === lab.name ? lab.name : `${lab.code} - ${lab.name}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="sm:col-span-2 lg:col-span-1">
                 <Label className="text-xs">Search</Label>
                 <div className="relative">
@@ -483,7 +513,12 @@ export default function TimetablePage() {
               <div className="flex items-end">
                 <Button 
                   onClick={() => {
-                    setSelectedLab("all")
+                    const cp1Lab = labs.find(lab => lab.code === 'CP1')
+                    if (cp1Lab) {
+                      setSelectedLab(cp1Lab.id.toString())
+                    } else if (labs.length > 0) {
+                      setSelectedLab(labs[0].id.toString())
+                    }
                     setSelectedDay("all")
                     setSearchTerm("")
                   }}
