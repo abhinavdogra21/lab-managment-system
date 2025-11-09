@@ -73,6 +73,19 @@ export async function POST(request: NextRequest) {
       if (details.rows.length > 0) {
         const req = details.rows[0]
         
+        // Format requester name with salutation
+        let formattedRequesterName = req.requester_name
+        if (req.requester_salutation && req.requester_salutation !== 'none') {
+          const salutationMap: Record<string, string> = {
+            'prof': 'Prof.',
+            'dr': 'Dr.',
+            'mr': 'Mr.',
+            'mrs': 'Mrs.'
+          }
+          const salutation = salutationMap[req.requester_salutation.toLowerCase()] || ''
+          formattedRequesterName = salutation ? `${salutation} ${req.requester_name}` : req.requester_name
+        }
+        
         // Get lab staff email, name, and salutation for this lab
         const labStaff = await db.query(
           `SELECT u.email, u.name, u.salutation
@@ -86,7 +99,7 @@ export async function POST(request: NextRequest) {
           // Send to each lab staff with their specific salutation
           for (const staff of labStaff.rows) {
             const emailData = emailTemplates.labBookingCreated({
-              requesterName: req.requester_name,
+              requesterName: formattedRequesterName,
               requesterRole: 'Others',
               labName: req.lab_name,
               bookingDate: booking_date,

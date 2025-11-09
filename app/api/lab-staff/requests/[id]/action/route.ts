@@ -129,6 +129,7 @@ export async function POST(
         u.name as student_name,
         u.email as student_email,
         u.salutation as student_salutation,
+        u.role as requester_role,
         l.name as lab_name,
         f.name as faculty_name,
         staff.name as staff_name
@@ -142,6 +143,13 @@ export async function POST(
     )
 
     const updatedRequest = updatedResult.rows[0]
+
+    // Helper to format role for display
+    const formatRole = (role: string) => {
+      if (role === 'lab_staff') return 'Lab Staff'
+      if (role === 'non_teaching') return 'Non-Teaching Staff'
+      return role.charAt(0).toUpperCase() + role.slice(1)
+    }
 
     // Send email notifications
     try {
@@ -175,9 +183,22 @@ export async function POST(
         )
         
         if (hod.rows.length > 0) {
+          // Format requester name with salutation
+          let formattedRequesterName = updatedRequest.student_name
+          if (updatedRequest.student_salutation && updatedRequest.student_salutation !== 'none') {
+            const salutationMap: { [key: string]: string } = {
+              'prof': 'Prof.',
+              'dr': 'Dr.',
+              'mr': 'Mr.',
+              'mrs': 'Mrs.'
+            }
+            const salutation = salutationMap[updatedRequest.student_salutation.toLowerCase()] || ''
+            formattedRequesterName = salutation ? `${salutation} ${updatedRequest.student_name}` : updatedRequest.student_name
+          }
+
           const hodEmailData = emailTemplates.labBookingCreated({
-            requesterName: updatedRequest.student_name,
-            requesterRole: 'Student',
+            requesterName: formattedRequesterName,
+            requesterRole: formatRole(updatedRequest.requester_role),
             labName: updatedRequest.lab_name,
             bookingDate: updatedRequest.booking_date,
             startTime: updatedRequest.start_time,
@@ -198,75 +219,6 @@ export async function POST(
         const emailData = emailTemplates.labBookingRejected({
           requesterName: updatedRequest.student_name,
           requesterSalutation: updatedRequest.student_salutation,
-          labName: updatedRequest.lab_name,
-          bookingDate: updatedRequest.booking_date,
-          startTime: updatedRequest.start_time,
-          endTime: updatedRequest.end_time,
-          requestId: Number(id),
-          reason: remarks || 'No reason provided',
-          rejectedBy: updatedRequest.staff_name || 'Lab Staff'
-        })
-
-        await sendEmail({
-          to: updatedRequest.student_email,
-          ...emailData
-        }).catch(err => console.error('Email send failed:', err))
-      }
-    } catch (emailError) {
-      console.error('Failed to send email notification:', emailError)
-    }    // Send email notifications
-    try {
-      if (action === 'approve') {
-        // Email to student
-        const studentEmailData = emailTemplates.labBookingApproved({
-          requesterName: updatedRequest.student_name,
-          labName: updatedRequest.lab_name,
-          bookingDate: updatedRequest.booking_date,
-          startTime: updatedRequest.start_time,
-          endTime: updatedRequest.end_time,
-          requestId: Number(id),
-          approverRole: 'Lab Staff',
-          nextStep: 'Your request is now pending HOD approval'
-        })
-
-        await sendEmail({
-          to: updatedRequest.student_email,
-          ...studentEmailData
-        }).catch(err => console.error('Email send failed:', err))
-
-        // Email to HOD - Get HOD for this lab's department
-        const hod = await db.query(
-          `SELECT u.email, u.name, u.salutation
-           FROM users u
-           JOIN labs l ON l.department_id = (SELECT id FROM departments WHERE code = u.department)
-           WHERE u.role = 'hod' AND l.id = ?
-           LIMIT 1`,
-          [updatedRequest.lab_id]
-        )
-        
-        if (hod.rows.length > 0) {
-          const hodEmailData = emailTemplates.labBookingCreated({
-            requesterName: updatedRequest.student_name,
-            requesterRole: 'Student',
-            labName: updatedRequest.lab_name,
-            bookingDate: updatedRequest.booking_date,
-            startTime: updatedRequest.start_time,
-            endTime: updatedRequest.end_time,
-            purpose: updatedRequest.purpose || 'Not specified',
-            requestId: Number(id),
-            recipientName: hod.rows[0].name,
-            recipientSalutation: hod.rows[0].salutation
-          })
-
-          await sendEmail({
-            to: hod.rows[0].email,
-            ...hodEmailData
-          }).catch(err => console.error('Email send failed:', err))
-        }
-      } else {
-        // Email to student for rejection
-        const emailData = emailTemplates.labBookingRejected({
-          requesterName: updatedRequest.student_name,
           labName: updatedRequest.lab_name,
           bookingDate: updatedRequest.booking_date,
           startTime: updatedRequest.start_time,

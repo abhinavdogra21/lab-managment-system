@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, ArrowRight, Clock, User, Building2, ChevronLeft } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { CalendarIcon, ArrowRight, Clock, User, Building2, ChevronLeft, CheckCircle2 } from "lucide-react"
 import { format } from "date-fns"
 
 interface Lab { id: number; name: string; code: string; department_id: number; capacity: number; location: string }
@@ -31,6 +32,7 @@ export default function TNPBookLabsPage() {
 	const [endTime, setEndTime] = useState("")
 	const [purpose, setPurpose] = useState("")
 	const [loading, setLoading] = useState(false)
+	const [successDialog, setSuccessDialog] = useState({ open: false, message: '' })
 
 	useEffect(() => { loadLabs() }, [])
 
@@ -94,7 +96,7 @@ export default function TNPBookLabsPage() {
 
 	const handleSubmit = async () => {
 		const manualSelected = !selectedTimeSlot && startTime && endTime
-		if (!canSubmit) return
+		if (!canSubmit || loading) return // Prevent double submission
 		setLoading(true)
 		try {
 			const [sTime, eTime] = selectedTimeSlot ? selectedTimeSlot.split(' - ') : [startTime, endTime]
@@ -115,7 +117,10 @@ export default function TNPBookLabsPage() {
 			setStartTime("")
 			setEndTime("")
 			setPurpose("")
-			toast({ title: 'Request raised successfully!', description: 'Your lab booking request has been submitted and is pending Lab Staff review.' })
+			setSuccessDialog({ 
+				open: true, 
+				message: '✓ Lab booking request submitted successfully! Your request has been sent to Lab Staff for review and will then proceed to HOD for final approval.'
+			})
 		} catch (e: any) {
 			toast({ title: 'Submission failed', description: e?.message || 'Failed to submit request', variant: 'destructive' })
 		} finally { setLoading(false) }
@@ -304,6 +309,21 @@ export default function TNPBookLabsPage() {
 					</Card>
 				)}
 			</div>
+
+			<Dialog open={successDialog.open} onOpenChange={(open) => setSuccessDialog({ ...successDialog, open })}>
+				<DialogContent>
+					<DialogHeader>
+						<div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full bg-green-100">
+							<CheckCircle2 className="w-6 h-6 text-green-600" />
+						</div>
+						<DialogTitle className="text-center text-xl">Success!</DialogTitle>
+					</DialogHeader>
+					<p className="text-center text-muted-foreground">{successDialog.message}</p>
+					<Button onClick={() => setSuccessDialog({ open: false, message: '' })} className="w-full">
+						Close
+					</Button>
+				</DialogContent>
+			</Dialog>
 		</div>
 	)
 }

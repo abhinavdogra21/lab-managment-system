@@ -212,6 +212,7 @@ export default function BookLabPage() {
   }, [selectedLab, selectedDate])
 
   const handleSubmit = async () => {
+    if (loading) return // Prevent double submission
     const manualSelected = !selectedTimeSlot && startTime && endTime
     if (!selectedDepartment || !selectedFaculty || !selectedLab || !selectedDate || (!selectedTimeSlot && !manualSelected) || !purpose.trim()) {
       toast({ title: "Missing Information", description: "Please fill all required fields", variant: "destructive" })

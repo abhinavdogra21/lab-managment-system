@@ -16,6 +16,7 @@ interface RequestItem {
   id: number
   student_name: string
   student_email: string
+  requester_role: string
   lab_name: string
   booking_date: string
   start_time: string
@@ -404,8 +405,8 @@ export default function LabStaffApprovePage() {
           <span className="text-gray-600">{item.purpose}</span>
         </div>
 
-        {/* Faculty Approval - Compact */}
-        {item.faculty_name && (
+        {/* Faculty Approval - Compact - Only show for student requests */}
+        {item.faculty_name && item.requester_role === 'student' && (
           <div className="bg-green-50 p-2 rounded text-xs">
             <span className="font-medium text-green-800">Faculty: </span>
             <span className="text-green-700">{item.faculty_name}</span>

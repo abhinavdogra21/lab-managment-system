@@ -46,6 +46,10 @@ export async function GET(request: NextRequest) {
 
     const bookingsWithTimeline = result.rows.map((booking: any) => {
       const timeline: any[] = []
+      
+      // Check which stage rejected the request
+      const rejectedByLabStaff = booking.status === 'rejected' && booking.lab_staff_approved_at && !booking.hod_approved_at
+      const rejectedByHOD = booking.status === 'rejected' && booking.hod_approved_at
 
       // Faculty approval step (for faculty-initiated requests this may be auto or skipped)
       if (booking.status === 'pending_faculty') {
@@ -81,7 +85,7 @@ export async function GET(request: NextRequest) {
       } else if (booking.lab_staff_approved_at) {
         timeline.push({
           step_name: 'Lab Staff Approval',
-          step_status: 'completed',
+          step_status: rejectedByLabStaff ? 'rejected' : 'completed',
           completed_at: booking.lab_staff_approved_at,
           completed_by: booking.lab_staff_approved_by,
           remarks: booking.lab_staff_remarks,
@@ -102,7 +106,7 @@ export async function GET(request: NextRequest) {
       } else if (booking.hod_approved_at) {
         timeline.push({
           step_name: 'HOD Approval',
-          step_status: 'completed',
+          step_status: rejectedByHOD ? 'rejected' : 'completed',
           completed_at: booking.hod_approved_at,
           completed_by: booking.hod_approved_by,
           remarks: booking.hod_remarks,

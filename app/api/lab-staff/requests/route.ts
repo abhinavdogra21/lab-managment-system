@@ -1,6 +1,23 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
 
+// Helper function to format requester name with salutation
+function formatRequesterName(name: string, salutation: string | null): string {
+  if (!salutation || salutation === 'none') {
+    return name
+  }
+  
+  const salutationMap: { [key: string]: string } = {
+    'prof': 'Prof.',
+    'dr': 'Dr.',
+    'mr': 'Mr.',
+    'mrs': 'Mrs.'
+  }
+  
+  const formattedSalutation = salutationMap[salutation.toLowerCase()]
+  return formattedSalutation ? `${formattedSalutation} ${name}` : name
+}
+
 export async function GET(request: NextRequest) {
   // ...existing code...
   // Debug logging will be placed after userId and assignedLabIds are defined
@@ -39,6 +56,8 @@ export async function GET(request: NextRequest) {
         br.*,
         u.name as student_name,
         u.email as student_email,
+        u.role as requester_role,
+        u.salutation as requester_salutation,
         l.name as lab_name,
         f.name as faculty_name,
         s.name as staff_approver_name,
@@ -155,6 +174,7 @@ export async function GET(request: NextRequest) {
 
         return {
           ...request,
+          student_name: formatRequesterName(request.student_name, request.requester_salutation),
           timeline
         }
       })

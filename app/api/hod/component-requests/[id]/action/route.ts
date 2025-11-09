@@ -214,8 +214,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           action: 'rejected_by_hod',
           actionDescription: `Rejected component request: ${remarks || 'No reason provided'}`,
           entitySnapshot: { ...sel.rows[0], items: itemsDetails.rows },
-          ipAddress: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || null,
-          userAgent: req.headers.get("user-agent") || null,
+          ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || null,
+          userAgent: request.headers.get("user-agent") || null,
         }).catch(err => console.error("Activity logging failed:", err))
       }
       

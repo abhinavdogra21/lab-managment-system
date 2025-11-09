@@ -96,7 +96,7 @@ export default function FacultyBookLabsPage() {
 
 	const handleSubmit = async () => {
 		const manualSelected = !selectedTimeSlot && startTime && endTime
-		if (!canSubmit) return
+		if (!canSubmit || loading) return // Prevent double submission
 		setLoading(true)
 		try {
 			const [sTime, eTime] = selectedTimeSlot ? selectedTimeSlot.split(' - ') : [startTime, endTime]

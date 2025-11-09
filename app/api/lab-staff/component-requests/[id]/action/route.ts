@@ -93,12 +93,13 @@ export async function POST(
         `SELECT r.*, l.name as lab_name, l.department_id,
                 u.name as requester_name, u.email as requester_email,
                 ls.name as lab_staff_name, ls.salutation as lab_staff_salutation,
-                d.hod_email, d.hod_name, d.hod_salutation
+                d.hod_email, hod.name as hod_name, hod.salutation as hod_salutation
          FROM component_requests r
          JOIN labs l ON l.id = r.lab_id
          JOIN users u ON u.id = r.requester_id
          LEFT JOIN users ls ON ls.id = ?
          LEFT JOIN departments d ON d.id = l.department_id
+         LEFT JOIN users hod ON hod.id = d.hod_id
          WHERE r.id = ?`,
         [Number(user.userId), requestId]
       )
