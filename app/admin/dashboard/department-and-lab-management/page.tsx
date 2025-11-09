@@ -608,15 +608,17 @@ export default function DepartmentAndLabManagementPage() {
                                     <SelectValue placeholder="Select head" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="none">Unassigned</SelectItem>
                                     {candidates.length === 0 ? (
-                                      <SelectItem value="none" disabled>No staff assigned</SelectItem>
+                                      <SelectItem value="none">No staff assigned</SelectItem>
                                     ) : (
-                                      candidates.map((u) => (
-                                        <SelectItem key={u.id} value={String(u.id)}>
-                                          {u.name} <span className="text-xs text-muted-foreground">({u.email})</span>
-                                        </SelectItem>
-                                      ))
+                                      <>
+                                        <SelectItem value="none">Unassigned</SelectItem>
+                                        {candidates.map((u) => (
+                                          <SelectItem key={u.id} value={String(u.id)}>
+                                            {u.name} <span className="text-xs text-muted-foreground">({u.email})</span>
+                                          </SelectItem>
+                                        ))}
+                                      </>
                                     )}
                                   </SelectContent>
                                 </Select>

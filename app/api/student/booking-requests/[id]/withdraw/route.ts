@@ -68,7 +68,12 @@ export async function POST(request: NextRequest, context: { params: { id: string
           emailRecipients.push(...labStaff.rows.map(s => s.email))
         } else if (req.status === 'pending_hod') {
           const hod = await db.query(
-            `SELECT email FROM users WHERE role = 'hod' LIMIT 1`
+            `SELECT u.email
+             FROM users u
+             JOIN labs l ON l.department_id = (SELECT id FROM departments WHERE code = u.department)
+             WHERE u.role = 'hod' AND l.id = ?
+             LIMIT 1`,
+            [req.lab_id]
           )
           if (hod.rows.length > 0) {
             emailRecipients.push(hod.rows[0].email)
