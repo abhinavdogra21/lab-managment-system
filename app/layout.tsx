@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Inter, Montserrat } from "next/font/google"
 import "./globals.css"
 import "react-day-picker/style.css"
+import { Toaster } from "@/components/ui/toaster"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -30,7 +31,10 @@ export default function RootLayout({
 }>) {
   return (
   <html lang="en" suppressHydrationWarning className={`${inter.variable} ${montserrat.variable} antialiased`}>
-      <body className="min-h-screen bg-background font-sans antialiased">{children}</body>
+      <body className="min-h-screen bg-background font-sans antialiased">
+        {children}
+        <Toaster />
+      </body>
     </html>
   )
 }

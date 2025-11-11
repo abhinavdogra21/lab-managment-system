@@ -17,7 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 
 type Department = { id: number; name: string; code: string }
 
@@ -120,13 +120,22 @@ export default function UsersPage() {
     try {
   const res = await fetch(`/api/admin/users/${editUser.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: fullName, email: editUser.email, role: editUser.role, salutation: editUser.salutation, department: editUser.department || null }) })
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || "Failed to update user")
+      if (!res.ok) {
+        const errorMsg = data?.error || "Failed to update user"
+        throw new Error(errorMsg)
+      }
   setUsers((prev) => prev.map((x) => (x.id === editUser.id ? { ...x, name: fullName, email: editUser.email, role: editUser.role, salutation: editUser.salutation, department: editUser.department } : x)))
-      toast({ title: "User updated" })
+      toast({ title: "User updated successfully" })
       setEditOpen(false)
       setEditUser(null)
     } catch (e: any) {
-      toast({ title: "Update failed", description: e?.message || "", variant: "destructive" })
+      const errorMessage = e?.message || 'An unexpected error occurred'
+      toast({ 
+        title: "Failed to Update User", 
+        description: errorMessage, 
+        variant: "destructive",
+        duration: 5000
+      })
     }
   }
 
@@ -497,12 +506,22 @@ export default function UsersPage() {
               try {
                 const res = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: fullName, email: addUser.email, role: addUser.role, salutation: addUser.salutation || 'none', department: addUser.department || null }) })
                 const data = await res.json()
-                if (!res.ok) throw new Error(data?.error || 'Failed to create user')
+                if (!res.ok) {
+                  const errorMsg = data?.error || 'Failed to create user'
+                  throw new Error(errorMsg)
+                }
                 setUsers((prev) => [data.user, ...prev])
                 toast({ title: 'User created', description: 'Welcome email sent to ' + addUser.email })
                 setAddOpen(false)
+                setAddUser({ first: '', middle: '', last: '', email: '', role: 'student', salutation: 'none', department: undefined })
               } catch (e: any) {
-                toast({ title: 'Create failed', description: e?.message || '', variant: 'destructive' })
+                const errorMessage = e?.message || 'An unexpected error occurred'
+                toast({ 
+                  title: 'Failed to Create User', 
+                  description: errorMessage, 
+                  variant: 'destructive',
+                  duration: 5000
+                })
               } finally {
                 setAddingUser(false)
               }

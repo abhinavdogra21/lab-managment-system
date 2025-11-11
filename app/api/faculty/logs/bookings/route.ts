@@ -47,9 +47,9 @@ export async function GET(req: NextRequest) {
 
     const params: any[] = [];
 
-    // Get faculty user's name for comparison
-    const facultyUserRes = await db.query('SELECT name FROM users WHERE id = ?', [user.userId]);
-    const facultyName = facultyUserRes.rows[0]?.name || '';
+    // Get faculty user's email for comparison (more reliable than name)
+    const facultyUserRes = await db.query('SELECT email FROM users WHERE id = ?', [user.userId]);
+    const facultyEmail = facultyUserRes.rows[0]?.email || '';
 
     // Filter by source
     if (source === 'own') {
@@ -58,16 +58,17 @@ export async function GET(req: NextRequest) {
       params.push(user.userId);
     } else if (source === 'mentees') {
       // Mentee logs: bookings where I was the approving faculty (for student/mentee bookings)
-      sql += ` AND JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.faculty_name')) = ?`;
+      // Match by faculty_email (more reliable than faculty_name which includes salutation)
+      sql += ` AND JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.faculty_email')) = ?`;
       sql += ` AND JSON_EXTRACT(lbal.booking_snapshot, '$.requested_by') != ?`;
-      params.push(facultyName, user.userId);
+      params.push(facultyEmail, user.userId);
     } else {
       // 'all' - show both own and where faculty approved
       sql += ` AND (
         JSON_EXTRACT(lbal.booking_snapshot, '$.requested_by') = ? OR
-        JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.faculty_name')) = ?
+        JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.faculty_email')) = ?
       )`;
-      params.push(user.userId, facultyName);
+      params.push(user.userId, facultyEmail);
     }
 
     // Date filters

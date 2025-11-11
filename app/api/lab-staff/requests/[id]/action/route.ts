@@ -174,10 +174,11 @@ export async function POST(
 
         // Email to HoD with salutation - Get HOD for this lab's department
         const hod = await db.query(
-          `SELECT u.email, u.name, u.salutation, u.department
-           FROM users u
-           JOIN labs l ON l.department_id = (SELECT id FROM departments WHERE code = u.department)
-           WHERE u.role = 'hod' AND l.id = ?
+          `SELECT u.email, u.name, u.salutation, u.department, d.name as department_name
+           FROM labs l
+           JOIN departments d ON l.department_id = d.id
+           JOIN users u ON d.hod_id = u.id
+           WHERE l.id = ?
            LIMIT 1`,
           [updatedRequest.lab_id]
         )

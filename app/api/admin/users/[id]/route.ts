@@ -43,12 +43,27 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 	if (body?.role && String(body.role) === 'admin') {
 		return NextResponse.json({ error: "Updating a user to role Admin is not allowed" }, { status: 400 })
 	}
-	const updated = await dbOperations.updateUser(id, {
-		department: body?.department ?? undefined,
-		role: body?.role ?? undefined,
-		name: body?.name ?? undefined,
-		email: body?.email ?? undefined,
-		salutation: body?.salutation ?? undefined,
-	})
-	return NextResponse.json({ user: updated })
+	try {
+		const updated = await dbOperations.updateUser(id, {
+			department: body?.department ?? undefined,
+			role: body?.role ?? undefined,
+			name: body?.name ?? undefined,
+			email: body?.email ?? undefined,
+			salutation: body?.salutation ?? undefined,
+		})
+		return NextResponse.json({ user: updated })
+	} catch (e: any) {
+		console.error("Error updating user:", e)
+		if (e?.code === "ER_DUP_ENTRY") {
+			// Extract email from error message if possible
+			const emailMatch = e?.sqlMessage?.match(/'([^']+)'/)
+			const email = emailMatch ? emailMatch[1] : body.email
+			return NextResponse.json({ 
+				error: `A user with email '${email}' already exists in the system. Please use a different email address.` 
+			}, { status: 409 })
+		}
+		return NextResponse.json({ 
+			error: "Failed to update user. Please try again or contact support." 
+		}, { status: 500 })
+	}
 }

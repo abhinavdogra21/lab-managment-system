@@ -145,16 +145,6 @@ export async function POST(
       html: emailBody
     })
 
-    // Log the reminder (optional - create table if needed)
-    try {
-      await db.query(
-        `INSERT INTO component_request_reminders (request_id, sent_at, sent_by_id) VALUES (?, NOW(), ?)`,
-        [requestId, user.userId]
-      )
-    } catch (e) {
-      console.log('Reminder logging skipped (table may not exist)')
-    }
-
     return NextResponse.json({ 
       success: true,
       message: `Return reminder sent to ${requestData.requester_name} successfully!`

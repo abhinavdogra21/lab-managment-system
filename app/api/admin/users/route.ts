@@ -85,9 +85,17 @@ export async function POST(req: NextRequest) {
 		
 		return NextResponse.json({ user: created }, { status: 201 })
 	} catch (e: any) {
+		console.error("Error creating user:", e)
 		if (e?.code === "ER_DUP_ENTRY") {
-			return NextResponse.json({ error: "Email already exists" }, { status: 409 })
+			// Extract email from error message if possible
+			const emailMatch = e?.sqlMessage?.match(/'([^']+)'/)
+			const email = emailMatch ? emailMatch[1] : body.email
+			return NextResponse.json({ 
+				error: `A user with email '${email}' already exists in the system. Please use a different email address.` 
+			}, { status: 409 })
 		}
-		throw e
+		return NextResponse.json({ 
+			error: "Failed to create user. Please try again or contact support." 
+		}, { status: 500 })
 	}
 }
