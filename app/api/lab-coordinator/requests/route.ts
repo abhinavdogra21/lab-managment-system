@@ -5,7 +5,7 @@ import { verifyToken, hasRole } from "@/lib/auth"
 export async function GET(request: NextRequest) {
   try {
     const user = await verifyToken(request)
-    if (!user || !hasRole(user, ["hod", "admin"])) {
+    if (!user || !hasRole(user, ["lab_coordinator", "admin"])) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -14,12 +14,12 @@ export async function GET(request: NextRequest) {
 
     const db = Database.getInstance()
 
-    // For non-admin HODs, get their department(s) by hod_id or hod_email
+    // For lab coordinators, get their department(s) by lab_coordinator_id
     let departmentIds: number[] = []
     if (user.role !== 'admin') {
       const depRes = await db.query(
-        `SELECT id FROM departments WHERE hod_id = ? OR LOWER(hod_email) = LOWER(?)`,
-        [Number(user.userId), String(user.email || '')]
+        `SELECT id FROM departments WHERE lab_coordinator_id = ?`,
+        [Number(user.userId)]
       )
       departmentIds = depRes.rows.map((d: any) => Number(d.id))
       
@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Get requests that need HOD approval from the user's department
-    // Only show requests where HOD is the actual approver (not Lab Coordinator)
+    // Get requests that need Lab Coordinator or HOD approval from the user's department
+    // Only show requests where Lab Coordinator is the actual approver
     let query = `
       SELECT DISTINCT
         br.id,
@@ -51,8 +51,7 @@ export async function GET(request: NextRequest) {
         s.email as student_email,
         f.name as faculty_name,
         l.name as lab_name,
-        d.highest_approval_authority,
-        d.lab_coordinator_id
+        d.highest_approval_authority
       FROM booking_requests br
       JOIN users s ON br.requested_by = s.id
       JOIN users f ON br.faculty_supervisor_id = f.id
@@ -66,16 +65,15 @@ export async function GET(request: NextRequest) {
     if (user.role !== 'admin') {
       query += ` WHERE d.id IN (${departmentIds.map(() => '?').join(',')})`
       params.push(...departmentIds)
-      // IMPORTANT: Only show requests where HOD should approve
-      // (Either highest_approval_authority = 'hod' OR lab_coordinator not assigned as fallback)
-      query += ` AND (d.highest_approval_authority = 'hod' OR (d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NULL))`
+      // IMPORTANT: Only show requests where Lab Coordinator should approve
+      query += ` AND d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL`
     } else {
       query += ` WHERE 1=1`
     }
 
     if (status && status !== 'all') {
       if (status === 'rejected') {
-        // For rejected status, only show requests rejected BY HOD (not by faculty or lab staff)
+        // For rejected status, only show requests rejected BY HOD/Lab Coordinator
         query += ` AND br.status = 'rejected' AND br.hod_approved_by IS NOT NULL`
       } else {
         // specific status requested
@@ -83,11 +81,10 @@ export async function GET(request: NextRequest) {
         params.push(status)
       }
     } else if (status === 'all') {
-      // For 'all' status, only show requests that reached HOD level
-      // This includes: pending_hod, approved, and requests rejected BY HOD
+      // For 'all' status, only show requests that reached HOD/Lab Coordinator level
       query += ` AND (br.status = 'pending_hod' OR br.status = 'approved' OR (br.status = 'rejected' AND br.hod_approved_by IS NOT NULL))`
     } else {
-      // Default: show requests waiting for HOD approval when no status provided
+      // Default: show requests waiting for HOD/Lab Coordinator approval when no status provided
       query += ` AND br.status = 'pending_hod'`
     }
 
@@ -100,7 +97,7 @@ export async function GET(request: NextRequest) {
       total: result.rows.length
     })
   } catch (error) {
-    console.error("Error fetching HOD requests:", error)
+    console.error("Error fetching Lab Coordinator requests:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

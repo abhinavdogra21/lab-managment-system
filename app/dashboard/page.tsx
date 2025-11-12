@@ -37,9 +37,7 @@ export default function DashboardPage() {
           "lab_staff": "/lab-staff/dashboard",
           "lab-staff": "/lab-staff/dashboard",
           "student": "/student/dashboard",
-          "others": "/others/dashboard",
-          "non_teaching": "/non-teaching/dashboard",
-          "non-teaching": "/non-teaching/dashboard"
+          "others": "/others/dashboard"
         }
 
         const dashboardPath = roleMapping[role]

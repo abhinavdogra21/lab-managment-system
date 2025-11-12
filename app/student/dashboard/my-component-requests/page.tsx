@@ -59,6 +59,7 @@ interface ComponentRequest {
   created_at: string
   updated_at: string
   lab_name: string
+  highest_approval_authority?: 'hod' | 'lab_coordinator'
   faculty_name?: string | null
   lab_staff_name?: string | null
   hod_name?: string | null
@@ -197,14 +198,14 @@ export default function MyComponentRequestsPage() {
     }
   }
 
-  function StatusBadge({ status }: { status: ComponentRequest['status'] }) {
+  function StatusBadge({ status, request }: { status: ComponentRequest['status'], request?: ComponentRequest }) {
     switch (status) {
       case 'approved':
         return <Badge className="bg-green-600">Approved</Badge>
       case 'rejected':
         return <Badge variant="destructive">Rejected</Badge>
       case 'pending_hod':
-        return <Badge variant="outline">Pending HOD</Badge>
+        return <Badge variant="outline">Pending {request?.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}</Badge>
       case 'pending_lab_staff':
         return <Badge variant="outline">Pending Lab Staff</Badge>
       case 'pending_faculty':
@@ -336,7 +337,7 @@ export default function MyComponentRequestsPage() {
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 justify-between">
                   <span className="truncate">{req.lab_name}</span>
-                  <StatusBadge status={req.status} />
+                  <StatusBadge status={req.status} request={req} />
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -427,10 +428,10 @@ export default function MyComponentRequestsPage() {
                             <StepCircle state={getStepState(req,'staff')}><Users className="h-5 w-5"/></StepCircle>
                             <div className="text-xs text-center"><div className="font-medium">Lab Staff Recommendation</div><div className="text-gray-500">{req.lab_staff_approved_at ? new Date(req.lab_staff_approved_at).toLocaleDateString() : ''}</div></div>
                           </div>
-                          {/* HOD */}
+                          {/* HOD/Lab Coordinator */}
                           <div className="flex flex-col items-center space-y-1 relative z-10">
                             <StepCircle state={getStepState(req,'hod')}><Building className="h-5 w-5"/></StepCircle>
-                            <div className="text-xs text-center"><div className="font-medium">HOD Approval</div><div className="text-gray-500">{req.hod_approved_at ? new Date(req.hod_approved_at).toLocaleDateString() : ''}</div></div>
+                            <div className="text-xs text-center"><div className="font-medium">{req.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'} Approval</div><div className="text-gray-500">{req.hod_approved_at ? new Date(req.hod_approved_at).toLocaleDateString() : ''}</div></div>
                           </div>
                           {/* Final */}
                           <div className="flex flex-col items-center space-y-1 relative z-10">

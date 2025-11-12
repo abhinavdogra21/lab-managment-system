@@ -43,7 +43,6 @@ export const roleHierarchy = {
   faculty: ["faculty", "student"],
   lab_staff: ["lab_staff", "student"],
   others: ["others", "student"],
-  non_teaching: ["non_teaching", "student"],
 } as const
 
 // Check if user can access resource based on role hierarchy

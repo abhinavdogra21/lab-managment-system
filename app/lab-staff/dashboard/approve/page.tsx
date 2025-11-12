@@ -29,6 +29,7 @@ interface RequestItem {
   faculty_remarks?: string
   lab_staff_remarks?: string
   hod_remarks?: string
+  highest_approval_authority?: 'hod' | 'lab_coordinator'
   timeline?: any[]
 }
 
@@ -203,12 +204,15 @@ export default function LabStaffApprovePage() {
     }))
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, item?: RequestItem) => {
     switch (status) {
       case 'pending_lab_staff':
         return <Badge variant="secondary" className="bg-orange-100 text-orange-800">Pending Lab Staff Approval</Badge>
       case 'pending_hod':
-        return <Badge variant="secondary" className="bg-blue-100 text-blue-800">Pending HOD Approval</Badge>
+        const approvalLabel = item?.highest_approval_authority === 'lab_coordinator' 
+          ? 'Lab Coordinator' 
+          : 'HOD'
+        return <Badge variant="secondary" className="bg-blue-100 text-blue-800">Pending {approvalLabel} Approval</Badge>
       case 'approved':
         return <Badge variant="secondary" className="bg-green-100 text-green-800">Approved</Badge>
       case 'rejected':
@@ -223,16 +227,21 @@ export default function LabStaffApprovePage() {
     // Faculty and TnP bookings have 4 steps (they book for themselves)
     const isStudentBooking = item.faculty_supervisor_id && item.requested_by !== item.faculty_supervisor_id
     
+    // Dynamic approval authority label
+    const approvalAuthorityLabel = item.highest_approval_authority === 'lab_coordinator' 
+      ? 'Lab Coordinator Review' 
+      : 'HOD Review'
+    
     const allSteps = isStudentBooking ? [
       { name: 'Submitted', status: 'completed', icon: Clock },
       { name: 'Faculty Review', status: getStepStatus(item, 'Faculty Review'), icon: User },
       { name: 'Lab Staff Review', status: getStepStatus(item, 'Lab Staff Review'), icon: Users },
-      { name: 'HOD Review', status: getStepStatus(item, 'HOD Review'), icon: Building },
+      { name: approvalAuthorityLabel, status: getStepStatus(item, approvalAuthorityLabel), icon: Building },
       { name: 'Approved', status: getFinalApprovalStatus(item), icon: CheckCircle }
     ] : [
       { name: 'Submitted', status: 'completed', icon: Clock },
       { name: 'Lab Staff Review', status: getStepStatus(item, 'Lab Staff Review'), icon: Users },
-      { name: 'HOD Review', status: getStepStatus(item, 'HOD Review'), icon: Building },
+      { name: approvalAuthorityLabel, status: getStepStatus(item, approvalAuthorityLabel), icon: Building },
       { name: 'Approved', status: getFinalApprovalStatus(item), icon: CheckCircle }
     ]
 
@@ -341,7 +350,8 @@ export default function LabStaffApprovePage() {
       if (['pending_hod', 'approved'].includes(item.status)) return 'completed'
       if (item.status === 'pending_faculty') return 'waiting'
     }
-    if (stepName === 'HOD Review') {
+    // Handle both "HOD Review" and "Lab Coordinator Review"
+    if (stepName === 'HOD Review' || stepName === 'Lab Coordinator Review') {
       if (item.status === 'pending_hod') return 'pending'
       if (item.status === 'approved') return 'completed'
       if (['pending_faculty', 'pending_lab_staff'].includes(item.status)) return 'waiting'
@@ -384,7 +394,7 @@ export default function LabStaffApprovePage() {
             <span className="text-xs text-gray-500">•</span>
             <span className="text-xs text-gray-600">{item.student_name}</span>
           </div>
-          {getStatusBadge(item.status)}
+          {getStatusBadge(item.status, item)}
         </div>
 
         {/* Booking Details - Compact */}

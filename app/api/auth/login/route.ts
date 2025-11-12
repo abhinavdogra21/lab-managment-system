@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import crypto from "node:crypto"
 import { dbOperations, Database } from "@/lib/database"
 
+const mockUsers: any[] = [] // Fallback mock users (not used when USE_DB_AUTH=true)
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,10 +27,32 @@ export async function POST(request: NextRequest) {
       if (!dbUser) {
         return NextResponse.json({ error: "Invalid credentials or role" }, { status: 401 })
       }
-      // Compare role (normalize hyphen/underscore differences)
-      if (String(dbUser.role).toLowerCase() !== normalizedRole) {
-        return NextResponse.json({ error: "Invalid credentials or role" }, { status: 401 })
+      
+      // Special handling for lab_coordinator role
+      // Faculty members can login as lab_coordinator if they are assigned as one
+      if (normalizedRole === 'lab_coordinator') {
+        // Check if user is faculty
+        if (String(dbUser.role).toLowerCase() !== 'faculty') {
+          return NextResponse.json({ error: "Only faculty members can be lab coordinators" }, { status: 401 })
+        }
+        
+        // Check if this faculty is assigned as lab coordinator for any department
+        const db = Database.getInstance()
+        const coordCheck = await db.query(
+          "SELECT id, code, name FROM departments WHERE lab_coordinator_id = ?",
+          [dbUser.id]
+        )
+        
+        if (coordCheck.rows.length === 0) {
+          return NextResponse.json({ error: "You are not assigned as a lab coordinator" }, { status: 401 })
+        }
+      } else {
+        // Compare role (normalize hyphen/underscore differences)
+        if (String(dbUser.role).toLowerCase() !== normalizedRole) {
+          return NextResponse.json({ error: "Invalid credentials or role" }, { status: 401 })
+        }
       }
+      
       // Verify password (scrypt format: salt:hash) or legacy sha256
       const stored: string | null = dbUser.password_hash || null
       if (!stored) {
@@ -80,7 +103,7 @@ export async function POST(request: NextRequest) {
       const tokenPayload = {
         userId: Number.parseInt(String(dbUser.id), 10),
         email: dbUser.email,
-        role: String(dbUser.role),  // Keep database role format (lab_staff) for middleware
+        role: normalizedRole === 'lab_coordinator' ? 'lab_coordinator' : String(dbUser.role),  // Use lab_coordinator if logging in as coordinator
         name: displayName,
         salutation: userSalutation,
         department: dbUser.department,
@@ -93,7 +116,7 @@ export async function POST(request: NextRequest) {
           email: dbUser.email,
           name: displayName,
           salutation: userSalutation,
-          role: String(dbUser.role).replace(/_/g, "-"),
+          role: normalizedRole === 'lab_coordinator' ? 'lab-coordinator' : String(dbUser.role).replace(/_/g, "-"),
           department: dbUser.department,
           studentId: dbUser.student_id || null,
         },

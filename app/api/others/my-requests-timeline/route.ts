@@ -30,10 +30,12 @@ export async function GET(request: NextRequest) {
         br.hod_approved_at,
         br.rejection_reason,
         br.rejected_at,
+        d.highest_approval_authority,
         s.name as staff_approver_name,
         h.name as hod_approver_name
       FROM booking_requests br
       LEFT JOIN labs l ON br.lab_id = l.id
+      LEFT JOIN departments d ON l.department_id = d.id
       LEFT JOIN users s ON br.lab_staff_approved_by = s.id
       LEFT JOIN users h ON br.hod_approved_by = h.id
       WHERE br.requested_by = ? AND br.request_type = 'lab_booking'
@@ -71,10 +73,14 @@ export async function GET(request: NextRequest) {
         })
       }
       
-      // HOD approval step
+      // HOD/Lab Coordinator approval step
+      const approvalAuthorityLabel = booking.highest_approval_authority === 'lab_coordinator' 
+        ? 'Lab Coordinator Approval' 
+        : 'HOD Approval'
+      
       if (booking.status === 'pending_hod') {
         timeline.push({
-          step_name: 'HOD Approval',
+          step_name: approvalAuthorityLabel,
           step_status: 'pending',
           completed_at: null,
           completed_by: null,
@@ -82,9 +88,9 @@ export async function GET(request: NextRequest) {
           user_name: null
         })
       } else if (booking.hod_approved_at) {
-        // If rejected by HOD, show as rejected, otherwise completed
+        // If rejected by HOD/Lab Coordinator, show as rejected, otherwise completed
         timeline.push({
-          step_name: 'HOD Approval',
+          step_name: approvalAuthorityLabel,
           step_status: rejectedByHOD ? 'rejected' : 'completed',
           completed_at: booking.hod_approved_at,
           completed_by: booking.hod_approved_by,
@@ -104,6 +110,7 @@ export async function GET(request: NextRequest) {
         created_at: booking.created_at,
         requested_by: booking.requested_by,
         faculty_supervisor_id: booking.faculty_supervisor_id,
+        highest_approval_authority: booking.highest_approval_authority,
         timeline
       }
     })

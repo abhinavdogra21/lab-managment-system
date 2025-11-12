@@ -48,6 +48,7 @@ export function LoginForm() {
     { value: "lab-staff", label: "Lab Staff" },
     { value: "faculty", label: "Faculty" },
     { value: "hod", label: "Head of Department (HoD)" },
+    { value: "lab-coordinator", label: "Lab Coordinator" },
     { value: "student", label: "Student" },
     { value: "others", label: "Others" },
   ]

@@ -25,7 +25,17 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/components/ui/use-toast"
 
-type Department = { id: number; name: string; code: string; hod_id?: number | null; hod_name?: string | null; hod_email?: string | null }
+type Department = { 
+  id: number; 
+  name: string; 
+  code: string; 
+  hod_id?: number | null; 
+  hod_name?: string | null; 
+  hod_email?: string | null;
+  highest_approval_authority?: 'hod' | 'lab_coordinator' | null;
+  lab_coordinator_id?: number | null;
+  lab_coordinator_name?: string | null;
+}
 type Lab = { id: number; name: string; code: string; department_id: number; department_name?: string; staff_id?: number | null; staff_name?: string | null; staff_ids_csv?: string | null; staff_names_csv?: string | null; capacity?: number; location?: string }
 type User = { id: number; name: string; email: string; role: string; department?: string | null }
 
@@ -54,6 +64,7 @@ export default function DepartmentAndLabManagementPage() {
   const [staffQuery, setStaffQuery] = useState("")
   const [staffLabFilter, setStaffLabFilter] = useState<string | "all">("all")
   const [hodPopoverOpen, setHodPopoverOpen] = useState<{ [key: number]: boolean }>({})
+  const [coordinatorPopoverOpen, setCoordinatorPopoverOpen] = useState<{ [key: number]: boolean }>({})
   const [labStaffPopoverOpen, setLabStaffPopoverOpen] = useState<{ [key: number]: boolean }>({})
 
   useEffect(() => {
@@ -95,6 +106,43 @@ export default function DepartmentAndLabManagementPage() {
       if (!res.ok) throw new Error(data?.error || "Failed to set HOD")
       setDepartments((prev) => prev.map((d) => (d.id === departmentId ? { ...d, hod_id: data.department.hod_id, hod_name: data.department.hod_name, hod_email: data.department.hod_email } : d)))
       toast({ title: "HOD updated" })
+    } catch (e: any) {
+      toast({ title: "Update failed", description: e?.message || "", variant: "destructive" })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const updateApprovalAuthority = async (
+    departmentId: number, 
+    highestApprovalAuthority?: 'hod' | 'lab_coordinator',
+    labCoordinatorId?: number | null
+  ) => {
+    setLoading(true)
+    try {
+      const payload: any = { departmentId }
+      if (highestApprovalAuthority !== undefined) payload.highestApprovalAuthority = highestApprovalAuthority
+      if (labCoordinatorId !== undefined) payload.labCoordinatorId = labCoordinatorId
+      
+      const res = await fetch("/api/admin/departments", { 
+        method: "PATCH", 
+        headers: { "Content-Type": "application/json" }, 
+        body: JSON.stringify(payload) 
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || "Failed to update approval authority")
+      
+      setDepartments((prev) => prev.map((d) => (
+        d.id === departmentId 
+          ? { 
+              ...d, 
+              highest_approval_authority: data.department.highest_approval_authority,
+              lab_coordinator_id: data.department.lab_coordinator_id,
+              lab_coordinator_name: data.department.lab_coordinator_name
+            } 
+          : d
+      )))
+      toast({ title: "Approval authority updated" })
     } catch (e: any) {
       toast({ title: "Update failed", description: e?.message || "", variant: "destructive" })
     } finally {
@@ -348,6 +396,8 @@ export default function DepartmentAndLabManagementPage() {
                     <TableHead className="min-w-64">Name</TableHead>
                     <TableHead>Code</TableHead>
                     <TableHead>HOD</TableHead>
+                    <TableHead>Highest Approval Authority</TableHead>
+                    <TableHead>Lab Coordinator</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -432,6 +482,94 @@ export default function DepartmentAndLabManagementPage() {
                             {/* Removed per requirement */}
                           </div>
                         </div>
+                      </TableCell>
+                      <TableCell className="min-w-48">
+                        <Select
+                          value={d.highest_approval_authority || "hod"}
+                          onValueChange={(v: 'hod' | 'lab_coordinator') => {
+                            updateApprovalAuthority(d.id, v, d.lab_coordinator_id)
+                          }}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select authority" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="hod">HOD</SelectItem>
+                            <SelectItem value="lab_coordinator">Lab Coordinator</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell className="min-w-56">
+                        <Popover 
+                          open={coordinatorPopoverOpen[d.id] || false} 
+                          onOpenChange={(open) => setCoordinatorPopoverOpen(prev => ({ ...prev, [d.id]: open }))}
+                        >
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={coordinatorPopoverOpen[d.id] || false}
+                              className="w-full justify-between"
+                              disabled={d.highest_approval_authority !== 'lab_coordinator'}
+                            >
+                              {d.lab_coordinator_id ? (
+                                (() => {
+                                  const coordinator = faculties.find(f => f.id === d.lab_coordinator_id)
+                                  return coordinator ? (
+                                    <span className="truncate">{coordinator.name}</span>
+                                  ) : "Unknown"
+                                })()
+                              ) : "Assign Coordinator"}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[300px] p-0">
+                            <Command>
+                              <CommandInput placeholder="Search faculty..." />
+                              <CommandList>
+                                <CommandEmpty>No faculty found.</CommandEmpty>
+                                <CommandGroup>
+                                  <CommandItem
+                                    value="none"
+                                    onSelect={() => {
+                                      updateApprovalAuthority(d.id, d.highest_approval_authority || 'hod', null)
+                                      setCoordinatorPopoverOpen(prev => ({ ...prev, [d.id]: false }))
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        !d.lab_coordinator_id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    Unassigned
+                                  </CommandItem>
+                                  {faculties.filter((u) => u.department === d.code).map((u) => (
+                                    <CommandItem
+                                      key={u.id}
+                                      value={`${u.name} ${u.email}`}
+                                      onSelect={() => {
+                                        updateApprovalAuthority(d.id, d.highest_approval_authority || 'hod', u.id)
+                                        setCoordinatorPopoverOpen(prev => ({ ...prev, [d.id]: false }))
+                                      }}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          d.lab_coordinator_id === u.id ? "opacity-100" : "opacity-0"
+                                        )}
+                                      />
+                                      <div className="flex flex-col">
+                                        <span className="font-medium">{u.name}</span>
+                                        <span className="text-xs text-muted-foreground">{u.email}</span>
+                                      </div>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         <div className="flex gap-2">

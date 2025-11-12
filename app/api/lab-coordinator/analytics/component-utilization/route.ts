@@ -5,7 +5,7 @@ import { Database } from '@/lib/database'
 export async function GET(request: NextRequest) {
   try {
     const user = await verifyToken(request)
-    if (!user || !hasRole(user, ['hod', 'admin'])) {
+    if (!user || !hasRole(user, ['lab_coordinator', 'admin'])) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -16,17 +16,17 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
 
-    // Get HOD's departments
+    // Get Lab Coordinator's departments
     let departmentIds: number[] = []
     if (user.role !== 'admin') {
       const depRes = await db.query(
-        `SELECT id FROM departments WHERE hod_id = ? OR LOWER(hod_email) = LOWER(?)`,
-        [Number(user.userId), String(user.email || '')]
+        `SELECT id FROM departments WHERE lab_coordinator_id = ?`,
+        [Number(user.userId)]
       )
       departmentIds = depRes.rows.map((d: any) => Number(d.id))
 
       if (departmentIds.length === 0) {
-        return NextResponse.json({ labStats: [], componentStats: [] })
+        return NextResponse.json({ labStats: [], componentStats: [], allLabs: [] })
       }
     }
 

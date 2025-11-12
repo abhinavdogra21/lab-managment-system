@@ -60,11 +60,13 @@ export async function GET(req: NextRequest) {
     // List the current user's component requests with items
     const rows = await db.query(
       `SELECT r.*, l.name AS lab_name,
+              d.highest_approval_authority,
               uf.name AS faculty_name,
               ul.name AS lab_staff_name,
               uh.name AS hod_name
        FROM component_requests r
        JOIN labs l ON l.id = r.lab_id
+       LEFT JOIN departments d ON l.department_id = d.id
        LEFT JOIN users uf ON uf.id = r.mentor_faculty_id
        LEFT JOIN users ul ON ul.id = r.lab_staff_approver_id
        LEFT JOIN users uh ON uh.id = r.hod_approver_id

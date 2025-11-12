@@ -10,7 +10,7 @@ export async function POST(
 ) {
   try {
     const user = await verifyToken(request)
-    if (!user || !hasRole(user, ["hod", "admin"])) {
+    if (!user || !hasRole(user, ["lab_coordinator", "admin"])) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -27,23 +27,23 @@ export async function POST(
 
     const db = Database.getInstance()
 
-    // For non-admin HODs, get their department(s) by hod_id or hod_email
+    // For lab coordinators, get their department(s) by lab_coordinator_id
     let departmentIds: number[] = []
     if (user.role !== 'admin') {
       const depRes = await db.query(
-        `SELECT id FROM departments WHERE hod_id = ? OR LOWER(hod_email) = LOWER(?)`,
-        [Number(user.userId), String(user.email || '')]
+        `SELECT id FROM departments WHERE lab_coordinator_id = ?`,
+        [Number(user.userId)]
       )
       departmentIds = depRes.rows.map((d: any) => Number(d.id))
       
       if (departmentIds.length === 0) {
-        return NextResponse.json({ error: "No department found for this HOD" }, { status: 403 })
+        return NextResponse.json({ error: "No department found for this Lab Coordinator" }, { status: 403 })
       }
     }
 
     // First, verify the request exists and is in the correct state
     let checkQuery = `
-      SELECT br.*, l.department_id, d.name as dept_name, d.highest_approval_authority, d.hod_id, d.lab_coordinator_id
+      SELECT br.*, l.department_id, d.name as dept_name, d.highest_approval_authority, d.lab_coordinator_id
       FROM booking_requests br
       JOIN labs l ON br.lab_id = l.id
       JOIN departments d ON l.department_id = d.id
@@ -66,18 +66,22 @@ export async function POST(
 
     const booking = checkResult.rows[0]
     
-    // CRITICAL: Verify this department actually uses HOD approval (or fallback to HOD if Lab Coordinator not available)
+    // CRITICAL: Verify this department actually uses Lab Coordinator approval
     if (user.role !== 'admin') {
-      if (booking.highest_approval_authority === 'lab_coordinator' && booking.lab_coordinator_id) {
+      if (booking.highest_approval_authority !== 'lab_coordinator') {
         return NextResponse.json({ 
-          error: "This department uses Lab Coordinator approval. The Lab Coordinator should approve this request." 
+          error: "This department uses HOD approval, not Lab Coordinator approval" 
         }, { status: 403 })
       }
-      // If highest_approval_authority is 'lab_coordinator' but no lab_coordinator_id, HOD can approve as fallback
+      if (!booking.lab_coordinator_id) {
+        return NextResponse.json({ 
+          error: "No Lab Coordinator assigned to this department" 
+        }, { status: 403 })
+      }
     }
     
     if (booking.status !== 'pending_hod') {
-      return NextResponse.json({ error: "Request is not pending HOD approval" }, { status: 400 })
+      return NextResponse.json({ error: "Request is not pending approval" }, { status: 400 })
     }
 
     // Update the booking status
@@ -100,7 +104,7 @@ export async function POST(
             rejected_by = ?, rejected_at = NOW(), rejection_reason = ?
         WHERE id = ?
       `
-      updateParams = [newStatus, user.userId, remarks || null, user.userId, remarks || 'Rejected by HOD', requestId]
+      updateParams = [newStatus, user.userId, remarks || null, user.userId, remarks || 'Rejected by Lab Coordinator', requestId]
     }
     
     await db.query(updateQuery, updateParams)
@@ -129,42 +133,33 @@ export async function POST(
         END as lab_staff_name,
         lab_staff.email as lab_staff_email,
         CASE 
-          WHEN hod.salutation IS NOT NULL 
-          THEN CONCAT(UPPER(hod.salutation), '. ', hod.name)
-          ELSE hod.name
-        END as hod_name,
-        hod.email as hod_email
+          WHEN coordinator.salutation IS NOT NULL 
+          THEN CONCAT(UPPER(coordinator.salutation), '. ', coordinator.name)
+          ELSE coordinator.name
+        END as lab_coordinator_name,
+        coordinator.email as lab_coordinator_email
       FROM booking_requests br
       LEFT JOIN users u ON u.id = br.requested_by
       LEFT JOIN labs l ON l.id = br.lab_id
       LEFT JOIN departments d ON l.department_id = d.id
       LEFT JOIN users faculty ON faculty.id = br.faculty_supervisor_id
       LEFT JOIN users lab_staff ON lab_staff.id = br.lab_staff_approved_by
-      LEFT JOIN users hod ON hod.id = d.hod_id
+      LEFT JOIN users coordinator ON coordinator.id = d.lab_coordinator_id
       WHERE br.id = ?
     `, [requestId])
     
     if (bookingDetails.rows.length > 0) {
-      // Determine the actual approver role based on user's role and department settings
-      const isLabCoordinator = user.role === 'lab_coordinator' || 
-                               (booking.highest_approval_authority === 'lab_coordinator' && 
-                                booking.lab_coordinator_id === user.userId)
-      const approverRoleForLog = isLabCoordinator ? 'lab_coordinator' : 'hod'
-      const actionLabel = action === 'approve' 
-        ? (isLabCoordinator ? 'approved_by_lab_coordinator' : 'approved_by_hod')
-        : (isLabCoordinator ? 'rejected_by_lab_coordinator' : 'rejected_by_hod')
-      
       logLabBookingActivity({
         bookingId: requestId,
         labId: booking.lab_id,
         actorUserId: userInfo?.userId || null,
         actorName: userInfo?.name || null,
         actorEmail: userInfo?.email || null,
-        actorRole: approverRoleForLog as any,
-        action: actionLabel,
+        actorRole: 'lab_coordinator' as any, // Explicitly set to lab_coordinator
+        action: action === 'approve' ? 'approved_by_lab_coordinator' : 'rejected_by_lab_coordinator',
         actionDescription: action === 'approve' 
-          ? `Approved booking request${remarks ? ': ' + remarks : ''}`
-          : `Rejected booking request: ${remarks}`,
+          ? `Approved booking request by Lab Coordinator${remarks ? ': ' + remarks : ''}`
+          : `Rejected booking request by Lab Coordinator: ${remarks}`,
         bookingSnapshot: bookingDetails.rows[0],
         ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || null,
         userAgent: request.headers.get("user-agent") || null,
@@ -177,23 +172,17 @@ export async function POST(
         `SELECT u.name as student_name, u.email as student_email, u.salutation as student_salutation,
                 l.name as lab_name,
                 br.booking_date, br.start_time, br.end_time,
-                hod.name as hod_name
+                coordinator.name as coordinator_name
          FROM booking_requests br
          JOIN users u ON u.id = br.requested_by
          JOIN labs l ON l.id = br.lab_id
-         JOIN users hod ON hod.id = ?
+         JOIN users coordinator ON coordinator.id = ?
          WHERE br.id = ?`,
         [user.userId, requestId]
       )
 
       if (studentDetails.rows.length > 0) {
         const student = studentDetails.rows[0]
-        
-        // Determine the actual approver role for display
-        const isLabCoordinator = user.role === 'lab_coordinator' || 
-                                 (booking.highest_approval_authority === 'lab_coordinator' && 
-                                  booking.lab_coordinator_id === user.userId)
-        const approverRoleDisplay = isLabCoordinator ? 'Lab Coordinator' : 'HoD'
         
         if (action === 'approve') {
           const emailData = emailTemplates.labBookingApproved({
@@ -204,7 +193,7 @@ export async function POST(
             startTime: student.start_time,
             endTime: student.end_time,
             requestId: requestId,
-            approverRole: approverRoleDisplay,
+            approverRole: 'Lab Coordinator',
             nextStep: undefined // Final approval
           })
 
@@ -222,7 +211,7 @@ export async function POST(
             endTime: student.end_time,
             requestId: requestId,
             reason: remarks || 'No reason provided',
-            rejectedBy: approverRoleDisplay
+            rejectedBy: student.coordinator_name || 'Lab Coordinator'
           })
 
           await sendEmail({
@@ -243,7 +232,7 @@ export async function POST(
     })
 
   } catch (error) {
-    console.error("Error processing HOD action:", error)
+    console.error("Error processing Lab Coordinator action:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -36,9 +36,11 @@ export async function GET(request: NextRequest) {
         br.rejected_at,
         f.name as faculty_approver_name,
         s.name as staff_approver_name,
-        h.name as hod_approver_name
+        h.name as hod_approver_name,
+        d.highest_approval_authority
       FROM booking_requests br
       LEFT JOIN labs l ON br.lab_id = l.id
+      LEFT JOIN departments d ON l.department_id = d.id
       LEFT JOIN users u ON br.faculty_supervisor_id = u.id
       LEFT JOIN users f ON br.faculty_approved_by = f.id
       LEFT JOIN users s ON br.lab_staff_approved_by = s.id
@@ -99,10 +101,14 @@ export async function GET(request: NextRequest) {
         })
       }
       
-      // HOD approval step
+      // HOD/Lab Coordinator approval step
+      const approvalAuthorityLabel = booking.highest_approval_authority === 'lab_coordinator' 
+        ? 'Lab Coordinator Approval' 
+        : 'HOD Approval'
+      
       if (booking.status === 'pending_hod') {
         timeline.push({
-          step_name: 'HOD Approval',
+          step_name: approvalAuthorityLabel,
           step_status: 'pending',
           completed_at: null,
           completed_by: null,
@@ -111,7 +117,7 @@ export async function GET(request: NextRequest) {
         })
       } else if (booking.hod_approved_at) {
         timeline.push({
-          step_name: 'HOD Approval',
+          step_name: approvalAuthorityLabel,
           step_status: rejectedByHOD ? 'rejected' : 'completed',
           completed_at: booking.hod_approved_at,
           completed_by: booking.hod_approved_by,
@@ -130,6 +136,7 @@ export async function GET(request: NextRequest) {
         purpose: booking.purpose,
         status: booking.status,
         created_at: booking.created_at,
+        highest_approval_authority: booking.highest_approval_authority,
         timeline
       }
     })

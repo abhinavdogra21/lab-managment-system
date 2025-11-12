@@ -36,6 +36,8 @@ export async function GET(request: NextRequest) {
         stu.email as student_email,
         br.lab_id,
         l.name as lab_name,
+        l.department_id,
+        d.highest_approval_authority,
         br.booking_date,
         br.start_time,
         br.end_time,
@@ -56,6 +58,7 @@ export async function GET(request: NextRequest) {
       FROM booking_requests br
       LEFT JOIN users stu ON br.requested_by = stu.id
       LEFT JOIN labs l ON br.lab_id = l.id
+      LEFT JOIN departments d ON d.id = l.department_id
       LEFT JOIN users f ON br.faculty_approved_by = f.id
       LEFT JOIN users s ON br.lab_staff_approved_by = s.id
       LEFT JOIN users h ON br.hod_approved_by = h.id
@@ -115,10 +118,14 @@ export async function GET(request: NextRequest) {
         })
       }
       
-      // HOD approval step
+      // HOD/Lab Coordinator approval step (dynamic based on department settings)
+      const approvalAuthorityLabel = request.highest_approval_authority === 'lab_coordinator'
+        ? 'Lab Coordinator Approval'
+        : 'HOD Approval'
+      
       if (request.hod_approved_at) {
         timeline.push({
-          step_name: 'HOD Approval',
+          step_name: approvalAuthorityLabel,
           step_status: 'completed',
           completed_at: request.hod_approved_at,
           completed_by: request.hod_approved_by,
@@ -127,7 +134,7 @@ export async function GET(request: NextRequest) {
         })
       } else if (request.status === 'pending_hod') {
         timeline.push({
-          step_name: 'HOD Approval',
+          step_name: approvalAuthorityLabel,
           step_status: 'pending',
           completed_at: null,
           completed_by: null,

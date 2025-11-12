@@ -93,13 +93,34 @@ export async function POST(
         `SELECT r.*, l.name as lab_name, l.department_id,
                 u.name as requester_name, u.email as requester_email,
                 ls.name as lab_staff_name, ls.salutation as lab_staff_salutation,
-                d.hod_email, hod.name as hod_name, hod.salutation as hod_salutation
+                d.highest_approval_authority,
+                CASE 
+                  WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
+                  THEN coord.email
+                  ELSE d.hod_email
+                END as approver_email,
+                CASE 
+                  WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
+                  THEN coord.name
+                  ELSE hod.name
+                END as approver_name,
+                CASE 
+                  WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
+                  THEN coord.salutation
+                  ELSE hod.salutation
+                END as approver_salutation,
+                CASE 
+                  WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
+                  THEN 'Lab Coordinator'
+                  ELSE 'HOD'
+                END as approver_role
          FROM component_requests r
          JOIN labs l ON l.id = r.lab_id
          JOIN users u ON u.id = r.requester_id
          LEFT JOIN users ls ON ls.id = ?
          LEFT JOIN departments d ON d.id = l.department_id
          LEFT JOIN users hod ON hod.id = d.hod_id
+         LEFT JOIN users coord ON coord.id = d.lab_coordinator_id
          WHERE r.id = ?`,
         [Number(user.userId), requestId]
       )
@@ -118,8 +139,8 @@ export async function POST(
         await sendEmail({ to: requestDetails.requester_email, ...emailData }).catch(err => console.error('Email failed:', err))
       }
       
-      // Email to HOD (forwarding the approved request)
-      if (requestDetails && requestDetails.hod_email) {
+      // Email to HOD or Lab Coordinator (forwarding the approved request)
+      if (requestDetails && requestDetails.approver_email) {
         const itemsDetails = await db.query(
           `SELECT c.name, cri.quantity_requested as quantity
            FROM component_request_items cri
@@ -128,9 +149,9 @@ export async function POST(
           [requestId]
         )
         const emailData = emailTemplates.componentRequestForwarded({
-          recipientRole: 'HOD',
-          recipientName: requestDetails.hod_name || '',
-          recipientSalutation: requestDetails.hod_salutation || 'none',
+          recipientRole: requestDetails.approver_role || 'HOD',
+          recipientName: requestDetails.approver_name || '',
+          recipientSalutation: requestDetails.approver_salutation || 'none',
           requesterName: requestDetails.requester_name,
           requesterRole: requestDetails.initiator_role === 'faculty' ? 'Faculty' : 'Student',
           approverName: requestDetails.lab_staff_name || 'Lab Staff',
@@ -142,7 +163,7 @@ export async function POST(
           returnDate: requestDetails.return_date,
           requestId: requestId
         })
-        await sendEmail({ to: requestDetails.hod_email, ...emailData }).catch(err => console.error('Email failed:', err))
+        await sendEmail({ to: requestDetails.approver_email, ...emailData }).catch(err => console.error('Email failed:', err))
       }
       
       // Log the activity

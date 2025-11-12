@@ -29,6 +29,7 @@ interface BookingWithTimeline {
   purpose: string
   status: string
   created_at: string
+  highest_approval_authority?: 'hod' | 'lab_coordinator'
   timeline: TimelineStep[]
 }
 
@@ -138,13 +139,18 @@ export default function MyRequestsPage() {
   }
 
   const TimelineView = ({ request }: { request: BookingWithTimeline }) => {
+    // Determine the approval authority label based on department settings
+    const approvalAuthorityLabel = request.highest_approval_authority === 'lab_coordinator' 
+      ? 'Lab Coordinator Approval' 
+      : 'HOD Approval'
+    
     // Create standard timeline steps for visual consistency
-    // Use "Recommendation" for Faculty and Lab Staff, "Approval" only for HOD
+    // Use "Recommendation" for Faculty and Lab Staff, "Approval" only for HOD/Lab Coordinator
     const allSteps = [
       { name: 'Submitted', status: 'completed', icon: Clock },
       { name: 'Faculty Recommendation', status: getStepStatus(request, 'Faculty Recommendation'), icon: User },
       { name: 'Lab Staff Recommendation', status: getStepStatus(request, 'Lab Staff Recommendation'), icon: Users },
-      { name: 'HOD Approval', status: getStepStatus(request, 'HOD Approval'), icon: Building },
+      { name: approvalAuthorityLabel, status: getStepStatus(request, approvalAuthorityLabel), icon: Building },
       { name: 'Approved', status: getFinalApprovalStatus(request), icon: CheckCircle }
     ]
 
@@ -173,9 +179,10 @@ export default function MyRequestsPage() {
               } else {
                 timelineStep = request.timeline.find(t => {
                   const stepTitle = getStepTitle(t.step_name)
-                  return stepTitle.includes('Faculty') && step.name === 'Faculty Review' ||
-                         stepTitle.includes('Lab Staff') && step.name === 'Lab Staff Review' ||
-                         stepTitle.includes('HOD') && step.name === 'HOD Review'
+                  return stepTitle.includes('Faculty') && step.name === 'Faculty Recommendation' ||
+                         stepTitle.includes('Lab Staff') && step.name === 'Lab Staff Recommendation' ||
+                         (stepTitle.includes('HOD') || stepTitle.includes('Lab Coordinator')) && 
+                         (step.name === 'HOD Approval' || step.name === 'Lab Coordinator Approval')
                 })
               }
               
@@ -265,7 +272,8 @@ export default function MyRequestsPage() {
       if (request.status === 'pending_faculty') return 'waiting'
       if (request.status === 'rejected' && !step) return 'waiting' // Rejected before this step
     }
-    if (stepName === 'HOD Approval') {
+    // Handle both "HOD Approval" and "Lab Coordinator Approval"
+    if (stepName === 'HOD Approval' || stepName === 'Lab Coordinator Approval') {
       if (request.status === 'pending_hod') return 'pending'
       if (request.status === 'approved') return 'completed'
       if (['pending_faculty', 'pending_lab_staff'].includes(request.status)) return 'waiting'

@@ -51,10 +51,12 @@ export async function GET(req: NextRequest) {
     const rows = await db.query(
       `SELECT r.*, 
               l.name AS lab_name, l.code AS lab_code,
+              d.highest_approval_authority,
               ul.name AS lab_staff_name,
               uh.name AS hod_name
        FROM component_requests r
        JOIN labs l ON l.id = r.lab_id
+       LEFT JOIN departments d ON l.department_id = d.id
        LEFT JOIN users ul ON ul.id = r.lab_staff_approver_id
        LEFT JOIN users uh ON uh.id = r.hod_approver_id
        WHERE r.requester_id = ? AND r.initiator_role = 'faculty'

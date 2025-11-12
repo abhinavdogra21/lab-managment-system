@@ -71,8 +71,6 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
       hod: "/hod/dashboard/settings",
       admin: "/admin/dashboard/settings",
       others: "/others/dashboard/settings",
-      "non-teaching": "/non-teaching/dashboard/settings",
-      "non_teaching": "/non-teaching/dashboard/settings",
     }
     return roleMap[role] || "/dashboard/settings"
   }

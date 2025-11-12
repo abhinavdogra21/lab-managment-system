@@ -55,9 +55,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const action = String(body?.action || '').toLowerCase()
     const remarks = String(body?.remarks || '') || null
 
-    // Fetch request and verify HOD has domain over the lab
+    // Fetch request and verify HOD/Lab Coordinator has domain over the lab
     const r = await db.query(
-      `SELECT r.*, l.department_id, d.hod_id, d.hod_email
+      `SELECT r.*, l.department_id, d.hod_id, d.hod_email, 
+              d.highest_approval_authority, d.lab_coordinator_id
        FROM component_requests r
        JOIN labs l ON l.id = r.lab_id
        LEFT JOIN departments d ON d.id = l.department_id
@@ -74,6 +75,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     if (action === 'approve') {
+      // Determine if the actual approver is a Lab Coordinator
+      const isLabCoordinator = user.role === 'lab_coordinator' || 
+                               (request.highest_approval_authority === 'lab_coordinator' && 
+                                request.lab_coordinator_id === user.userId)
+      const approverRoleForLog = isLabCoordinator ? 'lab_coordinator' : 'hod'
+      const approverRoleDisplay = isLabCoordinator ? 'Lab Coordinator' : 'HOD'
+      const actionLabel = 'approved_by_' + approverRoleForLog
+      
       // Mark as approved - quantities will be deducted when lab staff issues the components
       await db.query(
         `UPDATE component_requests
@@ -102,8 +111,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (req && req.requester_email) {
         const emailData = emailTemplates.componentRequestApproved({
           requesterName: req.requester_name,
-          approverName: req.hod_name || 'HOD',
-          approverRole: 'HOD',
+          approverName: req.hod_name || approverRoleDisplay,
+          approverRole: approverRoleDisplay,
           labName: req.lab_name,
           requestId: requestId,
           remarks: remarks || undefined
@@ -149,9 +158,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           actorUserId: userInfo?.userId || null,
           actorName: userInfo?.name || null,
           actorEmail: userInfo?.email || null,
-          actorRole: userInfo?.role || null,
-          action: 'approved_by_hod',
-          actionDescription: `Approved component request${remarks ? ': ' + remarks : ''}`,
+          actorRole: approverRoleForLog as any,
+          action: actionLabel as any,
+          actionDescription: `Approved component request by ${approverRoleDisplay}${remarks ? ': ' + remarks : ''}`,
           entitySnapshot: { ...sel.rows[0], items: itemsDetails.rows },
           ipAddress: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || null,
           userAgent: req.headers.get("user-agent") || null,
@@ -161,6 +170,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ request: sel.rows[0] })
     }
     if (action === 'reject') {
+      // Determine if the actual rejecter is a Lab Coordinator
+      const isLabCoordinator = user.role === 'lab_coordinator' || 
+                               (request.highest_approval_authority === 'lab_coordinator' && 
+                                request.lab_coordinator_id === user.userId)
+      const approverRoleForLog = isLabCoordinator ? 'lab_coordinator' : 'hod'
+      const approverRoleDisplay = isLabCoordinator ? 'Lab Coordinator' : 'HOD'
+      const actionLabel = 'rejected_by_' + approverRoleForLog
+      
       await db.query(
         `UPDATE component_requests SET status = 'rejected', rejected_by_id = ?, rejected_at = NOW(), rejection_reason = ?, hod_remarks = COALESCE(hod_remarks, ?) WHERE id = ? AND status = 'pending_hod'`,
         [Number(user.userId), remarks, remarks, requestId]
@@ -183,8 +200,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (req && req.requester_email) {
         const emailData = emailTemplates.componentRequestRejected({
           requesterName: req.requester_name,
-          rejecterName: req.hod_name || 'HOD',
-          rejecterRole: 'HOD',
+          rejecterName: req.hod_name || approverRoleDisplay,
+          rejecterRole: approverRoleDisplay,
           labName: req.lab_name,
           requestId: requestId,
           reason: remarks || undefined
@@ -210,9 +227,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           actorUserId: userInfo?.userId || null,
           actorName: userInfo?.name || null,
           actorEmail: userInfo?.email || null,
-          actorRole: userInfo?.role || null,
-          action: 'rejected_by_hod',
-          actionDescription: `Rejected component request: ${remarks || 'No reason provided'}`,
+          actorRole: approverRoleForLog as any,
+          action: actionLabel as any,
+          actionDescription: `Rejected component request by ${approverRoleDisplay}: ${remarks || 'No reason provided'}`,
           entitySnapshot: { ...sel.rows[0], items: itemsDetails.rows },
           ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || null,
           userAgent: request.headers.get("user-agent") || null,

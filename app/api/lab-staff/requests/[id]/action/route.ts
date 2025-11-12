@@ -147,7 +147,6 @@ export async function POST(
     // Helper to format role for display
     const formatRole = (role: string) => {
       if (role === 'lab_staff') return 'Lab Staff'
-      if (role === 'non_teaching') return 'Non-Teaching Staff'
       return role.charAt(0).toUpperCase() + role.slice(1)
     }
 
@@ -172,18 +171,46 @@ export async function POST(
           ...studentEmailData
         }).catch(err => console.error('Email send failed:', err))
 
-        // Email to HoD with salutation - Get HOD for this lab's department
-        const hod = await db.query(
-          `SELECT u.email, u.name, u.salutation, u.department, d.name as department_name
+        // Email to HOD or Lab Coordinator based on department's highest_approval_authority
+        const approver = await db.query(
+          `SELECT 
+             CASE 
+               WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
+               THEN coord.email
+               ELSE hod.email
+             END as email,
+             CASE 
+               WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
+               THEN coord.name
+               ELSE hod.name
+             END as name,
+             CASE 
+               WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
+               THEN coord.salutation
+               ELSE hod.salutation
+             END as salutation,
+             CASE 
+               WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
+               THEN coord.department
+               ELSE hod.department
+             END as department,
+             d.name as department_name,
+             d.highest_approval_authority,
+             CASE 
+               WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
+               THEN 'Lab Coordinator'
+               ELSE 'HOD'
+             END as approver_role
            FROM labs l
            JOIN departments d ON l.department_id = d.id
-           JOIN users u ON d.hod_id = u.id
+           LEFT JOIN users hod ON d.hod_id = hod.id
+           LEFT JOIN users coord ON d.lab_coordinator_id = coord.id
            WHERE l.id = ?
            LIMIT 1`,
           [updatedRequest.lab_id]
         )
         
-        if (hod.rows.length > 0) {
+        if (approver.rows.length > 0 && approver.rows[0].email) {
           // Format requester name with salutation
           let formattedRequesterName = updatedRequest.student_name
           if (updatedRequest.student_salutation && updatedRequest.student_salutation !== 'none') {
@@ -197,7 +224,7 @@ export async function POST(
             formattedRequesterName = salutation ? `${salutation} ${updatedRequest.student_name}` : updatedRequest.student_name
           }
 
-          const hodEmailData = emailTemplates.labBookingCreated({
+          const approverEmailData = emailTemplates.labBookingCreated({
             requesterName: formattedRequesterName,
             requesterRole: formatRole(updatedRequest.requester_role),
             labName: updatedRequest.lab_name,
@@ -206,13 +233,13 @@ export async function POST(
             endTime: updatedRequest.end_time,
             purpose: updatedRequest.purpose || 'Not specified',
             requestId: Number(id),
-            recipientName: hod.rows[0].name,
-            recipientSalutation: hod.rows[0].salutation
+            recipientName: approver.rows[0].name,
+            recipientSalutation: approver.rows[0].salutation
           })
 
           await sendEmail({
-            to: hod.rows[0].email,
-            ...hodEmailData
+            to: approver.rows[0].email,
+            ...approverEmailData
           }).catch(err => console.error('Email send failed:', err))
         }
       } else {

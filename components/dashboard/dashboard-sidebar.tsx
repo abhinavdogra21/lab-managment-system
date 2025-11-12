@@ -44,7 +44,7 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
   const pathname = usePathname()
 
   // Compute optional role prefix from current URL (e.g., /admin, /student)
-  const roleMatch = pathname?.match(/^\/(admin|student|faculty|lab-staff|hod|others)(?:\/|$)/)
+  const roleMatch = pathname?.match(/^\/(admin|student|faculty|lab-staff|hod|lab-coordinator|others)(?:\/|$)/)
   const prefix = roleMatch ? `/${roleMatch[1]}` : ""
 
   const withPrefix = (p: string) => `${prefix}${p}`
@@ -90,6 +90,15 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
           { name: "Analytics", href: withPrefix("/dashboard/analytics"), icon: BarChart3 },
         ]
 
+      case "lab_coordinator":
+      case "lab-coordinator":
+        return [
+          ...baseItems,
+          { name: "Department Labs", href: withPrefix("/dashboard/labs"), icon: Building },
+          { name: "Approvals", href: withPrefix("/dashboard/approvals"), icon: UserCheck },
+          { name: "Analytics", href: withPrefix("/dashboard/analytics"), icon: BarChart3 },
+        ]
+
       case "admin":
         return [
           ...baseItems,
@@ -125,7 +134,7 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
         <nav className="space-y-2">
           {navigationItems.map((item) => {
             // Normalize for active match across prefixed and non-prefixed URLs
-            const normalized = pathname?.replace(/^\/(admin|student|faculty|lab-staff|hod|others)(?=\/)/, "") || ""
+            const normalized = pathname?.replace(/^\/(admin|student|faculty|lab-staff|hod|lab-coordinator|others)(?=\/)/, "") || ""
             const itemPath = item.href.replace(prefix, "")
             const isDashboardRoot = itemPath === "/dashboard" || item.href === "/admin/users"
             const isExact = normalized === itemPath

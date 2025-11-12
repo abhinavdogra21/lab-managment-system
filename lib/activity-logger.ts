@@ -15,7 +15,7 @@ export interface LabBookingActivityLog {
   actorUserId: number | null
   actorName: string | null
   actorEmail: string | null
-  actorRole: 'student' | 'faculty' | 'lab_staff' | 'hod' | 'admin' | 'others' | 'non_teaching' | null
+  actorRole: 'student' | 'faculty' | 'lab_staff' | 'hod' | 'lab_coordinator' | 'admin' | 'others' | null
   action: string
   actionDescription?: string | null
   bookingSnapshot?: any
@@ -176,7 +176,7 @@ export interface ComponentActivityLog {
   actorUserId: number | null
   actorName: string | null
   actorEmail: string | null
-  actorRole: 'student' | 'faculty' | 'lab_staff' | 'hod' | 'admin' | 'others' | 'non_teaching' | null
+  actorRole: 'student' | 'faculty' | 'lab_staff' | 'hod' | 'lab_coordinator' | 'admin' | 'others' | null
   action: string
   actionDescription?: string | null
   entitySnapshot?: any

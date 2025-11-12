@@ -28,6 +28,7 @@ interface RequestItem {
   faculty_approved_at?: string | null
   lab_staff_approved_at?: string | null
   hod_approved_at?: string | null
+  highest_approval_authority?: 'hod' | 'lab_coordinator'
 }
 
 export default function FacultyApprovePage() {
@@ -774,7 +775,8 @@ export default function FacultyApprovePage() {
       if (['pending_hod', 'approved'].includes(item.status)) return 'completed'
       if (item.status === 'pending_faculty') return 'waiting'
     }
-    if (stepName === 'HOD Review') {
+    // Handle both "HOD Review" and "Lab Coordinator Review"
+    if (stepName === 'HOD Review' || stepName === 'Lab Coordinator Review') {
       if (item.status === 'pending_hod') return 'pending'
       if (item.status === 'approved') return 'completed'
       if (['pending_faculty', 'pending_lab_staff'].includes(item.status)) return 'waiting'
@@ -795,14 +797,17 @@ export default function FacultyApprovePage() {
     }))
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, item?: RequestItem) => {
     switch (status) {
       case 'pending_faculty':
         return <Badge variant="outline" className="text-orange-600 border-orange-300">Pending Faculty Review</Badge>
       case 'pending_lab_staff':
         return <Badge variant="outline" className="text-blue-600 border-blue-300">Pending Lab Staff Review</Badge>
       case 'pending_hod':
-        return <Badge variant="outline" className="text-purple-600 border-purple-300">Pending HOD Review</Badge>
+        const approvalLabel = item?.highest_approval_authority === 'lab_coordinator' 
+          ? 'Lab Coordinator' 
+          : 'HOD'
+        return <Badge variant="outline" className="text-purple-600 border-purple-300">Pending {approvalLabel} Review</Badge>
       case 'approved':
         return <Badge variant="outline" className="text-green-600 border-green-300">Approved</Badge>
       case 'rejected':
@@ -814,11 +819,16 @@ export default function FacultyApprovePage() {
 
     // Timeline component
   const TimelineView = ({ item }: { item: RequestItem }) => {
+    // Dynamic approval authority label
+    const approvalAuthorityLabel = item.highest_approval_authority === 'lab_coordinator' 
+      ? 'Lab Coordinator Review' 
+      : 'HOD Review'
+    
     const allSteps = [
       { name: 'Submitted', status: 'completed', icon: Clock },
       { name: 'Faculty Review', status: getStepStatus(item, 'Faculty Review'), icon: User },
       { name: 'Lab Staff Review', status: getStepStatus(item, 'Lab Staff Review'), icon: Users },
-      { name: 'HOD Review', status: getStepStatus(item, 'HOD Review'), icon: Building },
+      { name: approvalAuthorityLabel, status: getStepStatus(item, approvalAuthorityLabel), icon: Building },
       { name: 'Approved', status: getFinalApprovalStatus(item), icon: CheckCircle2 }
     ]
 
@@ -909,7 +919,7 @@ export default function FacultyApprovePage() {
             <span className="text-xs text-gray-500">•</span>
             <span className="text-xs text-gray-600">{item.student_name}</span>
           </div>
-          {getStatusBadge(item.status)}
+          {getStatusBadge(item.status, item)}
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">

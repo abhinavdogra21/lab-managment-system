@@ -30,6 +30,8 @@ interface RequestItem {
   faculty_approved_at?: string | null
   lab_staff_approved_at?: string | null
   hod_approved_at?: string | null
+  highest_approval_authority?: 'hod' | 'lab_coordinator'
+  lab_coordinator_id?: number | null
 }
 
 const TimelineView = ({ item, getStepStatus, getFinalApprovalStatus }: { 
@@ -41,16 +43,21 @@ const TimelineView = ({ item, getStepStatus, getFinalApprovalStatus }: {
   // Faculty and TnP bookings have 4 steps (they book for themselves)
   const isStudentBooking = item.faculty_supervisor_id && item.requested_by !== item.faculty_supervisor_id
   
+  // Determine the approval authority label based on department settings
+  const approvalAuthorityLabel = item.highest_approval_authority === 'lab_coordinator' 
+    ? 'Lab Coordinator Review' 
+    : 'HOD Review'
+  
   const allSteps = isStudentBooking ? [
     { name: 'Submitted', status: 'completed', icon: Clock },
     { name: 'Faculty Review', status: getStepStatus(item, 'Faculty Review'), icon: User },
     { name: 'Lab Staff Review', status: getStepStatus(item, 'Lab Staff Review'), icon: Users },
-    { name: 'HOD Review', status: getStepStatus(item, 'HOD Review'), icon: Building },
+    { name: approvalAuthorityLabel, status: getStepStatus(item, approvalAuthorityLabel), icon: Building },
     { name: 'Approved', status: getFinalApprovalStatus(item), icon: CheckCircle2 }
   ] : [
     { name: 'Submitted', status: 'completed', icon: Clock },
     { name: 'Lab Staff Review', status: getStepStatus(item, 'Lab Staff Review'), icon: Users },
-    { name: 'HOD Review', status: getStepStatus(item, 'HOD Review'), icon: Building },
+    { name: approvalAuthorityLabel, status: getStepStatus(item, approvalAuthorityLabel), icon: Building },
     { name: 'Approved', status: getFinalApprovalStatus(item), icon: CheckCircle2 }
   ]
 
@@ -285,6 +292,25 @@ export default function HODApprovePage() {
   const [search, setSearch] = useState('')
   const [remarks, setRemarks] = useState<Record<number, string>>({})
   const [showTimeline, setShowTimeline] = useState<Record<number, boolean>>({})
+  const [userRole, setUserRole] = useState<string>('')
+
+  // Detect user role on mount
+  useEffect(() => {
+    try {
+      const userStr = localStorage.getItem('user')
+      if (userStr) {
+        const user = JSON.parse(userStr)
+        setUserRole(user.role || '')
+      }
+    } catch (error) {
+      console.error('Failed to get user role:', error)
+    }
+  }, [])
+
+  // Determine which API endpoint to use based on user role
+  const getApiEndpoint = () => {
+    return userRole === 'lab_coordinator' ? '/api/lab-coordinator' : '/api/hod'
+  }
 
   const handleRemarksChange = useCallback((requestId: number, value: string) => {
     setRemarks(prev => ({ ...prev, [requestId]: value }))
@@ -326,10 +352,14 @@ export default function HODApprovePage() {
   const loadAllLabRequests = async () => {
     setLoading(true)
     try {
+      const apiEndpoint = getApiEndpoint()
+      // Both HOD and Lab Coordinator use 'pending_hod' status
+      // The difference is in the department's highest_approval_authority
+      
       const [pendingRes, approvedRes, rejectedRes] = await Promise.all([
-        fetch('/api/hod/requests?status=pending_hod', { cache: 'no-store' }),
-        fetch('/api/hod/requests?status=approved', { cache: 'no-store' }),
-        fetch('/api/hod/requests?status=rejected', { cache: 'no-store' })
+        fetch(`${apiEndpoint}/requests?status=pending_hod`, { cache: 'no-store' }),
+        fetch(`${apiEndpoint}/requests?status=approved`, { cache: 'no-store' }),
+        fetch(`${apiEndpoint}/requests?status=rejected`, { cache: 'no-store' })
       ])
 
       if (pendingRes.ok) {
@@ -363,10 +393,10 @@ export default function HODApprovePage() {
   }
 
   useEffect(() => {
-    if (activeType === 'lab') {
+    if (activeType === 'lab' && userRole) {
       loadAllLabRequests()
     }
-  }, [activeType])
+  }, [activeType, userRole])
 
   const handleAction = async (requestId: number, action: 'approve' | 'reject', overrideRemarks?: string) => {
     const requestRemarks = typeof overrideRemarks === 'string'
@@ -380,7 +410,8 @@ export default function HODApprovePage() {
 
     try {
       setActionLoading(requestId)
-      const res = await fetch(`/api/hod/requests/${requestId}/action`, {
+      const apiEndpoint = getApiEndpoint()
+      const res = await fetch(`${apiEndpoint}/requests/${requestId}/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -454,10 +485,11 @@ export default function HODApprovePage() {
         if (item.faculty_approved_at) return 'rejected' // Reached lab staff and was rejected
         return 'waiting' // Never reached this step
       }
-      if (stepName === 'HOD Review') {
-        // If HOD approved, show completed, otherwise check if it reached this step
+      // Handle both "HOD Review" and "Lab Coordinator Review"
+      if (stepName === 'HOD Review' || stepName === 'Lab Coordinator Review') {
+        // If HOD/Lab Coordinator approved, show completed, otherwise check if it reached this step
         if (item.hod_approved_at) return 'completed'
-        if (item.lab_staff_approved_at) return 'rejected' // Reached HOD and was rejected
+        if (item.lab_staff_approved_at) return 'rejected' // Reached HOD/Lab Coordinator and was rejected
         return 'waiting' // Never reached this step
       }
     }
@@ -472,7 +504,8 @@ export default function HODApprovePage() {
       if (['pending_hod', 'approved'].includes(item.status)) return 'completed'
       if (item.status === 'pending_faculty') return 'waiting'
     }
-    if (stepName === 'HOD Review') {
+    // Handle both "HOD Review" and "Lab Coordinator Review"
+    if (stepName === 'HOD Review' || stepName === 'Lab Coordinator Review') {
       if (item.status === 'pending_hod') return 'pending'
       if (item.status === 'approved') return 'completed'
       if (['pending_faculty', 'pending_lab_staff'].includes(item.status)) return 'waiting'
@@ -484,6 +517,13 @@ export default function HODApprovePage() {
     if (item.status === 'approved') return 'completed'
     if (item.status === 'rejected') return 'rejected'
     return 'waiting'
+  }
+
+  // Helper to get approval authority label
+  const getApprovalAuthorityLabel = (item: RequestItem) => {
+    return item.highest_approval_authority === 'lab_coordinator' 
+      ? 'Lab Coordinator' 
+      : 'HOD'
   }
 
   const toggleTimeline = (itemId: number) => {
@@ -724,7 +764,7 @@ export default function HODApprovePage() {
                                 { name: 'Submitted', status: 'completed', icon: Clock },
                                 { name: 'Faculty', status: getStepStatus(r, 'Faculty Review'), icon: User },
                                 { name: 'Lab Staff', status: getStepStatus(r, 'Lab Staff Review'), icon: Users },
-                                { name: 'HOD', status: getStepStatus(r, 'HOD Review'), icon: Building },
+                                { name: getApprovalAuthorityLabel(r), status: getStepStatus(r, getApprovalAuthorityLabel(r) + ' Review'), icon: Building },
                                 { name: 'Final', status: getFinalApprovalStatus(r), icon: CheckCircle2 }
                               ].map((step, index) => (
                                 <div key={index} className="flex flex-col items-center space-y-1 relative z-10">
@@ -872,13 +912,13 @@ export default function HODApprovePage() {
                             {(r.initiator_role === 'faculty' ? [
                               { name: 'Submitted', status: 'completed', icon: Clock },
                               { name: 'Lab Staff', status: getStepStatus(r, 'Lab Staff Review'), icon: Users },
-                              { name: 'HOD', status: getStepStatus(r, 'HOD Review'), icon: Building },
+                              { name: getApprovalAuthorityLabel(r), status: getStepStatus(r, getApprovalAuthorityLabel(r) + ' Review'), icon: Building },
                               { name: 'Final', status: getFinalApprovalStatus(r), icon: CheckCircle2 }
                             ] : [
                               { name: 'Submitted', status: 'completed', icon: Clock },
                               { name: 'Faculty', status: getStepStatus(r, 'Faculty Review'), icon: User },
                               { name: 'Lab Staff', status: getStepStatus(r, 'Lab Staff Review'), icon: Users },
-                              { name: 'HOD', status: getStepStatus(r, 'HOD Review'), icon: Building },
+                              { name: getApprovalAuthorityLabel(r), status: getStepStatus(r, getApprovalAuthorityLabel(r) + ' Review'), icon: Building },
                               { name: 'Final', status: getFinalApprovalStatus(r), icon: CheckCircle2 }
                             ]).map((step, index) => (
                               <div key={index} className="flex flex-col items-center space-y-1 relative z-10">
@@ -992,13 +1032,13 @@ export default function HODApprovePage() {
                             {(r.initiator_role === 'faculty' ? [
                               { name: 'Submitted', status: 'completed', icon: Clock },
                               { name: 'Lab Staff', status: getStepStatus(r, 'Lab Staff Review'), icon: Users },
-                              { name: 'HOD', status: getStepStatus(r, 'HOD Review'), icon: Building },
+                              { name: getApprovalAuthorityLabel(r), status: getStepStatus(r, getApprovalAuthorityLabel(r) + ' Review'), icon: Building },
                               { name: 'Final', status: getFinalApprovalStatus(r), icon: CheckCircle2 }
                             ] : [
                               { name: 'Submitted', status: 'completed', icon: Clock },
                               { name: 'Faculty', status: getStepStatus(r, 'Faculty Review'), icon: User },
                               { name: 'Lab Staff', status: getStepStatus(r, 'Lab Staff Review'), icon: Users },
-                              { name: 'HOD', status: getStepStatus(r, 'HOD Review'), icon: Building },
+                              { name: getApprovalAuthorityLabel(r), status: getStepStatus(r, getApprovalAuthorityLabel(r) + ' Review'), icon: Building },
                               { name: 'Final', status: getFinalApprovalStatus(r), icon: CheckCircle2 }
                             ]).map((step, index) => (
                               <div key={index} className="flex flex-col items-center space-y-1 relative z-10">

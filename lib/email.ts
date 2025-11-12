@@ -198,8 +198,7 @@ export async function sendWelcomeEmail(
     'faculty': 'Faculty',
     'lab_staff': 'Lab Staff',
     'student': 'Student',
-    'others': 'Staff Member',
-    'non_teaching': 'Non-Teaching Staff'
+    'others': 'Staff Member'
   }
   const roleDisplay = roleDisplayMap[role] || role
   

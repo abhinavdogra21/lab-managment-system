@@ -4,19 +4,19 @@ import { NextRequest, NextResponse } from "next/server"
 const roleMap: Array<{ pattern: RegExp; roles: string[] }> = [
   // Pages
   { pattern: /^\/admin(?:\/|$)/, roles: ["admin"] },
-  { pattern: /^\/hod(?:\/|$)/, roles: ["hod", "faculty", "admin"] },
+  { pattern: /^\/hod(?:\/|$)/, roles: ["hod", "faculty", "lab_coordinator", "admin"] },
+  { pattern: /^\/lab-coordinator(?:\/|$)/, roles: ["lab_coordinator", "faculty", "admin"] },
   { pattern: /^\/faculty(?:\/|$)/, roles: ["faculty", "admin"] },
   { pattern: /^\/lab-staff(?:\/|$)/, roles: ["lab_staff", "admin"] },
   { pattern: /^\/student(?:\/|$)/, roles: ["student", "admin"] },
   { pattern: /^\/others(?:\/|$)/, roles: ["others", "admin"] },
-  { pattern: /^\/non-teaching(?:\/|$)/, roles: ["non_teaching", "admin"] },
   // APIs (canonical)
   { pattern: /^\/api\/admin(?:\/|$)/, roles: ["admin"] },
-  { pattern: /^\/api\/hod(?:\/|$)/, roles: ["hod", "faculty", "admin"] },
+  { pattern: /^\/api\/hod(?:\/|$)/, roles: ["hod", "faculty", "lab_coordinator", "admin"] },
+  { pattern: /^\/api\/lab-coordinator(?:\/|$)/, roles: ["lab_coordinator", "faculty", "admin"] },
   { pattern: /^\/api\/student(?:\/|$)/, roles: ["student", "admin"] },
   { pattern: /^\/api\/faculty(?:\/|$)/, roles: ["faculty", "admin"] },
   { pattern: /^\/api\/lab-staff(?:\/|$)/, roles: ["lab_staff", "admin"] },
-  { pattern: /^\/api\/non-teaching(?:\/|$)/, roles: ["non_teaching", "admin"] },
 ]
 
 export function middleware(req: NextRequest) {
@@ -32,7 +32,7 @@ export function middleware(req: NextRequest) {
       let role = user?.role || ""
       // Map backend role codes to path segments
       if (role === "lab_staff") role = "lab-staff"
-      if (role === "non_teaching") role = "non-teaching"
+      if (role === "lab_coordinator") role = "lab-coordinator"
       if (!role) return NextResponse.redirect(new URL("/", req.url))
       const rest = pathname.slice("/dashboard".length) || ""
       return NextResponse.redirect(new URL(`/${role}/dashboard${rest}`, req.url))
@@ -85,11 +85,11 @@ export const config = {
   "/dashboard/:path*",
     "/admin/:path*",
   "/hod/:path*",
+    "/lab-coordinator/:path*",
     "/faculty/:path*",
     "/lab-staff/:path*",
     "/student/:path*",
     "/tnp/:path*",
-    "/non-teaching/:path*",
     "/api/:path*",
   ],
 }

@@ -1236,9 +1236,39 @@ export const dbOperations = {
       `SELECT COUNT(1) AS cnt FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'departments' AND column_name = 'hod_email'`
     )
     const hasHodEmail = Array.isArray(hasColRes.rows) && hasColRes.rows[0] && Number(hasColRes.rows[0].cnt) > 0
-    const select = hasHodEmail
-      ? `SELECT d.id, d.name, d.code, d.hod_id, d.hod_email, u.name AS hod_name, d.created_at FROM departments d LEFT JOIN users u ON u.id = d.hod_id ORDER BY d.name`
-      : `SELECT d.id, d.name, d.code, d.hod_id, NULL AS hod_email, u.name AS hod_name, d.created_at FROM departments d LEFT JOIN users u ON u.id = d.hod_id ORDER BY d.name`
+    
+    // Check for new lab coordinator columns
+    const hasCoordinatorRes = await db.query(
+      `SELECT COUNT(1) AS cnt FROM information_schema.columns 
+       WHERE table_schema = DATABASE() 
+       AND table_name = 'departments' 
+       AND column_name IN ('highest_approval_authority', 'lab_coordinator_id')
+       GROUP BY table_name`
+    )
+    const hasCoordinatorCols = Array.isArray(hasCoordinatorRes.rows) && hasCoordinatorRes.rows[0] && Number(hasCoordinatorRes.rows[0].cnt) === 2
+    
+    let select: string
+    if (hasHodEmail && hasCoordinatorCols) {
+      select = `SELECT d.id, d.name, d.code, d.hod_id, d.hod_email, d.highest_approval_authority, d.lab_coordinator_id,
+                       u_hod.name AS hod_name, u_coord.name AS lab_coordinator_name, d.created_at 
+                FROM departments d 
+                LEFT JOIN users u_hod ON u_hod.id = d.hod_id 
+                LEFT JOIN users u_coord ON u_coord.id = d.lab_coordinator_id 
+                ORDER BY d.name`
+    } else if (hasHodEmail) {
+      select = `SELECT d.id, d.name, d.code, d.hod_id, d.hod_email, NULL AS highest_approval_authority, NULL AS lab_coordinator_id,
+                       u.name AS hod_name, NULL AS lab_coordinator_name, d.created_at 
+                FROM departments d 
+                LEFT JOIN users u ON u.id = d.hod_id 
+                ORDER BY d.name`
+    } else {
+      select = `SELECT d.id, d.name, d.code, d.hod_id, NULL AS hod_email, NULL AS highest_approval_authority, NULL AS lab_coordinator_id,
+                       u.name AS hod_name, NULL AS lab_coordinator_name, d.created_at 
+                FROM departments d 
+                LEFT JOIN users u ON u.id = d.hod_id 
+                ORDER BY d.name`
+    }
+    
     const res = await db.query(select)
     return res.rows
   },
@@ -1521,6 +1551,78 @@ export const dbOperations = {
         [departmentId]
       )
       return sel.rows[0]
+    })
+  },
+
+  async setDepartmentApprovalAuthority(
+    departmentId: number, 
+    highestApprovalAuthority?: 'hod' | 'lab_coordinator',
+    labCoordinatorId?: number | null
+  ) {
+    return db.transaction(async (client) => {
+      // Ensure department exists
+      const d = await client.query(`SELECT id, code, name FROM departments WHERE id = ?`, [departmentId])
+      const dep = d.rows[0]
+      if (!dep) throw new Error("Department not found")
+      
+      let coordinatorInfo = null
+      
+      // Validate lab coordinator if provided
+      if (labCoordinatorId !== undefined && labCoordinatorId !== null) {
+        const u = await client.query(`SELECT id, role, name, email, salutation FROM users WHERE id = ? AND is_active = 1`, [labCoordinatorId])
+        const ur = u.rows[0]
+        if (!ur) throw new Error("User not found")
+        if (String(ur.role) !== 'faculty') throw new Error("User must be a faculty member to be assigned as Lab Coordinator")
+        
+        // Ensure this user is not already lab coordinator of another department
+        const existing = await client.query(`SELECT id FROM departments WHERE lab_coordinator_id = ? AND id <> ?`, [labCoordinatorId, departmentId])
+        if (existing.rows[0]) throw new Error('This user is already assigned as Lab Coordinator of another department')
+        
+        // Store coordinator info for email notification
+        coordinatorInfo = {
+          name: ur.name,
+          email: ur.email,
+          salutation: ur.salutation,
+          departmentName: dep.name,
+          departmentCode: dep.code
+        }
+      }
+      
+      // Update department
+      const updates: string[] = []
+      const values: any[] = []
+      
+      if (highestApprovalAuthority !== undefined) {
+        updates.push('highest_approval_authority = ?')
+        values.push(highestApprovalAuthority)
+      }
+      
+      if (labCoordinatorId !== undefined) {
+        updates.push('lab_coordinator_id = ?')
+        values.push(labCoordinatorId)
+      }
+      
+      if (updates.length > 0) {
+        values.push(departmentId)
+        await client.query(
+          `UPDATE departments SET ${updates.join(', ')} WHERE id = ?`,
+          values
+        )
+      }
+      
+      // Return updated department with all relevant info
+      const sel = await client.query(
+        `SELECT d.id, d.name, d.code, d.hod_id, d.highest_approval_authority, d.lab_coordinator_id,
+                u_hod.name AS hod_name,
+                u_coord.name AS lab_coordinator_name,
+                u_coord.email AS lab_coordinator_email
+         FROM departments d
+         LEFT JOIN users u_hod ON u_hod.id = d.hod_id
+         LEFT JOIN users u_coord ON u_coord.id = d.lab_coordinator_id
+         WHERE d.id = ?`,
+        [departmentId]
+      )
+      return { ...sel.rows[0], coordinatorInfo }
     })
   },
 

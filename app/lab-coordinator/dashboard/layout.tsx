@@ -12,7 +12,7 @@ interface User {
 	salutation?: string
 }
 
-export default function DashboardRouteLayout({ children }: { children: React.ReactNode }) {
+export default function LabCoordinatorDashboardLayout({ children }: { children: React.ReactNode }) {
 	const [user, setUser] = useState<User | null>(null)
 	const [loading, setLoading] = useState(true)
 
