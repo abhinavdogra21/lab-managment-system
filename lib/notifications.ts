@@ -228,6 +228,13 @@ export const emailTemplates = {
               Review Request
             </a>
           </div>
+          
+          <div style="margin-top: 15px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/lab-staff/dashboard" 
+               style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
+              Go to Portal Dashboard
+            </a>
+          </div>
         </td>
       </tr>
     `)
@@ -349,6 +356,13 @@ export const emailTemplates = {
                 Review & Approve Request
               </a>
             </div>
+            
+            <div style="margin-top: 15px; text-align: center;">
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}" 
+                 style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
+                Go to Portal Dashboard
+              </a>
+            </div>
           </td>
         </tr>
       `)
@@ -422,9 +436,16 @@ export const emailTemplates = {
           <p>You will be notified once the components are ready for collection.</p>
           
           <div style="margin-top: 25px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}" 
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" 
                style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
-              Go to Dashboard
+              View My Requests
+            </a>
+          </div>
+          
+          <div style="margin-top: 15px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
+               style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
+              Go to Portal Dashboard
             </a>
           </div>
         </td>
@@ -474,8 +495,15 @@ export const emailTemplates = {
           <p>If you have any questions or need clarification, please contact the lab staff or the person who rejected the request.</p>
           
           <div style="text-align: center; margin-top: 20px;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}" style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: 500;">
-              Go to Dashboard
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: 500;">
+              View My Requests
+            </a>
+          </div>
+          
+          <div style="margin-top: 15px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
+               style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
+              Go to Portal Dashboard
             </a>
           </div>
         </td>
@@ -585,6 +613,13 @@ export const emailTemplates = {
               Issue Components
             </a>
           </div>
+          
+          <div style="margin-top: 15px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/lab-staff/dashboard" 
+               style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
+              Go to Portal Dashboard
+            </a>
+          </div>
         </td>
       </tr>
     `)
@@ -659,6 +694,20 @@ export const emailTemplates = {
           </p>
           
           <p>If you need to extend the return date, please submit an extension request through the system.</p>
+          
+          <div style="margin-top: 25px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" 
+               style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+              View My Component Requests
+            </a>
+          </div>
+          
+          <div style="margin-top: 15px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
+               style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
+              Go to Portal Dashboard
+            </a>
+          </div>
         </td>
       </tr>
     `)
@@ -732,6 +781,13 @@ export const emailTemplates = {
               Approve Return
             </a>
           </div>
+          
+          <div style="margin-top: 15px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/lab-staff/dashboard" 
+               style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
+              Go to Portal Dashboard
+            </a>
+          </div>
         </td>
       </tr>
     `)
@@ -779,6 +835,20 @@ export const emailTemplates = {
           </p>
           
           <p>Thank you for returning the components in good condition and on time.</p>
+          
+          <div style="margin-top: 25px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" 
+               style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+              View My Component Requests
+            </a>
+          </div>
+          
+          <div style="margin-top: 15px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
+               style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
+              Go to Portal Dashboard
+            </a>
+          </div>
         </td>
       </tr>
     `)
@@ -897,6 +967,20 @@ export const emailTemplates = {
           </p>
           
           <p>Please ensure you return all components by <b>${data.newReturnDate}</b> in good working condition.</p>
+          
+          <div style="margin-top: 25px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" 
+               style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+              View My Component Requests
+            </a>
+          </div>
+          
+          <div style="margin-top: 15px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
+               style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
+              Go to Portal Dashboard
+            </a>
+          </div>
         </td>
       </tr>
     `)
@@ -933,6 +1017,20 @@ export const emailTemplates = {
           </p>
           
           <p>Please ensure you return all components by the <b>original deadline</b>. If you have any concerns, please contact the lab staff.</p>
+          
+          <div style="margin-top: 25px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" 
+               style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+              View My Component Requests
+            </a>
+          </div>
+          
+          <div style="margin-top: 15px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
+               style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
+              Go to Portal Dashboard
+            </a>
+          </div>
         </td>
       </tr>
     `)
@@ -966,6 +1064,13 @@ export const emailTemplates = {
 
           <div style="background: #fff3cd; padding: 12px; border-left: 4px solid #ffc107; margin: 20px 0;">
             <p style="margin: 0;"><strong>⚠️ Security Notice:</strong> If you did not perform this action, please contact the administrator immediately at <a href="mailto:webmaster@lnmiit.ac.in">webmaster@lnmiit.ac.in</a></p>
+          </div>
+          
+          <div style="margin-top: 25px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}" 
+               style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+              Go to Portal Dashboard
+            </a>
           </div>
         </td>
       </tr>
@@ -1009,6 +1114,13 @@ export const emailTemplates = {
           </p>
           
           <p>If you have any questions, please contact the requester or lab administration.</p>
+          
+          <div style="margin-top: 25px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/faculty/dashboard" 
+               style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+              Go to Portal Dashboard
+            </a>
+          </div>
         </td>
       </tr>
     `)
@@ -1083,6 +1195,20 @@ export const emailTemplates = {
           <p style="padding: 12px; background: #dbeafe; border-left: 4px solid #3b82f6;">
             <strong>📋 Action Required:</strong> Please log in to the system to review and take action on this request.
           </p>
+          
+          <div style="margin-top: 25px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/faculty/dashboard/approve" 
+               style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+              Review Lab Booking Request
+            </a>
+          </div>
+          
+          <div style="margin-top: 15px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/faculty/dashboard" 
+               style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
+              Go to Portal Dashboard
+            </a>
+          </div>
         </td>
       </tr>
     `)
@@ -1144,6 +1270,20 @@ export const emailTemplates = {
           <p style="padding: 12px; background: #d4edda; border-left: 4px solid #28a745;">
             <strong>✅ Status:</strong> Approved by ${data.approverRole}${data.nextStep ? `. ${data.nextStep}` : '.'}
           </p>
+          
+          <div style="margin-top: 25px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-requests" 
+               style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+              View My Lab Bookings
+            </a>
+          </div>
+          
+          <div style="margin-top: 15px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
+               style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
+              Go to Portal Dashboard
+            </a>
+          </div>
         </td>
       </tr>
     `)
@@ -1213,6 +1353,20 @@ export const emailTemplates = {
           <p style="padding: 12px; background: #fecaca; border-left: 4px solid #ef4444;">
             <strong>❌ Status:</strong> Request rejected. Please contact the faculty or lab staff if you have questions.
           </p>
+          
+          <div style="margin-top: 25px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-requests" 
+               style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+              View My Lab Bookings
+            </a>
+          </div>
+          
+          <div style="margin-top: 15px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
+               style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
+              Go to Portal Dashboard
+            </a>
+          </div>
         </td>
       </tr>
     `)
@@ -1264,6 +1418,13 @@ export const emailTemplates = {
           <p style="padding: 12px; background: #fef3c7; border-left: 4px solid #f59e0b;">
             <strong>⚠️ Notice:</strong> This booking request has been withdrawn. No further action is required.
           </p>
+          
+          <div style="margin-top: 25px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/faculty/dashboard" 
+               style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+              Go to Portal Dashboard
+            </a>
+          </div>
         </td>
       </tr>
     `)

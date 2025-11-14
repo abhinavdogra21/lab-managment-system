@@ -145,7 +145,7 @@ export default function FacultyApprovePage() {
       if (res.ok) {
         const data = await res.json().catch(() => ({}))
         const successMessage = action === 'approve' 
-          ? '✓ Lab booking request approved successfully! The request has been forwarded to Lab Staff for further processing.'
+          ? '✓ Lab booking request recommended successfully! The request has been forwarded to Lab Staff for further processing.'
           : '✓ Lab booking request rejected successfully. The student has been notified with your remarks.'
         setSuccessDialog({ open: true, message: successMessage })
         // Clear remark for this request
@@ -292,7 +292,7 @@ export default function FacultyApprovePage() {
         const text = await res.text()
         if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
         const successMessage = action === 'approve' 
-          ? '✓ Component request approved successfully! The request has been forwarded to Lab Staff for processing.'
+          ? '✓ Component request recommended successfully! The request has been forwarded to Lab Staff for processing.'
           : '✓ Component request rejected successfully. The student has been notified with your remarks.'
         setSuccessDialog({ open: true, message: successMessage })
         setRemarks(prev => { const p = { ...prev }; delete p[id]; return p })
@@ -467,7 +467,7 @@ export default function FacultyApprovePage() {
                       </div>
                       {r.status === 'pending_faculty' && (
                         <div className="space-y-2 pt-2 border-t">
-                          <Textarea placeholder="Remarks (optional for approval, required for rejection)" value={remarks[r.id] || ''} onChange={(e) => setRemarks(prev => ({ ...prev, [r.id]: e.target.value }))} />
+                          <Textarea placeholder="Remarks (optional for recommendation, required for rejection)" value={remarks[r.id] || ''} onChange={(e) => setRemarks(prev => ({ ...prev, [r.id]: e.target.value }))} />
                           <div className="flex gap-2">
                             <Button 
                               className="flex-1" 
@@ -477,7 +477,7 @@ export default function FacultyApprovePage() {
                               {processingIds.has(r.id) ? (
                                 <>Processing...</>
                               ) : (
-                                <><Check className="h-4 w-4 mr-2" /> Approve</>
+                                <><Check className="h-4 w-4 mr-2" /> Recommend</>
                               )}
                             </Button>
                             <Button 
@@ -1009,7 +1009,7 @@ export default function FacultyApprovePage() {
                   </div>
                 ) : (
                   <>
-                    <Check className="h-4 w-4 mr-1" /> Approve
+                    <Check className="h-4 w-4 mr-1" /> Recommend
                   </>
                 )}
               </Button>

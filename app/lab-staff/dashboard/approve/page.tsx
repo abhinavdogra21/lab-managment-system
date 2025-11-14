@@ -136,7 +136,7 @@ export default function LabStaffApprovePage() {
       if (res.ok) {
         const data = await res.json()
         const successMessage = action === 'approve' 
-          ? '✓ Lab booking request approved successfully! The request has been forwarded to HOD for final approval.'
+          ? '✓ Lab booking request recommended successfully! The request has been forwarded to HOD/Lab Coordinator for final approval.'
           : '✓ Lab booking request rejected successfully. The requester has been notified with your remarks.'
         setSuccessDialog({ open: true, message: successMessage })
 
@@ -488,7 +488,7 @@ export default function LabStaffApprovePage() {
                 ) : (
                   <>
                     <Check className="h-3 w-3 mr-1" />
-                    Approve
+                    Recommend
                   </>
                 )}
               </Button>
