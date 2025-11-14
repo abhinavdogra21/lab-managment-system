@@ -217,7 +217,8 @@ export default function FacultyApprovePage() {
         return 'waiting'
       }
       
-      if (step === 'HOD Review') {
+      // Handle both "HOD Review" and "Lab Coordinator Review"
+      if (step === 'HOD Review' || step === 'Lab Coordinator Review') {
         if (request.hod_approved_at) return 'completed'
         if (request.status === 'pending_hod') return 'pending'
         if (request.status === 'rejected' && request.lab_staff_approved_at && !request.hod_approved_at) return 'rejected'
@@ -391,13 +392,13 @@ export default function FacultyApprovePage() {
                               {(r.initiator_role === 'faculty' ? [
                                 { name: 'Submitted', status: 'completed', icon: Clock },
                                 { name: 'Lab Staff', status: getComponentStepStatus(r, 'Lab Staff Review'), icon: Users },
-                                { name: 'HOD', status: getComponentStepStatus(r, 'HOD Review'), icon: Building },
+                                { name: r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD', status: getComponentStepStatus(r, r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator Review' : 'HOD Review'), icon: Building },
                                 { name: 'Final', status: getComponentFinalApprovalStatus(r), icon: CheckCircle2 }
                               ] : [
                                 { name: 'Submitted', status: 'completed', icon: Clock },
                                 { name: 'Faculty', status: getComponentStepStatus(r, 'Faculty Review'), icon: User },
                                 { name: 'Lab Staff', status: getComponentStepStatus(r, 'Lab Staff Review'), icon: Users },
-                                { name: 'HOD', status: getComponentStepStatus(r, 'HOD Review'), icon: Building },
+                                { name: r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD', status: getComponentStepStatus(r, r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator Review' : 'HOD Review'), icon: Building },
                                 { name: 'Final', status: getComponentFinalApprovalStatus(r), icon: CheckCircle2 }
                               ]).map((step, index) => (
                                 <div key={index} className="flex flex-col items-center space-y-1 relative z-10">
@@ -445,7 +446,7 @@ export default function FacultyApprovePage() {
                               )}
                               {r.hod_remarks && (
                                 <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
-                                  <span className="font-medium">HOD:</span> {r.hod_remarks}
+                                  <span className="font-medium">{r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator:' : 'HOD:'}</span> {r.hod_remarks}
                                 </div>
                               )}
                             </div>
@@ -544,13 +545,13 @@ export default function FacultyApprovePage() {
                             {(r.initiator_role === 'faculty' ? [
                               { name: 'Submitted', status: 'completed', icon: Clock },
                               { name: 'Lab Staff', status: getComponentStepStatus(r, 'Lab Staff Review'), icon: Users },
-                              { name: 'HOD', status: getComponentStepStatus(r, 'HOD Review'), icon: Building },
+                              { name: r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD', status: getComponentStepStatus(r, r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator Review' : 'HOD Review'), icon: Building },
                               { name: 'Final', status: getComponentFinalApprovalStatus(r), icon: CheckCircle2 }
                             ] : [
                               { name: 'Submitted', status: 'completed', icon: Clock },
                               { name: 'Faculty', status: getComponentStepStatus(r, 'Faculty Review'), icon: User },
                               { name: 'Lab Staff', status: getComponentStepStatus(r, 'Lab Staff Review'), icon: Users },
-                              { name: 'HOD', status: getComponentStepStatus(r, 'HOD Review'), icon: Building },
+                              { name: r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD', status: getComponentStepStatus(r, r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator Review' : 'HOD Review'), icon: Building },
                               { name: 'Final', status: getComponentFinalApprovalStatus(r), icon: CheckCircle2 }
                             ]).map((step, index) => (
                               <div key={index} className="flex flex-col items-center space-y-1 relative z-10">
@@ -598,7 +599,7 @@ export default function FacultyApprovePage() {
                             )}
                             {r.hod_remarks && (
                               <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
-                                <span className="font-medium">HOD:</span> {r.hod_remarks}
+                                <span className="font-medium">{r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator:' : 'HOD:'}</span> {r.hod_remarks}
                               </div>
                             )}
                           </div>
@@ -663,13 +664,13 @@ export default function FacultyApprovePage() {
                             {(r.initiator_role === 'faculty' ? [
                               { name: 'Submitted', status: 'completed', icon: Clock },
                               { name: 'Lab Staff', status: getComponentStepStatus(r, 'Lab Staff Review'), icon: Users },
-                              { name: 'HOD', status: getComponentStepStatus(r, 'HOD Review'), icon: Building },
+                              { name: r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD', status: getComponentStepStatus(r, r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator Review' : 'HOD Review'), icon: Building },
                               { name: 'Final', status: getComponentFinalApprovalStatus(r), icon: CheckCircle2 }
                             ] : [
                               { name: 'Submitted', status: 'completed', icon: Clock },
                               { name: 'Faculty', status: getComponentStepStatus(r, 'Faculty Review'), icon: User },
                               { name: 'Lab Staff', status: getComponentStepStatus(r, 'Lab Staff Review'), icon: Users },
-                              { name: 'HOD', status: getComponentStepStatus(r, 'HOD Review'), icon: Building },
+                              { name: r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD', status: getComponentStepStatus(r, r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator Review' : 'HOD Review'), icon: Building },
                               { name: 'Final', status: getComponentFinalApprovalStatus(r), icon: CheckCircle2 }
                             ]).map((step, index) => (
                               <div key={index} className="flex flex-col items-center space-y-1 relative z-10">
@@ -717,7 +718,7 @@ export default function FacultyApprovePage() {
                             )}
                             {r.hod_remarks && (
                               <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
-                                <span className="font-medium">HOD:</span> {r.hod_remarks}
+                                <span className="font-medium">{r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator:' : 'HOD:'}</span> {r.hod_remarks}
                               </div>
                             )}
                           </div>

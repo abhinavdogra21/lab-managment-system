@@ -10,7 +10,7 @@ export async function POST(
 ) {
   try {
     const user = await verifyToken(request)
-    if (!user || !hasRole(user, ["hod", "admin"])) {
+    if (!user || !hasRole(user, ["hod", "lab_coordinator", "admin"])) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -27,17 +27,31 @@ export async function POST(
 
     const db = Database.getInstance()
 
-    // For non-admin HODs, get their department(s) by hod_id or hod_email
+    // For non-admin users, get their department(s)
     let departmentIds: number[] = []
     if (user.role !== 'admin') {
-      const depRes = await db.query(
-        `SELECT id FROM departments WHERE hod_id = ? OR LOWER(hod_email) = LOWER(?)`,
-        [Number(user.userId), String(user.email || '')]
-      )
-      departmentIds = depRes.rows.map((d: any) => Number(d.id))
-      
-      if (departmentIds.length === 0) {
-        return NextResponse.json({ error: "No department found for this HOD" }, { status: 403 })
+      if (user.role === 'lab_coordinator') {
+        // Lab Coordinator: get departments where they are assigned
+        const depRes = await db.query(
+          `SELECT id FROM departments WHERE lab_coordinator_id = ?`,
+          [Number(user.userId)]
+        )
+        departmentIds = depRes.rows.map((d: any) => Number(d.id))
+        
+        if (departmentIds.length === 0) {
+          return NextResponse.json({ error: "No department found for this Lab Coordinator" }, { status: 403 })
+        }
+      } else {
+        // HOD: get departments by hod_id or hod_email
+        const depRes = await db.query(
+          `SELECT id FROM departments WHERE hod_id = ? OR LOWER(hod_email) = LOWER(?)`,
+          [Number(user.userId), String(user.email || '')]
+        )
+        departmentIds = depRes.rows.map((d: any) => Number(d.id))
+        
+        if (departmentIds.length === 0) {
+          return NextResponse.json({ error: "No department found for this HOD" }, { status: 403 })
+        }
       }
     }
 
@@ -66,14 +80,26 @@ export async function POST(
 
     const booking = checkResult.rows[0]
     
-    // CRITICAL: Verify this department actually uses HOD approval (or fallback to HOD if Lab Coordinator not available)
+    // CRITICAL: Verify user has permission to approve/reject based on highest_approval_authority
     if (user.role !== 'admin') {
-      if (booking.highest_approval_authority === 'lab_coordinator' && booking.lab_coordinator_id) {
-        return NextResponse.json({ 
-          error: "This department uses Lab Coordinator approval. The Lab Coordinator should approve this request." 
-        }, { status: 403 })
+      const isLabCoordinator = user.role === 'lab_coordinator' || Number(booking.lab_coordinator_id) === Number(user.userId)
+      
+      if (booking.highest_approval_authority === 'lab_coordinator') {
+        // Lab Coordinator authority - only Lab Coordinator can approve
+        if (!isLabCoordinator) {
+          return NextResponse.json({ 
+            error: "Only the Lab Coordinator can approve this request." 
+          }, { status: 403 })
+        }
+      } else {
+        // HOD authority - only HOD can approve
+        const isHOD = Number(booking.hod_id) === Number(user.userId)
+        if (!isHOD && !isLabCoordinator) {
+          return NextResponse.json({ 
+            error: "Only the HOD can approve this request." 
+          }, { status: 403 })
+        }
       }
-      // If highest_approval_authority is 'lab_coordinator' but no lab_coordinator_id, HOD can approve as fallback
     }
     
     if (booking.status !== 'pending_hod') {

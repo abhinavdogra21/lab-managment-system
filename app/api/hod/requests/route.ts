@@ -5,7 +5,7 @@ import { verifyToken, hasRole } from "@/lib/auth"
 export async function GET(request: NextRequest) {
   try {
     const user = await verifyToken(request)
-    if (!user || !hasRole(user, ["hod", "admin"])) {
+    if (!user || !hasRole(user, ["hod", "lab_coordinator", "admin"])) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -14,14 +14,24 @@ export async function GET(request: NextRequest) {
 
     const db = Database.getInstance()
 
-    // For non-admin HODs, get their department(s) by hod_id or hod_email
+    // For non-admin users, get their department(s)
     let departmentIds: number[] = []
     if (user.role !== 'admin') {
-      const depRes = await db.query(
-        `SELECT id FROM departments WHERE hod_id = ? OR LOWER(hod_email) = LOWER(?)`,
-        [Number(user.userId), String(user.email || '')]
-      )
-      departmentIds = depRes.rows.map((d: any) => Number(d.id))
+      if (user.role === 'lab_coordinator') {
+        // Lab Coordinator: get departments where they are assigned
+        const depRes = await db.query(
+          `SELECT id FROM departments WHERE lab_coordinator_id = ?`,
+          [Number(user.userId)]
+        )
+        departmentIds = depRes.rows.map((d: any) => Number(d.id))
+      } else {
+        // HOD: get departments by hod_id or hod_email
+        const depRes = await db.query(
+          `SELECT id FROM departments WHERE hod_id = ? OR LOWER(hod_email) = LOWER(?)`,
+          [Number(user.userId), String(user.email || '')]
+        )
+        departmentIds = depRes.rows.map((d: any) => Number(d.id))
+      }
       
       if (departmentIds.length === 0) {
         return NextResponse.json({ requests: [], total: 0 })
@@ -66,9 +76,15 @@ export async function GET(request: NextRequest) {
     if (user.role !== 'admin') {
       query += ` WHERE d.id IN (${departmentIds.map(() => '?').join(',')})`
       params.push(...departmentIds)
-      // IMPORTANT: Only show requests where HOD should approve
-      // (Either highest_approval_authority = 'hod' OR lab_coordinator not assigned as fallback)
-      query += ` AND (d.highest_approval_authority = 'hod' OR (d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NULL))`
+      
+      if (user.role === 'lab_coordinator') {
+        // Lab Coordinator: Only show requests where they are the highest approval authority
+        query += ` AND d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL`
+      } else {
+        // HOD: Only show requests where HOD is the highest approval authority
+        // (Either highest_approval_authority = 'hod' OR NULL/lab_coordinator not assigned)
+        query += ` AND (d.highest_approval_authority = 'hod' OR d.highest_approval_authority IS NULL)`
+      }
     } else {
       query += ` WHERE 1=1`
     }

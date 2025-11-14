@@ -44,7 +44,7 @@ async function ensureSchema() {
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const user = await verifyToken(req)
-    if (!user || !hasRole(user, ["hod", "admin"])) {
+    if (!user || !hasRole(user, ["hod", "lab_coordinator", "admin"])) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
     await ensureSchema()
@@ -54,6 +54,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const body = await req.json().catch(() => ({}))
     const action = String(body?.action || '').toLowerCase()
     const remarks = String(body?.remarks || '') || null
+    
+    // Store request headers for logging before req gets reassigned
+    const ipAddress = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || null
+    const userAgent = req.headers.get("user-agent") || null
 
     // Fetch request and verify HOD/Lab Coordinator has domain over the lab
     const r = await db.query(
@@ -107,7 +111,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       // Send emails
       const details = await db.query(
         `SELECT r.*, l.name as lab_name, l.staff_id,
-                u.name as requester_name, u.email as requester_email,
+                u.name as requester_name, u.email as requester_email, u.salutation as requester_salutation,
                 hod.name as hod_name, hod.salutation as hod_salutation,
                 ls.name as lab_staff_name, ls.email as lab_staff_email, ls.salutation as lab_staff_salutation
          FROM component_requests r
@@ -124,7 +128,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (req && req.requester_email) {
         const emailData = emailTemplates.componentRequestApproved({
           requesterName: req.requester_name,
+          requesterSalutation: req.requester_salutation,
           approverName: req.hod_name || approverRoleDisplay,
+          approverSalutation: req.hod_salutation,
           approverRole: approverRoleDisplay,
           labName: req.lab_name,
           requestId: requestId,
@@ -175,8 +181,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           action: actionLabel as any,
           actionDescription: `Approved component request by ${approverRoleDisplay}${remarks ? ': ' + remarks : ''}`,
           entitySnapshot: { ...sel.rows[0], items: itemsDetails.rows },
-          ipAddress: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || null,
-          userAgent: req.headers.get("user-agent") || null,
+          ipAddress: ipAddress,
+          userAgent: userAgent,
         }).catch(err => console.error("Activity logging failed:", err))
       }
       
@@ -244,8 +250,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           action: actionLabel as any,
           actionDescription: `Rejected component request by ${approverRoleDisplay}: ${remarks || 'No reason provided'}`,
           entitySnapshot: { ...sel.rows[0], items: itemsDetails.rows },
-          ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || null,
-          userAgent: request.headers.get("user-agent") || null,
+          ipAddress: ipAddress,
+          userAgent: userAgent,
         }).catch(err => console.error("Activity logging failed:", err))
       }
       

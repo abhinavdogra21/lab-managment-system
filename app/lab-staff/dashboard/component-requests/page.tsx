@@ -26,6 +26,9 @@ interface RequestItem {
   lab_staff_approved_at?: string | null
   hod_remarks?: string | null
   hod_approved_at?: string | null
+  highest_approval_authority?: 'hod' | 'lab_coordinator'
+  lab_coordinator_id?: number | null
+  lab_coordinator_name?: string | null
   issued_at?: string | null
   return_requested_at?: string | null
   returned_at?: string | null
@@ -90,6 +93,8 @@ export default function LabStaffComponentRequestsPage() {
     }
     
     if (step === 'HOD Review') {
+      // If request is approved, then HOD/Lab Coordinator step is completed
+      if (request.status === 'approved') return 'completed'
       if (request.hod_approved_at) return 'completed'
       if (request.status === 'pending_hod') return 'pending'
       if (request.status === 'rejected' && request.lab_staff_approved_at && !request.hod_approved_at) return 'rejected'
@@ -280,10 +285,12 @@ export default function LabStaffComponentRequestsPage() {
     }
   }
 
-  const badge = (status: string) => {
+  const badge = (status: string, highestApprovalAuthority?: 'hod' | 'lab_coordinator') => {
     switch (status) {
       case 'pending_lab_staff': return <Badge className="bg-orange-100 text-orange-800" variant="secondary">Pending Lab Staff</Badge>
-      case 'pending_hod': return <Badge className="bg-blue-100 text-blue-800" variant="secondary">Pending HOD</Badge>
+      case 'pending_hod': 
+        const label = highestApprovalAuthority === 'lab_coordinator' ? 'Pending Lab Coordinator' : 'Pending HOD'
+        return <Badge className="bg-blue-100 text-blue-800" variant="secondary">{label}</Badge>
       case 'approved': return <Badge className="bg-green-100 text-green-800" variant="secondary">Approved</Badge>
       case 'rejected': return <Badge variant="destructive">Rejected</Badge>
       default: return <Badge variant="outline">{status}</Badge>
@@ -426,7 +433,7 @@ export default function LabStaffComponentRequestsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Package className="h-4 w-4" /> {r.lab_name}
-                  {badge(r.status)}
+                  {badge(r.status, r.highest_approval_authority)}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -470,13 +477,13 @@ export default function LabStaffComponentRequestsPage() {
                         {(r.initiator_role === 'faculty' ? [
                           { name: 'Submitted', status: 'completed', icon: Clock },
                           { name: 'Lab Staff', status: getStepStatus(r, 'Lab Staff Review'), icon: Users },
-                          { name: 'HOD', status: getStepStatus(r, 'HOD Review'), icon: Building },
+                          { name: r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD', status: getStepStatus(r, 'HOD Review'), icon: Building },
                           { name: 'Final', status: getFinalApprovalStatus(r), icon: CheckCircle2 }
                         ] : [
                           { name: 'Submitted', status: 'completed', icon: Clock },
                           { name: 'Faculty', status: getStepStatus(r, 'Faculty Review'), icon: User },
                           { name: 'Lab Staff', status: getStepStatus(r, 'Lab Staff Review'), icon: Users },
-                          { name: 'HOD', status: getStepStatus(r, 'HOD Review'), icon: Building },
+                          { name: r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD', status: getStepStatus(r, 'HOD Review'), icon: Building },
                           { name: 'Final', status: getFinalApprovalStatus(r), icon: CheckCircle2 }
                         ]).map((step, index) => (
                           <div key={index} className="flex flex-col items-center space-y-1 relative z-10">
@@ -524,7 +531,7 @@ export default function LabStaffComponentRequestsPage() {
                         )}
                         {r.hod_remarks && (
                           <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
-                            <span className="font-medium">HOD:</span> {r.hod_remarks}
+                            <span className="font-medium">{r.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}:</span> {r.hod_remarks}
                           </div>
                         )}
                       </div>

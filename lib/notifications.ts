@@ -126,6 +126,7 @@ export async function sendEmail(options: EmailOptions) {
 export const emailTemplates = {
   componentRequestCreated: (data: {
     requesterName: string
+    requesterSalutation?: string
     requesterRole: string
     labName: string
     purpose: string
@@ -160,6 +161,18 @@ export const emailTemplates = {
       }
     }
     
+    // Format requester name with salutation
+    let requesterDisplay = data.requesterName
+    if (data.requesterSalutation && data.requesterSalutation !== 'none') {
+      const salutationMap: Record<string, string> = {
+        'prof': 'Prof.',
+        'dr': 'Dr.',
+        'mr': 'Mr.',
+        'mrs': 'Mrs.'
+      }
+      requesterDisplay = `${salutationMap[data.requesterSalutation] || ''} ${data.requesterName}`
+    }
+    
     return {
     subject: `New Component Request - LNMIIT Lab Management`,
     html: createEmailTemplate(`
@@ -171,7 +184,7 @@ export const emailTemplates = {
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.requesterName} (${data.requesterRole})</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${requesterDisplay} (${data.requesterRole})</td>
             </tr>
             <tr style="background: #f0f9ff;">
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
@@ -208,6 +221,13 @@ export const emailTemplates = {
           <p style="margin-top: 20px; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107;">
             <strong>⚡ Action Required:</strong> Please review and process this request at your earliest convenience.
           </p>
+          
+          <div style="margin-top: 25px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/lab-staff/dashboard/component-requests" 
+               style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+              Review Request
+            </a>
+          </div>
         </td>
       </tr>
     `)
@@ -215,10 +235,11 @@ export const emailTemplates = {
   },
 
   componentRequestForwarded: (data: {
-    recipientRole: string  // 'Lab Staff', 'HOD', or 'Faculty'
+    recipientRole: string  // 'Lab Staff', 'HOD', 'Lab Coordinator', or 'Faculty'
     recipientName?: string
     recipientSalutation?: string
     requesterName: string
+    requesterSalutation?: string
     requesterRole: string  // 'Student' or 'Faculty'
     approverName: string   // Who approved and forwarded it
     approverSalutation?: string
@@ -245,6 +266,18 @@ export const emailTemplates = {
       greeting = `Dear <b>${data.recipientName}</b>`
     }
     
+    // Format requester name with salutation
+    let requesterDisplay = data.requesterName
+    if (data.requesterSalutation && data.requesterSalutation !== 'none') {
+      const salutationMap: Record<string, string> = {
+        'prof': 'Prof.',
+        'dr': 'Dr.',
+        'mr': 'Mr.',
+        'mrs': 'Mrs.'
+      }
+      requesterDisplay = `${salutationMap[data.requesterSalutation] || ''} ${data.requesterName}`
+    }
+    
     // Format approver name with salutation
     let approverDisplay = data.approverName
     if (data.approverSalutation && data.approverSalutation !== 'none') {
@@ -268,7 +301,7 @@ export const emailTemplates = {
             <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
               <tr>
                 <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
-                <td style="padding: 10px; border: 1px solid #ddd;">${data.requesterName} (${data.requesterRole})</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${requesterDisplay} (${data.requesterRole})</td>
               </tr>
               <tr style="background: #f0f9ff;">
                 <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
@@ -309,6 +342,13 @@ export const emailTemplates = {
             <p style="margin-top: 20px; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107;">
               <strong>⚡ Action Required:</strong> Please review and approve or reject this request at your earliest convenience.
             </p>
+            
+            <div style="margin-top: 25px; text-align: center;">
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}" 
+                 style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                Review & Approve Request
+              </a>
+            </div>
           </td>
         </tr>
       `)
@@ -317,17 +357,43 @@ export const emailTemplates = {
 
   componentRequestApproved: (data: {
     requesterName: string
+    requesterSalutation?: string
     approverName: string
+    approverSalutation?: string
     approverRole: string
     labName: string
     requestId: number
     remarks?: string
-  }) => ({
+  }) => {
+    // Format names with salutations
+    let requesterDisplay = data.requesterName
+    if (data.requesterSalutation && data.requesterSalutation !== 'none') {
+      const salutationMap: Record<string, string> = {
+        'prof': 'Prof.',
+        'dr': 'Dr.',
+        'mr': 'Mr.',
+        'mrs': 'Mrs.'
+      }
+      requesterDisplay = `${salutationMap[data.requesterSalutation] || ''} ${data.requesterName}`
+    }
+    
+    let approverDisplay = data.approverName
+    if (data.approverSalutation && data.approverSalutation !== 'none') {
+      const salutationMap: Record<string, string> = {
+        'prof': 'Prof.',
+        'dr': 'Dr.',
+        'mr': 'Mr.',
+        'mrs': 'Mrs.'
+      }
+      approverDisplay = `${salutationMap[data.approverSalutation] || ''} ${data.approverName}`
+    }
+    
+    return {
     subject: `Component Request Approved - LNMIIT Lab Management`,
     html: createEmailTemplate(`
       <tr>
         <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
-          <p>Dear <b>${data.requesterName}</b>,</p>
+          <p>Dear <b>${requesterDisplay}</b>,</p>
           <p>We are pleased to inform you that your component request has been <b>approved</b>.</p>
           
           <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
@@ -339,7 +405,7 @@ export const emailTemplates = {
             </tr>
             <tr style="background: #f0fdf4;">
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Approved by:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.approverName} (${data.approverRole})</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${approverDisplay} (${data.approverRole})</td>
             </tr>
             ${data.remarks ? `
             <tr>
@@ -354,10 +420,18 @@ export const emailTemplates = {
           </p>
           
           <p>You will be notified once the components are ready for collection.</p>
+          
+          <div style="margin-top: 25px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}" 
+               style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+              Go to Dashboard
+            </a>
+          </div>
         </td>
       </tr>
     `)
-  }),
+    }
+  },
 
   componentRequestRejected: (data: {
     requesterName: string
@@ -398,6 +472,12 @@ export const emailTemplates = {
           </p>
           
           <p>If you have any questions or need clarification, please contact the lab staff or the person who rejected the request.</p>
+          
+          <div style="text-align: center; margin-top: 20px;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}" style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: 500;">
+              Go to Dashboard
+            </a>
+          </div>
         </td>
       </tr>
     `)
@@ -499,6 +579,12 @@ export const emailTemplates = {
           <p style="margin-top: 20px; padding: 12px; background: #d1fae5; border-left: 4px solid #10b981;">
             <strong>✅ Action Required:</strong> Please issue these components to ${data.requesterName} and update the system accordingly.
           </p>
+          
+          <div style="text-align: center; margin-top: 20px;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/lab-staff/dashboard/component-requests" style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: 500;">
+              Issue Components
+            </a>
+          </div>
         </td>
       </tr>
     `)

@@ -91,7 +91,7 @@ export async function POST(
       // Send emails
       const details = await db.query(
         `SELECT r.*, l.name as lab_name, l.department_id,
-                u.name as requester_name, u.email as requester_email,
+                u.name as requester_name, u.email as requester_email, u.salutation as requester_salutation,
                 ls.name as lab_staff_name, ls.salutation as lab_staff_salutation,
                 d.highest_approval_authority,
                 CASE 
@@ -130,7 +130,9 @@ export async function POST(
       if (requestDetails && requestDetails.requester_email) {
         const emailData = emailTemplates.componentRequestApproved({
           requesterName: requestDetails.requester_name,
+          requesterSalutation: requestDetails.requester_salutation,
           approverName: requestDetails.lab_staff_name || 'Lab Staff',
+          approverSalutation: requestDetails.lab_staff_salutation,
           approverRole: 'Lab Staff',
           labName: requestDetails.lab_name,
           requestId: requestId,
@@ -153,6 +155,7 @@ export async function POST(
           recipientName: requestDetails.approver_name || '',
           recipientSalutation: requestDetails.approver_salutation || 'none',
           requesterName: requestDetails.requester_name,
+          requesterSalutation: requestDetails.requester_salutation,
           requesterRole: requestDetails.initiator_role === 'faculty' ? 'Faculty' : 'Student',
           approverName: requestDetails.lab_staff_name || 'Lab Staff',
           approverSalutation: requestDetails.lab_staff_salutation || 'none',

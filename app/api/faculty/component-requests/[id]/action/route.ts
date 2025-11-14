@@ -62,9 +62,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       
       // Send email to student and lab staff
       const details = await db.query(
-        `SELECT r.*, l.name as lab_name, l.staff_id,
-                u.name as requester_name, u.email as requester_email,
-                f.name as faculty_name,
+        `SELECT r.*, l.name as lab_name, l.staff_id as lab_staff_id,
+                u.name as requester_name, u.email as requester_email, u.salutation as requester_salutation,
+                f.name as faculty_name, f.salutation as faculty_salutation,
                 ls.email as lab_staff_email
          FROM component_requests r
          JOIN labs l ON l.id = r.lab_id
@@ -80,7 +80,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (req && req.requester_email) {
         const emailData = emailTemplates.componentRequestApproved({
           requesterName: req.requester_name,
+          requesterSalutation: req.requester_salutation,
           approverName: req.faculty_name || 'Faculty',
+          approverSalutation: req.faculty_salutation,
           approverRole: 'Faculty Mentor',
           labName: req.lab_name,
           requestId: requestId,
@@ -98,11 +100,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
            WHERE cri.request_id = ?`,
           [requestId]
         )
+        
+        // Get lab staff details with salutation
+        const staffDetails = await db.query(
+          `SELECT name, salutation FROM users WHERE id = ?`,
+          [req.lab_staff_id]
+        )
+        const labStaff = staffDetails.rows[0]
+        
         const emailData = emailTemplates.componentRequestForwarded({
           recipientRole: 'Lab Staff',
+          recipientName: labStaff?.name,
+          recipientSalutation: labStaff?.salutation,
           requesterName: req.requester_name,
+          requesterSalutation: req.requester_salutation,
           requesterRole: 'Student',
           approverName: req.faculty_name || 'Faculty',
+          approverSalutation: req.faculty_salutation,
           approverRole: 'Faculty',
           labName: req.lab_name,
           purpose: req.purpose || 'Not specified',

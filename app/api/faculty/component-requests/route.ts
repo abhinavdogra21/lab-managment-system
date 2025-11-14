@@ -136,7 +136,8 @@ export async function POST(req: NextRequest) {
 
     // Fetch request details for email
     const requestDetails = await db.query(
-      `SELECT r.*, l.name as lab_name, l.staff_id, u.name as requester_name, u.email as requester_email,
+      `SELECT r.*, l.name as lab_name, l.staff_id, 
+              u.name as requester_name, u.email as requester_email, u.salutation as requester_salutation,
               ls.email as lab_staff_email, ls.name as lab_staff_name, ls.salutation as lab_staff_salutation
        FROM component_requests r
        JOIN labs l ON l.id = r.lab_id
@@ -160,6 +161,7 @@ export async function POST(req: NextRequest) {
     if (request && request.lab_staff_email) {
       const emailData = emailTemplates.componentRequestCreated({
         requesterName: request.requester_name,
+        requesterSalutation: request.requester_salutation,
         requesterRole: 'Faculty',
         labName: request.lab_name,
         purpose: purpose || 'Not specified',
