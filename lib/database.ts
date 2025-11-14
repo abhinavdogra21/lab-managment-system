@@ -1560,12 +1560,14 @@ export const dbOperations = {
     labCoordinatorId?: number | null
   ) {
     return db.transaction(async (client) => {
-      // Ensure department exists
-      const d = await client.query(`SELECT id, code, name FROM departments WHERE id = ?`, [departmentId])
+      // Ensure department exists and get current coordinator
+      const d = await client.query(`SELECT id, code, name, lab_coordinator_id FROM departments WHERE id = ?`, [departmentId])
       const dep = d.rows[0]
       if (!dep) throw new Error("Department not found")
       
+      const previousCoordinatorId = dep.lab_coordinator_id
       let coordinatorInfo = null
+      let coordinatorChanged = false
       
       // Validate lab coordinator if provided
       if (labCoordinatorId !== undefined && labCoordinatorId !== null) {
@@ -1578,13 +1580,18 @@ export const dbOperations = {
         const existing = await client.query(`SELECT id FROM departments WHERE lab_coordinator_id = ? AND id <> ?`, [labCoordinatorId, departmentId])
         if (existing.rows[0]) throw new Error('This user is already assigned as Lab Coordinator of another department')
         
-        // Store coordinator info for email notification
-        coordinatorInfo = {
-          name: ur.name,
-          email: ur.email,
-          salutation: ur.salutation,
-          departmentName: dep.name,
-          departmentCode: dep.code
+        // Check if coordinator actually changed (new assignment)
+        coordinatorChanged = previousCoordinatorId !== labCoordinatorId
+        
+        // Store coordinator info for email notification only if changed
+        if (coordinatorChanged) {
+          coordinatorInfo = {
+            name: ur.name,
+            email: ur.email,
+            salutation: ur.salutation,
+            departmentName: dep.name,
+            departmentCode: dep.code
+          }
         }
       }
       
@@ -1622,7 +1629,7 @@ export const dbOperations = {
          WHERE d.id = ?`,
         [departmentId]
       )
-      return { ...sel.rows[0], coordinatorInfo }
+      return { ...sel.rows[0], coordinatorInfo, coordinatorChanged }
     })
   },
 

@@ -70,8 +70,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const isAdmin = user.role === 'admin'
     const hodMatchesId = Number(request.hod_id) === Number(user.userId)
     const hodMatchesEmail = (request.hod_email && String(request.hod_email).toLowerCase() === String(user.email || '').toLowerCase())
-    if (!isAdmin && !hodMatchesId && !hodMatchesEmail) {
-      return NextResponse.json({ error: "Not allowed" }, { status: 403 })
+    const isLabCoordinator = user.role === 'lab_coordinator' || Number(request.lab_coordinator_id) === Number(user.userId)
+    
+    // Check permissions based on highest_approval_authority
+    if (!isAdmin) {
+      if (request.highest_approval_authority === 'lab_coordinator') {
+        // Only Lab Coordinator can approve when they are set as highest authority
+        if (!isLabCoordinator) {
+          return NextResponse.json({ error: "Only the Lab Coordinator can approve this request" }, { status: 403 })
+        }
+      } else {
+        // HOD approval authority - check if user is HOD
+        if (!hodMatchesId && !hodMatchesEmail) {
+          return NextResponse.json({ error: "Not allowed" }, { status: 403 })
+        }
+      }
     }
 
     if (action === 'approve') {

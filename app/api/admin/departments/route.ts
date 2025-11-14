@@ -99,8 +99,8 @@ export async function PATCH(request: NextRequest) {
 				userAgent: request.headers.get("user-agent") || "unknown",
 			})
 			
-			// Send email notification if a new lab coordinator was assigned
-			if (updated.coordinatorInfo && body.labCoordinatorId) {
+			// Send email notification ONLY if a new lab coordinator was actually assigned (coordinator changed)
+			if (updated.coordinatorInfo && updated.coordinatorChanged) {
 				const { name, email, salutation, departmentName, departmentCode } = updated.coordinatorInfo
 				const loginUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}`
 				
