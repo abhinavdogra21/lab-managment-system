@@ -132,7 +132,7 @@ export async function POST(
       LEFT JOIN departments d ON l.department_id = d.id
       LEFT JOIN users fac ON br.faculty_supervisor_id = fac.id
       LEFT JOIN users ls ON br.lab_staff_approved_by = ls.id
-      LEFT JOIN users lc ON l.lab_coordinator_id = lc.id AND d.highest_approval_authority = 'lab_coordinator'
+      LEFT JOIN users lc ON d.lab_coordinator_id = lc.id AND d.highest_approval_authority = 'lab_coordinator'
       LEFT JOIN users hod ON d.hod_id = hod.id AND d.highest_approval_authority = 'hod'
       WHERE br.id = ?`,
       [id]

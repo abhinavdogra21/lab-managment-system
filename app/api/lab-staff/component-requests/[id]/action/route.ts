@@ -181,10 +181,11 @@ export async function POST(
          FROM component_requests r
          JOIN users u ON u.id = r.requester_id
          JOIN labs l ON l.id = r.lab_id
+         LEFT JOIN departments d ON l.department_id = d.id
          LEFT JOIN users fac ON r.faculty_approver_id = fac.id
          LEFT JOIN users ls ON r.lab_staff_approver_id = ls.id
          LEFT JOIN users hod ON r.hod_approver_id = hod.id
-         LEFT JOIN users lc ON l.lab_coordinator_id = lc.id AND r.final_approver_role = 'lab_coordinator'
+         LEFT JOIN users lc ON d.lab_coordinator_id = lc.id AND r.final_approver_role = 'lab_coordinator'
          WHERE r.id = ?`,
         [requestId]
       )
@@ -261,10 +262,11 @@ export async function POST(
          FROM component_requests r
          JOIN users u ON u.id = r.requester_id
          JOIN labs l ON l.id = r.lab_id
+         LEFT JOIN departments d ON l.department_id = d.id
          LEFT JOIN users fac ON r.faculty_approver_id = fac.id
          LEFT JOIN users ls ON r.lab_staff_approver_id = ls.id
          LEFT JOIN users hod ON r.hod_approver_id = hod.id
-         LEFT JOIN users lc ON l.lab_coordinator_id = lc.id AND r.final_approver_role = 'lab_coordinator'
+         LEFT JOIN users lc ON d.lab_coordinator_id = lc.id AND r.final_approver_role = 'lab_coordinator'
          WHERE r.id = ?`,
         [requestId]
       )
