@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
         JSON_EXTRACT(cal.entity_snapshot, '$.requester_id') as requester_id,
         JSON_EXTRACT(cal.entity_snapshot, '$.mentor_faculty_id') as mentor_faculty_id
       FROM component_activity_logs cal
-      WHERE cal.action IN ('issued', 'returned')
+      WHERE 1=1
     `;
 
     const params: any[] = [];
@@ -76,11 +76,22 @@ export async function GET(req: NextRequest) {
         ? JSON.parse(log.entity_snapshot) 
         : log.entity_snapshot;
 
+      // Determine the approval authority based on final_approver_role or presence of lab_coordinator fields
+      const finalApproverRole = snapshot?.final_approver_role
+      const hasLabCoordinator = !!snapshot?.lab_coordinator_name
+      const hasHOD = !!snapshot?.hod_name
+      
+      // Priority: final_approver_role > lab_coordinator_name > hod_name
+      const approvalAuthority = finalApproverRole === 'lab_coordinator' 
+        ? 'lab_coordinator' 
+        : (hasLabCoordinator ? 'lab_coordinator' : (hasHOD ? 'hod' : (snapshot?.highest_approval_authority || 'hod')))
+
       return {
         ...log,
         requester_name: log.requester_name || 'Unknown',
         requester_email: log.requester_email || 'N/A',
         requester_role: log.requester_role || 'student',
+        requester_salutation: snapshot?.requester_salutation || 'none',
         items: snapshot?.items || [],
         lab_name: snapshot?.lab_name || 'Unknown Lab',
         purpose: snapshot?.purpose || '',
@@ -89,11 +100,18 @@ export async function GET(req: NextRequest) {
         returned_at: snapshot?.returned_at || null,
         actual_return_date: snapshot?.actual_return_date || null,
         faculty_name: snapshot?.faculty_name || null,
+        faculty_salutation: snapshot?.faculty_salutation || 'none',
         faculty_approved_at: snapshot?.faculty_approved_at || null,
         lab_staff_name: snapshot?.lab_staff_name || null,
+        lab_staff_salutation: snapshot?.lab_staff_salutation || 'none',
         lab_staff_approved_at: snapshot?.lab_staff_approved_at || null,
+        lab_coordinator_name: snapshot?.lab_coordinator_name || null,
+        lab_coordinator_salutation: snapshot?.lab_coordinator_salutation || 'none',
+        lab_coordinator_approved_at: snapshot?.lab_coordinator_approved_at || null,
         hod_name: snapshot?.hod_name || null,
+        hod_salutation: snapshot?.hod_salutation || 'none',
         hod_approved_at: snapshot?.hod_approved_at || null,
+        highest_approval_authority: approvalAuthority,
       };
     });
 

@@ -90,27 +90,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const details = await db.query(
       `SELECT r.*, l.name as lab_name,
               u.name as requester_name, u.email as requester_email, u.salutation as requester_salutation,
-              CASE 
-                WHEN fac.salutation IS NOT NULL 
-                THEN CONCAT(UPPER(fac.salutation), '. ', fac.name)
-                ELSE fac.name
-              END as faculty_name,
-              CASE 
-                WHEN ls.salutation IS NOT NULL 
-                THEN CONCAT(UPPER(ls.salutation), '. ', ls.name)
-                ELSE ls.name
-              END as lab_staff_name,
-              CASE 
-                WHEN hod.salutation IS NOT NULL 
-                THEN CONCAT(UPPER(hod.salutation), '. ', hod.name)
-                ELSE hod.name
-              END as hod_name
+              fac.name as faculty_name, fac.salutation as faculty_salutation,
+              ls.name as lab_staff_name, ls.salutation as lab_staff_salutation,
+              hod.name as hod_name, hod.salutation as hod_salutation,
+              lc.name as lab_coordinator_name, lc.salutation as lab_coordinator_salutation
        FROM component_requests r
        JOIN labs l ON l.id = r.lab_id
        JOIN users u ON u.id = r.requester_id
        LEFT JOIN users fac ON r.faculty_approver_id = fac.id
        LEFT JOIN users ls ON r.lab_staff_approver_id = ls.id
        LEFT JOIN users hod ON r.hod_approver_id = hod.id
+       LEFT JOIN users lc ON l.lab_coordinator_id = lc.id AND r.final_approver_role = 'lab_coordinator'
        WHERE r.id = ?`,
       [requestId]
     )

@@ -667,6 +667,7 @@ export const emailTemplates = {
 
   returnRequested: (data: {
     requesterName: string
+    requesterSalutation?: string
     requesterRole: string
     labName: string
     requestId: number
@@ -689,6 +690,18 @@ export const emailTemplates = {
       }
     }
     
+    // Format requester name with salutation
+    let requesterDisplay = data.requesterName
+    if (data.requesterSalutation && data.requesterSalutation !== 'none') {
+      const salutationMap: Record<string, string> = {
+        'prof': 'Prof.',
+        'dr': 'Dr.',
+        'mr': 'Mr.',
+        'mrs': 'Mrs.'
+      }
+      requesterDisplay = `${salutationMap[data.requesterSalutation] || ''} ${data.requesterName}`
+    }
+    
     return {
     subject: `Return Request - LNMIIT Lab Management`,
     html: createEmailTemplate(`
@@ -702,7 +715,7 @@ export const emailTemplates = {
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.requesterName} (${data.requesterRole})</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${requesterDisplay} (${data.requesterRole})</td>
             </tr>
             <tr style="background: #fff7ed;">
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
@@ -713,6 +726,12 @@ export const emailTemplates = {
           <p style="padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107;">
             <strong>⚡ Action Required:</strong> Please verify the returned components and approve the return in the system.
           </p>
+          
+          <div style="text-align: center; margin-top: 20px;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/lab-staff/dashboard/component-requests" style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: 500;">
+              Approve Return
+            </a>
+          </div>
         </td>
       </tr>
     `)

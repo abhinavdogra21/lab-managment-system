@@ -1,50 +1,20 @@
 "use client"
 
-import { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
-import { Download, Calendar, FileText, Filter, Package, Users, Building2, Clock, CheckCircle2, ChevronDown, ChevronUp, ArrowLeft, Eye } from 'lucide-react'
+import { Calendar, Clock, ArrowLeft, User, Building, CheckCircle2, Users, ChevronDown, ChevronUp, Download, Eye, FileText, Package } from 'lucide-react'
 import Link from 'next/link'
 import jsPDF from 'jspdf'
-import 'jspdf-autotable'
-
-interface ComponentLog {
-  log_id: number
-  requester_name: string | null
-  requester_salutation?: string
-  requester_email: string | null
-  requester_role: string | null
-  lab_name: string
-  purpose: string
-  issued_at: string
-  return_date: string
-  returned_at: string | null
-  actual_return_date: string | null
-  faculty_name: string | null
-  faculty_salutation?: string
-  faculty_approved_at: string | null
-  lab_staff_name: string | null
-  lab_staff_salutation?: string
-  lab_staff_approved_at: string | null
-  lab_coordinator_name?: string | null
-  lab_coordinator_salutation?: string
-  lab_coordinator_approved_at?: string | null
-  hod_name: string | null
-  hod_salutation?: string
-  hod_approved_at: string | null
-  items: Array<{ component_name: string; quantity_requested?: number; quantity?: number }>
-  components_list?: string
-  created_at?: string
-  highest_approval_authority?: 'hod' | 'lab_coordinator'
-}
+import autoTable from 'jspdf-autotable'
 
 interface BookingLog {
-  log_id: number
+  id: number
+  log_id?: number  // Deprecated, use id instead
   requester_name: string | null
   requester_salutation?: string
   requester_email: string | null
@@ -61,13 +31,44 @@ interface BookingLog {
   lab_staff_name: string | null
   lab_staff_salutation?: string
   lab_staff_approved_at: string | null
-  lab_coordinator_name?: string | null
+  lab_coordinator_name: string | null
   lab_coordinator_salutation?: string
-  lab_coordinator_approved_at?: string | null
+  lab_coordinator_approved_at: string | null
   hod_name: string | null
   hod_salutation?: string
   hod_approved_at: string | null
-  created_at?: string
+  created_at: string
+  highest_approval_authority?: 'hod' | 'lab_coordinator'
+}
+
+interface ComponentLog {
+  id: number
+  log_id?: number  // Deprecated, use id instead
+  requester_name: string | null
+  requester_salutation?: string
+  requester_email: string | null
+  requester_role: string | null
+  lab_name: string
+  purpose: string
+  issued_at: string
+  return_date: string
+  returned_at: string | null
+  actual_return_date: string | null
+  faculty_name: string | null
+  faculty_salutation?: string
+  faculty_approved_at: string | null
+  lab_staff_name: string | null
+  lab_staff_salutation?: string
+  lab_staff_approved_at: string | null
+  lab_coordinator_name: string | null
+  lab_coordinator_salutation?: string
+  lab_coordinator_approved_at: string | null
+  hod_name: string | null
+  hod_salutation?: string
+  hod_approved_at: string | null
+  items: Array<{ component_name: string; quantity_requested?: number; quantity?: number }>
+  components_list?: string
+  created_at: string
   highest_approval_authority?: 'hod' | 'lab_coordinator'
 }
 
@@ -112,11 +113,9 @@ const BookingLogTimeline = ({ log }: { log: BookingLog }) => {
         </div>
         <div className="flex-1 pb-2">
           <p className="text-sm font-medium">Request Created</p>
-          {log.created_at && (
-            <p className="text-xs text-muted-foreground">
-              {new Date(log.created_at).toLocaleString('en-IN')}
-            </p>
-          )}
+          <p className="text-xs text-muted-foreground">
+            {new Date(log.created_at).toLocaleString('en-IN')}
+          </p>
         </div>
       </div>
       
@@ -218,11 +217,9 @@ const ComponentLogTimeline = ({ log }: { log: ComponentLog }) => {
         </div>
         <div className="flex-1 pb-2">
           <p className="text-sm font-medium">Request Created</p>
-          {log.created_at && (
-            <p className="text-xs text-muted-foreground">
-              {new Date(log.created_at).toLocaleString('en-IN')}
-            </p>
-          )}
+          <p className="text-xs text-muted-foreground">
+            {new Date(log.created_at).toLocaleString('en-IN')}
+          </p>
         </div>
       </div>
       
@@ -299,22 +296,43 @@ const ComponentLogTimeline = ({ log }: { log: ComponentLog }) => {
   )
 }
 
-export default function FacultyLogsPage() {
-  const [componentLogs, setComponentLogs] = useState<ComponentLog[]>([])
-  const [filteredComponentLogs, setFilteredComponentLogs] = useState<ComponentLog[]>([])
-  const [bookingLogs, setBookingLogs] = useState<BookingLog[]>([])
-  const [filteredBookingLogs, setFilteredBookingLogs] = useState<BookingLog[]>([])
-  const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'booking-logs' | 'component-logs'>('booking-logs')
-  const [logsSource, setLogsSource] = useState<'all' | 'own' | 'mentees'>('all')
-  const [componentLogsSearch, setComponentLogsSearch] = useState('')
-  const [bookingLogsSearch, setBookingLogsSearch] = useState('')
-  const [componentStartDate, setComponentStartDate] = useState('')
-  const [componentEndDate, setComponentEndDate] = useState('')
-  const [bookingStartDate, setBookingStartDate] = useState('')
-  const [bookingEndDate, setBookingEndDate] = useState('')
-  const [expandedTimelines, setExpandedTimelines] = useState<Set<number>>(new Set())
+export default function LabStaffLogsPage() {
   const { toast } = useToast()
+  const [loading, setLoading] = useState(false)
+  const [bookingLogs, setBookingLogs] = useState<BookingLog[]>([])
+  const [componentLogs, setComponentLogs] = useState<ComponentLog[]>([])
+  const [activeTab, setActiveTab] = useState<'booking'|'component'>('booking')
+  const [bookingSearch, setBookingSearch] = useState('')
+  const [componentSearch, setComponentSearch] = useState('')
+  const [expandedTimelines, setExpandedTimelines] = useState<Set<number>>(new Set())
+
+  // Calculate academic year dates (1 Aug to 31 July)
+  const getAcademicYearDates = () => {
+    const today = new Date()
+    const currentMonth = today.getMonth() // 0-11 (0 = Jan, 7 = Aug)
+    const currentYear = today.getFullYear()
+    
+    // If current month is Jan-July (0-6), academic year started last Aug
+    // If current month is Aug-Dec (7-11), academic year started this Aug
+    const academicYearStart = currentMonth >= 7 
+      ? new Date(currentYear, 7, 1) // Aug 1 this year
+      : new Date(currentYear - 1, 7, 1) // Aug 1 last year
+    
+    const academicYearEnd = currentMonth >= 7
+      ? new Date(currentYear + 1, 6, 31) // July 31 next year
+      : new Date(currentYear, 6, 31) // July 31 this year
+    
+    return {
+      start: academicYearStart.toISOString().split('T')[0],
+      end: academicYearEnd.toISOString().split('T')[0]
+    }
+  }
+  
+  const academicYear = getAcademicYearDates()
+  const [bookingStartDate, setBookingStartDate] = useState(academicYear.start)
+  const [bookingEndDate, setBookingEndDate] = useState(academicYear.end)
+  const [componentStartDate, setComponentStartDate] = useState(academicYear.start)
+  const [componentEndDate, setComponentEndDate] = useState(academicYear.end)
 
   const toggleTimeline = (id: number) => {
     setExpandedTimelines(prev => {
@@ -328,77 +346,20 @@ export default function FacultyLogsPage() {
     })
   }
 
-  // Academic year calculation (1 Aug - 31 July)
-  const getAcademicYearDates = () => {
-    const today = new Date()
-    const currentMonth = today.getMonth() // 0-11 (0 = Jan, 7 = Aug)
-    const currentYear = today.getFullYear()
-    
-    // If current month is Aug-Dec (7-11), academic year started this year
-    // If current month is Jan-Jul (0-6), academic year started last year
-    const academicYearStart = currentMonth >= 7 
-      ? new Date(currentYear, 7, 1)      // Aug 1 this year
-      : new Date(currentYear - 1, 7, 1)  // Aug 1 last year
-    
-    const academicYearEnd = currentMonth >= 7
-      ? new Date(currentYear + 1, 6, 31) // July 31 next year
-      : new Date(currentYear, 6, 31)     // July 31 this year
-    
-    return {
-      start: academicYearStart.toISOString().split('T')[0],
-      end: academicYearEnd.toISOString().split('T')[0]
-    }
-  }
-
-  const academicDates = getAcademicYearDates()
-  const startDateDefault = academicDates.start
-  const endDateDefault = academicDates.end
-
-  useEffect(() => {
-    setComponentStartDate(startDateDefault)
-    setComponentEndDate(endDateDefault)
-    setBookingStartDate(startDateDefault)
-    setBookingEndDate(endDateDefault)
-    // Load logs on initial mount after dates are set
-    setTimeout(() => {
-      loadComponentLogs()
-      loadBookingLogs()
-    }, 100)
-  }, [])
-
-  useEffect(() => {
-    if (componentStartDate && componentEndDate) {
-      loadComponentLogs()
-    }
-  }, [logsSource])
-
   const loadBookingLogs = async () => {
     setLoading(true)
     try {
       const params = new URLSearchParams({
-        source: logsSource,
+        type: 'booking',
         ...(bookingStartDate && { startDate: bookingStartDate }),
         ...(bookingEndDate && { endDate: bookingEndDate }),
       })
 
-      console.log('Loading booking logs with params:', {
-        source: logsSource,
-        startDate: bookingStartDate,
-        endDate: bookingEndDate,
-      })
-
-      const res = await fetch(`/api/faculty/logs/bookings?${params}`)
-      if (!res.ok) {
-        const errorData = await res.json()
-        console.error('API error:', errorData)
-        throw new Error('Failed to fetch booking logs')
-      }
+      const res = await fetch(`/api/lab-staff/activity-logs?${params}`, { cache: 'no-store' })
+      if (!res.ok) throw new Error('Failed to fetch booking logs')
       
       const data = await res.json()
-      console.log('Received booking logs:', data.length, 'logs')
-      
-      setBookingLogs(data)
-      setFilteredBookingLogs(data)
+      setBookingLogs(data.bookingLogs || [])
     } catch (error) {
       console.error('Error loading booking logs:', error)
       toast({ title: 'Error', description: 'Failed to load booking logs', variant: 'destructive' })
@@ -411,29 +372,18 @@ export default function FacultyLogsPage() {
     setLoading(true)
     try {
       const params = new URLSearchParams({
-        source: logsSource,
+        type: 'component',
         ...(componentStartDate && { startDate: componentStartDate }),
         ...(componentEndDate && { endDate: componentEndDate }),
       })
 
-      console.log('Loading component logs with params:', {
-        source: logsSource,
-        startDate: componentStartDate,
-        endDate: componentEndDate,
-      })
-
-      const res = await fetch(`/api/faculty/logs/components?${params}`)
-      if (!res.ok) {
-        const errorData = await res.json()
-        console.error('API error:', errorData)
-        throw new Error('Failed to fetch logs')
-      }
+      const res = await fetch(`/api/lab-staff/activity-logs?${params}`, { cache: 'no-store' })
+      if (!res.ok) throw new Error('Failed to fetch component logs')
       
       const data = await res.json()
-      console.log('Received component logs:', data.length, 'logs')
       
       // Process component lists
-      const processedData = data.map((log: any) => ({
+      const processedData = (data.componentLogs || []).map((log: any) => ({
         ...log,
         components_list: log.items?.map((item: any) => 
           `${item.component_name} (Qty: ${item.quantity_requested || item.quantity || 1})`
@@ -441,7 +391,6 @@ export default function FacultyLogsPage() {
       }))
       
       setComponentLogs(processedData)
-      setFilteredComponentLogs(processedData)
     } catch (error) {
       console.error('Error loading component logs:', error)
       toast({ title: 'Error', description: 'Failed to load component logs', variant: 'destructive' })
@@ -450,58 +399,15 @@ export default function FacultyLogsPage() {
     }
   }
 
-  useEffect(() => {
-    const filtered = componentLogs.filter(log => {
-      const searchLower = componentLogsSearch.toLowerCase()
-      return (
-        (log.requester_name || '').toLowerCase().includes(searchLower) ||
-        (log.requester_email || '').toLowerCase().includes(searchLower) ||
-        log.lab_name.toLowerCase().includes(searchLower) ||
-        log.purpose.toLowerCase().includes(searchLower) ||
-        log.components_list?.toLowerCase().includes(searchLower)
-      )
-    })
-    setFilteredComponentLogs(filtered)
-  }, [componentLogsSearch, componentLogs])
-
-  useEffect(() => {
-    const filtered = bookingLogs.filter(log => {
-      const searchLower = bookingLogsSearch.toLowerCase()
-      return (
-        (log.requester_name || '').toLowerCase().includes(searchLower) ||
-        (log.requester_email || '').toLowerCase().includes(searchLower) ||
-        log.lab_name.toLowerCase().includes(searchLower) ||
-        log.purpose.toLowerCase().includes(searchLower)
-      )
-    })
-    setFilteredBookingLogs(filtered)
-  }, [bookingLogsSearch, bookingLogs])
-
-  const generateComponentLogPDF = async (log: ComponentLog, viewOnly: boolean = false) => {
+  const generateBookingLogPDF = async (log: BookingLog, viewOnly: boolean = false) => {
     const doc = new jsPDF()
-    const pageHeight = doc.internal.pageSize.height
+    
+    // Add page border
     const pageWidth = doc.internal.pageSize.width
-    const marginBottom = 20
-    
-    // Helper function to add page border
-    const addPageBorder = () => {
-      doc.setDrawColor(0, 0, 0)
-      doc.setLineWidth(1)
-      doc.rect(10, 10, pageWidth - 20, pageHeight - 20)
-    }
-    
-    // Helper function to check if we need a new page
-    const checkAddPage = (currentY: number, spaceNeeded: number = 20) => {
-      if (currentY + spaceNeeded > pageHeight - marginBottom) {
-        doc.addPage()
-        addPageBorder() // Add border to new page
-        return 20 // Reset to top of new page
-      }
-      return currentY
-    }
-    
-    // Add border to first page
-    addPageBorder()
+    const pageHeight = doc.internal.pageSize.height
+    doc.setDrawColor(3, 77, 162)
+    doc.setLineWidth(1)
+    doc.rect(10, 10, pageWidth - 20, pageHeight - 20)
     
     // Add LNMIIT logo
     try {
@@ -517,135 +423,87 @@ export default function FacultyLogsPage() {
     }
 
     // Header
-    doc.setFontSize(14)
+    doc.setFontSize(16)
     doc.setFont('helvetica', 'bold')
-    doc.text('The LNM Institute of Information Technology, Jaipur', 105, 22, { align: 'center' })
-    
-    doc.setFontSize(13)
-    const docTitle = log.returned_at 
-      ? 'Component Return Certificate' 
-      : 'Component Issue Certificate'
-    doc.text(docTitle, 105, 32, { align: 'center' })
+    doc.text('LNMIIT', 105, 20, { align: 'center' })
+    doc.setFontSize(12)
+    doc.text('The LNM Institute of Information Technology', 105, 27, { align: 'center' })
+    doc.setFontSize(14)
+    doc.text('Lab Booking Approval Document', 105, 34, { align: 'center' })
     
     // Horizontal line
     doc.setLineWidth(0.5)
     doc.line(15, 38, 195, 38)
     
-    // Request Details
+    // Booking Details
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'normal')
+    
     let yPos = 50
-    doc.setFontSize(12)
+    
+    // Booking Information
     doc.setFont('helvetica', 'bold')
-    doc.text('Request Details:', 15, yPos)
+    doc.text('Booking Information:', 15, yPos)
+    doc.setFont('helvetica', 'normal')
     yPos += 10
     
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(11)
-    doc.text(`Lab:`, 20, yPos)
-    doc.text(log.lab_name, 85, yPos)
-    yPos += 8
+    doc.text(`Lab Name:`, 20, yPos)
+    doc.text(log.lab_name, 70, yPos)
+    yPos += 7
     
-    yPos = checkAddPage(yPos, 15)
-    doc.text(`Requester:`, 20, yPos)
-    doc.text(log.requester_name || 'Unknown', 85, yPos)
-    yPos += 6
-    doc.setFontSize(9)
-    doc.setTextColor(100, 100, 100)
-    doc.text(`(${log.requester_email || 'N/A'})`, 85, yPos)
-    doc.setTextColor(0, 0, 0)
-    doc.setFontSize(11)
-    yPos += 8
+    doc.text(`Date:`, 20, yPos)
+    doc.text(new Date(log.booking_date).toLocaleDateString('en-IN'), 70, yPos)
+    yPos += 7
     
-    yPos = checkAddPage(yPos, 10)
-    doc.text(`Role:`, 20, yPos)
-    doc.text((log.requester_role || 'N/A').toUpperCase(), 85, yPos)
-    yPos += 8
+    doc.text(`Time:`, 20, yPos)
+    doc.text(`${log.start_time} - ${log.end_time}`, 70, yPos)
+    yPos += 7
     
-    yPos = checkAddPage(yPos, 20)
     doc.text(`Purpose:`, 20, yPos)
-    const purposeLines = doc.splitTextToSize(log.purpose || 'N/A', 100)
-    doc.text(purposeLines, 85, yPos)
-    yPos += (purposeLines.length * 6) + 6
+    const purposeLines = doc.splitTextToSize(log.purpose, 120)
+    doc.text(purposeLines, 70, yPos)
+    yPos += (purposeLines.length * 7) + 5
     
-    yPos = checkAddPage(yPos, 15)
-    yPos += 5
-    doc.setLineWidth(0.3)
-    doc.line(15, yPos, 195, yPos)
-    yPos += 10
-    
-    // Components List
-    yPos = checkAddPage(yPos, 25)
+    // Requester Information
     doc.setFont('helvetica', 'bold')
-    doc.text('Issued Components:', 15, yPos)
-    yPos += 8
+    doc.text('Requester Information:', 15, yPos)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(10)
-    const componentLines = doc.splitTextToSize(log.components_list || '', 175)
-    doc.text(componentLines, 20, yPos)
-    yPos += (componentLines.length * 5) + 10
-    
-    yPos = checkAddPage(yPos, 15)
-    doc.setLineWidth(0.3)
-    doc.line(15, yPos, 195, yPos)
     yPos += 10
     
-    // Timeline
-    yPos = checkAddPage(yPos, 40)
-    doc.setFontSize(11)
-    doc.setFont('helvetica', 'bold')
-    doc.text('Timeline:', 15, yPos)
-    yPos += 10
-    doc.setFont('helvetica', 'normal')
+    doc.text(`Name:`, 20, yPos)
+    doc.text(formatNameWithSalutation(log.requester_name, log.requester_salutation), 70, yPos)
+    yPos += 7
     
-    doc.text(`Issue Date:`, 20, yPos)
-    doc.text(new Date(log.issued_at).toLocaleString('en-IN'), 85, yPos)
-    yPos += 8
+    doc.text(`Email:`, 20, yPos)
+    doc.text(log.requester_email || '', 70, yPos)
+    yPos += 7
     
-    yPos = checkAddPage(yPos, 10)
-    doc.text(`Expected Return:`, 20, yPos)
-    doc.text(new Date(log.return_date).toLocaleDateString('en-IN'), 85, yPos)
-    yPos += 8
-    
-    if (log.returned_at && log.actual_return_date) {
-      yPos = checkAddPage(yPos, 10)
-      doc.text(`Actual Return Date:`, 20, yPos)
-      doc.text(new Date(log.actual_return_date).toLocaleDateString('en-IN'), 85, yPos)
-      yPos += 8
-      
-      // Calculate delay
-      const returnDate = new Date(log.return_date)
-      const actualDate = new Date(log.actual_return_date)
-      const delayDays = Math.floor((actualDate.getTime() - returnDate.getTime()) / (1000 * 60 * 60 * 24))
-        
-      if (delayDays > 0) {
-        yPos = checkAddPage(yPos, 10)
-        doc.setTextColor(220, 38, 38) // Red for delay
-        doc.text(`Delay:`, 20, yPos)
-        doc.text(`${delayDays} day(s)`, 85, yPos)
-        doc.setTextColor(0, 0, 0)
-        yPos += 8
-      }
-    }
-    
-    yPos = checkAddPage(yPos, 15)
-    yPos += 5
-    doc.setLineWidth(0.3)
-    doc.line(15, yPos, 195, yPos)
+    doc.text(`Role:`, 20, yPos)
+    doc.text((log.requester_role || 'student').toUpperCase(), 70, yPos)
     yPos += 10
     
     // Approval Chain
-    yPos = checkAddPage(yPos, 50)
+    const approvalAuthorityLabel = log.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'
+    const approverName = log.highest_approval_authority === 'lab_coordinator'
+      ? formatNameWithSalutation(log.lab_coordinator_name || '', log.lab_coordinator_salutation)
+      : formatNameWithSalutation(log.hod_name || '', log.hod_salutation)
+    const approvalDate = log.highest_approval_authority === 'lab_coordinator'
+      ? log.lab_coordinator_approved_at
+      : log.hod_approved_at
+    const hasFinalApproval = log.lab_coordinator_name || log.hod_name
+    
     doc.setFont('helvetica', 'bold')
-    doc.text('Approval Chain:', 15, yPos)
+    doc.text('Approval/Recommendation Chain:', 15, yPos)
+    doc.setFont('helvetica', 'normal')
     yPos += 10
     
-    // Faculty Recommendation (for students)
-    if (log.requester_role === 'student' && log.faculty_name) {
-      yPos = checkAddPage(yPos, 20)
+    // Faculty Recommendation
+    if (log.faculty_supervisor_name) {
       doc.setFont('helvetica', 'bold')
       doc.text('✓', 20, yPos)
       doc.setFont('helvetica', 'normal')
       doc.text(`Recommended by Faculty:`, 25, yPos)
-      doc.text(log.faculty_name, 85, yPos)
+      doc.text(formatNameWithSalutation(log.faculty_supervisor_name, log.faculty_supervisor_salutation), 85, yPos)
       yPos += 7
       if (log.faculty_approved_at) {
         doc.setFontSize(9)
@@ -660,12 +518,11 @@ export default function FacultyLogsPage() {
     
     // Lab Staff Recommendation
     if (log.lab_staff_name) {
-      yPos = checkAddPage(yPos, 20)
       doc.setFont('helvetica', 'bold')
       doc.text('✓', 20, yPos)
       doc.setFont('helvetica', 'normal')
       doc.text(`Recommended by Lab Staff:`, 25, yPos)
-      doc.text(log.lab_staff_name, 85, yPos)
+      doc.text(formatNameWithSalutation(log.lab_staff_name, log.lab_staff_salutation), 85, yPos)
       yPos += 7
       if (log.lab_staff_approved_at) {
         doc.setFontSize(9)
@@ -678,56 +535,251 @@ export default function FacultyLogsPage() {
       yPos += 3
     }
     
-    // HoD/Lab Coordinator Final Approval
-    if (log.hod_name || log.lab_coordinator_name) {
-      yPos = checkAddPage(yPos, 20)
+    // Final Approval
+    if (hasFinalApproval) {
       doc.setFont('helvetica', 'bold')
       doc.text('✓', 20, yPos)
-      
-      // Determine approval authority and name
-      const approvalAuthority = log.highest_approval_authority === 'lab_coordinator' 
-        ? 'LAB COORDINATOR' 
-        : 'HoD'
-      const approverName = log.highest_approval_authority === 'lab_coordinator'
-        ? formatNameWithSalutation(log.lab_coordinator_name || '', log.lab_coordinator_salutation)
-        : formatNameWithSalutation(log.hod_name || '', log.hod_salutation)
-      const approvalDate = log.highest_approval_authority === 'lab_coordinator'
-        ? log.lab_coordinator_approved_at
-        : log.hod_approved_at
-      
-      // Calculate dynamic positioning with proper spacing
-      const approvalText = `APPROVED BY ${approvalAuthority}: `
-      const approvalTextWidth = doc.getTextWidth(approvalText)
-      const nameXPos = 25 + approvalTextWidth
-      
-      doc.setFont('helvetica', 'bold')
+      const approvalText = `APPROVED BY ${approvalAuthorityLabel.toUpperCase()}:`
       doc.text(approvalText, 25, yPos)
+      
+      // Calculate position for name to avoid overlap
+      const approvalTextWidth = doc.getTextWidth(approvalText)
+      const nameXPos = 25 + approvalTextWidth + 3 // 3px spacing
+      
       doc.setFont('helvetica', 'normal')
       doc.text(approverName, nameXPos, yPos)
       yPos += 7
-      
       if (approvalDate) {
         doc.setFontSize(9)
         doc.setTextColor(100, 100, 100)
-        doc.text(`Final approval on: ${new Date(approvalDate).toLocaleString('en-IN')}`, 85, yPos)
+        doc.text(`Final approval on: ${new Date(approvalDate).toLocaleString('en-IN')}`, nameXPos, yPos)
         doc.setTextColor(0, 0, 0)
         doc.setFontSize(11)
         yPos += 7
       }
     }
     
-    yPos = checkAddPage(yPos, 20)
+    yPos += 10
+    
+    // Status Badge
+    doc.setFont('helvetica', 'bold')
+    doc.setFillColor(34, 197, 94)
+    doc.roundedRect(15, yPos, 50, 10, 2, 2, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.text('APPROVED', 40, yPos + 7, { align: 'center' })
+    doc.setTextColor(0, 0, 0)
+    
+    // Footer
+    yPos = 270
+    doc.setLineWidth(0.3)
+    doc.line(15, yPos, 195, yPos)
+    doc.setFontSize(9)
+    doc.setTextColor(100, 100, 100)
+    doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, 105, yPos + 7, { align: 'center' })
+    doc.text('This is a computer-generated document and does not require a signature.', 105, yPos + 14, { align: 'center' })
+    
+    // Save or view PDF
+    if (viewOnly) {
+      const pdfBlob = doc.output('blob')
+      const pdfUrl = URL.createObjectURL(pdfBlob)
+      window.open(pdfUrl, '_blank')
+      toast({ title: 'Success', description: 'PDF opened in new tab!' })
+    } else {
+      doc.save(`Lab_Booking_${log.id}_${(log.requester_name || 'booking').replace(/\s+/g, '_')}.pdf`)
+      toast({ title: 'Success', description: 'PDF downloaded successfully!' })
+    }
+  }
+
+  const generateComponentLogPDF = async (log: ComponentLog, viewOnly: boolean = false) => {
+    const doc = new jsPDF()
+    
+    // Add page border
+    const pageWidth = doc.internal.pageSize.width
+    const pageHeight = doc.internal.pageSize.height
+    doc.setDrawColor(3, 77, 162)
+    doc.setLineWidth(1)
+    doc.rect(10, 10, pageWidth - 20, pageHeight - 20)
+    
+    // Add LNMIIT logo
+    try {
+      const logoImg = new Image()
+      logoImg.src = '/lnmiit-logo.png'
+      await new Promise((resolve) => {
+        logoImg.onload = resolve
+        logoImg.onerror = resolve
+      })
+      doc.addImage(logoImg, 'PNG', 15, 12, 40, 20)
+    } catch (error) {
+      console.error('Logo loading failed:', error)
+    }
+
+    // Header
+    doc.setFontSize(16)
+    doc.setFont('helvetica', 'bold')
+    doc.text('LNMIIT', 105, 20, { align: 'center' })
+    doc.setFontSize(12)
+    doc.text('The LNM Institute of Information Technology', 105, 27, { align: 'center' })
+    doc.setFontSize(14)
+    doc.text('Component Issue/Return Document', 105, 34, { align: 'center' })
+    
+    doc.setLineWidth(0.5)
+    doc.line(15, 38, 195, 38)
+    
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'normal')
+    
+    let yPos = 50
+    
+    // Component Issue Information
+    doc.setFont('helvetica', 'bold')
+    doc.text('Issue Information:', 15, yPos)
+    doc.setFont('helvetica', 'normal')
+    yPos += 10
+    
+    doc.text(`Lab Name:`, 20, yPos)
+    doc.text(log.lab_name, 70, yPos)
+    yPos += 7
+    
+    doc.text(`Issued Date:`, 20, yPos)
+    doc.text(new Date(log.issued_at).toLocaleDateString('en-IN'), 70, yPos)
+    yPos += 7
+    
+    doc.text(`Expected Return:`, 20, yPos)
+    doc.text(new Date(log.return_date).toLocaleDateString('en-IN'), 70, yPos)
+    yPos += 7
+    
+    if (log.returned_at) {
+      doc.text(`Returned Date:`, 20, yPos)
+      doc.text(new Date(log.returned_at).toLocaleDateString('en-IN'), 70, yPos)
+      yPos += 7
+    }
+    
+    doc.text(`Purpose:`, 20, yPos)
+    const purposeLines = doc.splitTextToSize(log.purpose, 120)
+    doc.text(purposeLines, 70, yPos)
+    yPos += (purposeLines.length * 7) + 5
+    
+    // Requester Information
+    doc.setFont('helvetica', 'bold')
+    doc.text('Requester Information:', 15, yPos)
+    doc.setFont('helvetica', 'normal')
+    yPos += 10
+    
+    doc.text(`Name:`, 20, yPos)
+    doc.text(formatNameWithSalutation(log.requester_name, log.requester_salutation), 70, yPos)
+    yPos += 7
+    
+    doc.text(`Email:`, 20, yPos)
+    doc.text(log.requester_email || '', 70, yPos)
+    yPos += 7
+    
+    doc.text(`Role:`, 20, yPos)
+    doc.text((log.requester_role || 'student').toUpperCase(), 70, yPos)
+    yPos += 10
+    
+    // Components List
+    doc.setFont('helvetica', 'bold')
+    doc.text('Components Issued:', 15, yPos)
+    yPos += 7
+    
+    if (log.items && log.items.length > 0) {
+      log.items.forEach((item: any) => {
+        doc.setFont('helvetica', 'normal')
+        doc.text(`• ${item.component_name}`, 20, yPos)
+        doc.text(`Qty: ${item.quantity_requested || item.quantity || 1}`, 150, yPos)
+        yPos += 7
+      })
+    }
+    yPos += 5
+    
+    // Approval Chain
+    const approvalAuthorityLabel = log.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'
+    const approverName = log.highest_approval_authority === 'lab_coordinator'
+      ? formatNameWithSalutation(log.lab_coordinator_name || '', log.lab_coordinator_salutation)
+      : formatNameWithSalutation(log.hod_name || '', log.hod_salutation)
+    const approvalDate = log.highest_approval_authority === 'lab_coordinator'
+      ? log.lab_coordinator_approved_at
+      : log.hod_approved_at
+    const hasFinalApproval = log.lab_coordinator_name || log.hod_name
+    
+    doc.setFont('helvetica', 'bold')
+    doc.text('Approval/Recommendation Chain:', 15, yPos)
+    doc.setFont('helvetica', 'normal')
+    yPos += 10
+    
+    // Faculty Recommendation (for student requests)
+    if (log.requester_role === 'student' && log.faculty_name) {
+      doc.setFont('helvetica', 'bold')
+      doc.text('✓', 20, yPos)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`Recommended by Faculty:`, 25, yPos)
+      doc.text(formatNameWithSalutation(log.faculty_name, log.faculty_salutation), 85, yPos)
+      yPos += 7
+      if (log.faculty_approved_at) {
+        doc.setFontSize(9)
+        doc.setTextColor(100, 100, 100)
+        doc.text(`Recommended on: ${new Date(log.faculty_approved_at).toLocaleString('en-IN')}`, 85, yPos)
+        doc.setTextColor(0, 0, 0)
+        doc.setFontSize(11)
+        yPos += 7
+      }
+      yPos += 3
+    }
+    
+    // Lab Staff Recommendation
+    if (log.lab_staff_name) {
+      doc.setFont('helvetica', 'bold')
+      doc.text('✓', 20, yPos)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`Recommended by Lab Staff:`, 25, yPos)
+      doc.text(formatNameWithSalutation(log.lab_staff_name, log.lab_staff_salutation), 85, yPos)
+      yPos += 7
+      if (log.lab_staff_approved_at) {
+        doc.setFontSize(9)
+        doc.setTextColor(100, 100, 100)
+        doc.text(`Recommended on: ${new Date(log.lab_staff_approved_at).toLocaleString('en-IN')}`, 85, yPos)
+        doc.setTextColor(0, 0, 0)
+        doc.setFontSize(11)
+        yPos += 7
+      }
+      yPos += 3
+    }
+    
+    // Final Approval
+    if (hasFinalApproval) {
+      doc.setFont('helvetica', 'bold')
+      doc.text('✓', 20, yPos)
+      const approvalText = `APPROVED BY ${approvalAuthorityLabel.toUpperCase()}:`
+      doc.text(approvalText, 25, yPos)
+      
+      // Calculate position for name to avoid overlap
+      const approvalTextWidth = doc.getTextWidth(approvalText)
+      const nameXPos = 25 + approvalTextWidth + 3 // 3px spacing
+      
+      doc.setFont('helvetica', 'normal')
+      doc.text(approverName, nameXPos, yPos)
+      yPos += 7
+      if (approvalDate) {
+        doc.setFontSize(9)
+        doc.setTextColor(100, 100, 100)
+        doc.text(`Final approval on: ${new Date(approvalDate).toLocaleString('en-IN')}`, nameXPos, yPos)
+        doc.setTextColor(0, 0, 0)
+        doc.setFontSize(11)
+        yPos += 7
+      }
+    }
+    
     yPos += 10
     
     // Status Badge
     doc.setFont('helvetica', 'bold')
     if (log.returned_at) {
-      doc.setFillColor(34, 197, 94) // Green
+      doc.setFillColor(34, 197, 94)
       doc.roundedRect(15, yPos, 50, 10, 2, 2, 'F')
       doc.setTextColor(255, 255, 255)
       doc.text('RETURNED', 40, yPos + 7, { align: 'center' })
     } else {
-      doc.setFillColor(59, 130, 246) // Blue
+      doc.setFillColor(59, 130, 246)
       doc.roundedRect(15, yPos, 50, 10, 2, 2, 'F')
       doc.setTextColor(255, 255, 255)
       doc.text('ISSUED', 40, yPos + 7, { align: 'center' })
@@ -750,278 +802,58 @@ export default function FacultyLogsPage() {
       window.open(pdfUrl, '_blank')
       toast({ title: 'Success', description: 'PDF opened in new tab!' })
     } else {
-      const requesterNameSafe = (log.requester_name || 'Unknown').replace(/\s+/g, '_')
-      const fileName = log.returned_at 
-        ? `Component_Return_${log.log_id}_${requesterNameSafe}.pdf`
-        : `Component_Issue_${log.log_id}_${requesterNameSafe}.pdf`
-      doc.save(fileName)
+      doc.save(`Component_Issue_${log.id}_${(log.requester_name || 'issue').replace(/\s+/g, '_')}.pdf`)
       toast({ title: 'Success', description: 'PDF downloaded successfully!' })
     }
   }
 
-  const generateBookingLogPDF = async (log: BookingLog, viewOnly: boolean = false) => {
-    const doc = new jsPDF()
-    const pageHeight = doc.internal.pageSize.height
-    const marginBottom = 20
-    
-    // Add page border function
-    const addPageBorder = () => {
-      const pageWidth = doc.internal.pageSize.width
-      const pageHeight = doc.internal.pageSize.height
-      doc.setDrawColor(3, 77, 162)
-      doc.setLineWidth(1)
-      doc.rect(10, 10, pageWidth - 20, pageHeight - 20)
-    }
-    
-    // Helper function to check if we need a new page
-    const checkAddPage = (currentY: number, spaceNeeded: number = 20) => {
-      if (currentY + spaceNeeded > pageHeight - marginBottom) {
-        doc.addPage()
-        addPageBorder()
-        return 20 // Reset to top of new page
-      }
-      return currentY
-    }
-    
-    // Add initial page border
-    addPageBorder()
-    
-    // Add LNMIIT logo
-    try {
-      const logoImg = new Image()
-      logoImg.src = '/lnmiit-logo.png'
-      await new Promise((resolve) => {
-        logoImg.onload = resolve
-        logoImg.onerror = resolve
-      })
-      doc.addImage(logoImg, 'PNG', 15, 12, 40, 20)
-    } catch (error) {
-      console.error('Logo loading failed:', error)
-    }
+  useEffect(() => {
+    loadBookingLogs()
+    loadComponentLogs()
+  }, [])
 
-    // Header
-    doc.setFontSize(14)
-    doc.setFont('helvetica', 'bold')
-    doc.text('The LNM Institute of Information Technology, Jaipur', 105, 22, { align: 'center' })
-    
-    doc.setFontSize(14)
-    doc.text('Lab Booking Certificate', 105, 32, { align: 'center' })
-    
-    // Horizontal line
-    doc.setLineWidth(0.5)
-    doc.line(15, 38, 195, 38)
-    
-    // Booking Details
-    let yPos = 50
-    doc.setFontSize(12)
-    doc.setFont('helvetica', 'bold')
-    doc.text('Booking Details:', 15, yPos)
-    yPos += 10
-    
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(11)
-    doc.text(`Lab:`, 20, yPos)
-    doc.text(log.lab_name, 85, yPos)
-    yPos += 8
-    
-    yPos = checkAddPage(yPos, 15)
-    doc.text(`Booking Date:`, 20, yPos)
-    doc.text(new Date(log.booking_date).toLocaleDateString('en-IN', {
-      weekday: 'long',
+  const filteredBookingLogs = useMemo(() => {
+    return bookingLogs.filter(log => {
+      const searchLower = bookingSearch.toLowerCase()
+      return (
+        (log.requester_name || '').toLowerCase().includes(searchLower) ||
+        (log.requester_email || '').toLowerCase().includes(searchLower) ||
+        log.lab_name.toLowerCase().includes(searchLower) ||
+        log.purpose.toLowerCase().includes(searchLower) ||
+        log.id.toString().includes(searchLower)
+      )
+    })
+  }, [bookingLogs, bookingSearch])
+
+  const filteredComponentLogs = useMemo(() => {
+    return componentLogs.filter(log => {
+      const searchLower = componentSearch.toLowerCase()
+      return (
+        (log.requester_name || '').toLowerCase().includes(searchLower) ||
+        (log.requester_email || '').toLowerCase().includes(searchLower) ||
+        log.lab_name.toLowerCase().includes(searchLower) ||
+        log.purpose.toLowerCase().includes(searchLower) ||
+        log.components_list?.toLowerCase().includes(searchLower) ||
+        log.id.toString().includes(searchLower)
+      )
+    })
+  }, [componentLogs, componentSearch])
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-IN', {
       year: 'numeric',
-      month: 'long',
+      month: 'short',
       day: 'numeric'
-    }), 85, yPos)
-    yPos += 8
-    
-    yPos = checkAddPage(yPos, 10)
-    doc.text(`Time Slot:`, 20, yPos)
-    doc.text(`${log.start_time} - ${log.end_time}`, 85, yPos)
-    yPos += 8
-    
-    yPos = checkAddPage(yPos, 10)
-    doc.text(`Status:`, 20, yPos)
-    doc.text(log.status.toUpperCase(), 85, yPos)
-    yPos += 12
-    
-    yPos = checkAddPage(yPos, 15)
-    doc.setLineWidth(0.3)
-    doc.line(15, yPos, 195, yPos)
-    yPos += 10
-    
-    // Requester Info
-    yPos = checkAddPage(yPos, 25)
-    doc.setFont('helvetica', 'bold')
-    doc.text('Requester Information:', 15, yPos)
-    yPos += 10
-    
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Name:`, 20, yPos)
-    doc.text(log.requester_name || 'Unknown', 85, yPos)
-    yPos += 6
-    doc.setFontSize(9)
-    doc.setTextColor(100, 100, 100)
-    doc.text(`(${log.requester_email || 'N/A'})`, 85, yPos)
-    doc.setTextColor(0, 0, 0)
-    doc.setFontSize(11)
-    yPos += 8
-    
-    yPos = checkAddPage(yPos, 10)
-    doc.text(`Role:`, 20, yPos)
-    doc.text((log.requester_role || 'student').toUpperCase(), 85, yPos)
-    yPos += 12
-    
-    yPos = checkAddPage(yPos, 15)
-    doc.setLineWidth(0.3)
-    doc.line(15, yPos, 195, yPos)
-    yPos += 10
-    
-    // Purpose
-    yPos = checkAddPage(yPos, 25)
-    doc.setFont('helvetica', 'bold')
-    doc.text('Purpose:', 15, yPos)
-    yPos += 8
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(10)
-    const purposeLines = doc.splitTextToSize(log.purpose || 'N/A', 175)
-    doc.text(purposeLines, 20, yPos)
-    yPos += (purposeLines.length * 5) + 10
-    
-    yPos = checkAddPage(yPos, 15)
-    doc.setLineWidth(0.3)
-    doc.line(15, yPos, 195, yPos)
-    yPos += 10
-    
-    // Approval Chain
-    yPos = checkAddPage(yPos, 50)
-    doc.setFontSize(11)
-    doc.setFont('helvetica', 'bold')
-    doc.text('Approval Chain:', 15, yPos)
-    yPos += 10
-    
-    // Faculty Recommendation (for students)
-    if (log.requester_role === 'student' && log.faculty_supervisor_name) {
-      yPos = checkAddPage(yPos, 20)
-      doc.setFont('helvetica', 'bold')
-      doc.text('✓', 20, yPos)
-      doc.setFont('helvetica', 'normal')
-      doc.text(`Recommended by Faculty:`, 25, yPos)
-      doc.text(log.faculty_supervisor_name, 85, yPos)
-      yPos += 7
-      if (log.faculty_approved_at) {
-        doc.setFontSize(9)
-        doc.setTextColor(100, 100, 100)
-        doc.text(`Recommended on: ${new Date(log.faculty_approved_at).toLocaleString('en-IN')}`, 85, yPos)
-        doc.setTextColor(0, 0, 0)
-        doc.setFontSize(11)
-        yPos += 7
-      }
-      yPos += 3
-    }
-    
-    // Lab Staff Recommendation
-    if (log.lab_staff_name) {
-      yPos = checkAddPage(yPos, 20)
-      doc.setFont('helvetica', 'bold')
-      doc.text('✓', 20, yPos)
-      doc.setFont('helvetica', 'normal')
-      doc.text(`Recommended by Lab Staff:`, 25, yPos)
-      doc.text(log.lab_staff_name, 85, yPos)
-      yPos += 7
-      if (log.lab_staff_approved_at) {
-        doc.setFontSize(9)
-        doc.setTextColor(100, 100, 100)
-        doc.text(`Recommended on: ${new Date(log.lab_staff_approved_at).toLocaleString('en-IN')}`, 85, yPos)
-        doc.setTextColor(0, 0, 0)
-        doc.setFontSize(11)
-        yPos += 7
-      }
-      yPos += 3
-    }
-    
-    // HoD/Lab Coordinator Final Approval
-    if (log.hod_name || log.lab_coordinator_name) {
-      yPos = checkAddPage(yPos, 20)
-      doc.setFont('helvetica', 'bold')
-      doc.text('✓', 20, yPos)
-      
-      // Determine approval authority and name
-      const approvalAuthority = log.highest_approval_authority === 'lab_coordinator' 
-        ? 'LAB COORDINATOR' 
-        : 'HoD'
-      const approverName = log.highest_approval_authority === 'lab_coordinator'
-        ? formatNameWithSalutation(log.lab_coordinator_name || '', log.lab_coordinator_salutation)
-        : formatNameWithSalutation(log.hod_name || '', log.hod_salutation)
-      const approvalDate = log.highest_approval_authority === 'lab_coordinator'
-        ? log.lab_coordinator_approved_at
-        : log.hod_approved_at
-      
-      // Calculate dynamic positioning with proper spacing
-      const approvalText = `APPROVED BY ${approvalAuthority}: `
-      const approvalTextWidth = doc.getTextWidth(approvalText)
-      const nameXPos = 25 + approvalTextWidth
-      
-      doc.setFont('helvetica', 'bold')
-      doc.text(approvalText, 25, yPos)
-      doc.setFont('helvetica', 'normal')
-      doc.text(approverName, nameXPos, yPos)
-      yPos += 7
-      
-      if (approvalDate) {
-        doc.setFontSize(9)
-        doc.setTextColor(100, 100, 100)
-        doc.text(`Final approval on: ${new Date(approvalDate).toLocaleString('en-IN')}`, 85, yPos)
-        doc.setTextColor(0, 0, 0)
-        doc.setFontSize(11)
-        yPos += 7
-      }
-    }
-    
-    yPos = checkAddPage(yPos, 20)
-    yPos += 10
-    
-    // Status Badge
-    doc.setFont('helvetica', 'bold')
-    if (log.status === 'approved') {
-      doc.setFillColor(34, 197, 94) // Green
-      doc.roundedRect(15, yPos, 50, 10, 2, 2, 'F')
-      doc.setTextColor(255, 255, 255)
-      doc.text('APPROVED', 40, yPos + 7, { align: 'center' })
-    } else if (log.status === 'rejected') {
-      doc.setFillColor(239, 68, 68) // Red
-      doc.roundedRect(15, yPos, 50, 10, 2, 2, 'F')
-      doc.setTextColor(255, 255, 255)
-      doc.text('REJECTED', 40, yPos + 7, { align: 'center' })
-    } else {
-      doc.setFillColor(234, 179, 8) // Yellow
-      doc.roundedRect(15, yPos, 50, 10, 2, 2, 'F')
-      doc.setTextColor(255, 255, 255)
-      doc.text('PENDING', 40, yPos + 7, { align: 'center' })
-    }
-    doc.setTextColor(0, 0, 0)
-    
-    // Footer
-    yPos = 270
-    doc.setLineWidth(0.3)
-    doc.line(15, yPos, 195, yPos)
-    doc.setFontSize(9)
-    doc.setTextColor(100, 100, 100)
-    doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, 105, yPos + 7, { align: 'center' })
-    doc.text('This is a computer-generated document and does not require a signature.', 105, yPos + 14, { align: 'center' })
-    
-    // Save or view PDF
-    if (viewOnly) {
-      const pdfBlob = doc.output('blob')
-      const pdfUrl = URL.createObjectURL(pdfBlob)
-      window.open(pdfUrl, '_blank')
-      toast({ title: 'Success', description: 'PDF opened in new tab!' })
-    } else {
-      const requesterNameSafe = (log.requester_name || 'Unknown').replace(/\s+/g, '_')
-      const bookingDateSafe = new Date(log.booking_date).toISOString().split('T')[0]
-      const fileName = `Lab_Booking_${log.log_id}_${requesterNameSafe}_${bookingDateSafe}.pdf`
-      doc.save(fileName)
-      toast({ title: 'Success', description: 'PDF downloaded successfully!' })
-    }
+    })
+  }
+
+  const formatTime = (timeString: string) => {
+    if (!timeString) return ''
+    return new Date(`2000-01-01T${timeString}`).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    })
   }
 
   const getStatusBadge = (status: string) => {
@@ -1030,12 +862,6 @@ export default function FacultyLogsPage() {
         return <Badge className="bg-green-100 text-green-800">Approved</Badge>
       case 'rejected':
         return <Badge variant="destructive">Rejected</Badge>
-      case 'pending_faculty':
-        return <Badge className="bg-yellow-100 text-yellow-800">Pending Faculty</Badge>
-      case 'pending_lab_staff':
-        return <Badge className="bg-blue-100 text-blue-800">Pending Lab Staff</Badge>
-      case 'pending_hod':
-        return <Badge className="bg-purple-100 text-purple-800">Pending HoD</Badge>
       default:
         return <Badge variant="outline">{status}</Badge>
     }
@@ -1045,7 +871,7 @@ export default function FacultyLogsPage() {
     <div className="space-y-3">
       <div className="flex items-center gap-3">
         <Button variant="outline" size="sm" asChild>
-          <Link href="/faculty/dashboard">
+          <Link href="/lab-staff/dashboard">
             <ArrowLeft className="h-4 w-4 mr-1" />
             Back
           </Link>
@@ -1053,68 +879,51 @@ export default function FacultyLogsPage() {
         <div>
           <h1 className="text-xl font-bold">Activity Logs</h1>
           <p className="text-xs text-muted-foreground">
-            View lab booking and component issue/return logs for your own requests and mentee requests
+            View approved lab booking and component issue logs for your assigned labs
           </p>
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)} className="space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <TabsList>
-            <TabsTrigger value="booking-logs" className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              Lab Booking Logs
-            </TabsTrigger>
-            <TabsTrigger value="component-logs" className="flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Component Logs
-            </TabsTrigger>
-          </TabsList>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-3">
+        <TabsList className="grid w-full grid-cols-2 max-w-md h-8">
+          <TabsTrigger value="booking" className="text-xs flex items-center gap-1">
+            <Calendar className="h-3 w-3" />
+            Lab Booking Logs
+            {filteredBookingLogs.length > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs">{filteredBookingLogs.length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="component" className="text-xs flex items-center gap-1">
+            <Package className="h-3 w-3" />
+            Component Logs
+            {filteredComponentLogs.length > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs">{filteredComponentLogs.length}</Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
 
-          {/* Logs Source Filter */}
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <Select value={logsSource} onValueChange={(v: any) => {
-              setLogsSource(v)
-              setTimeout(() => {
-                loadBookingLogs()
-                loadComponentLogs()
-              }, 100)
-            }}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Logs Source" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Logs</SelectItem>
-                <SelectItem value="mentees">My Own Logs</SelectItem>
-                <SelectItem value="own">Mentee Logs</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <TabsContent value="booking-logs" className="space-y-4">
-          {/* Filters */}
-          <div className="flex flex-col gap-4">
+        {/* Booking Logs Tab */}
+        <TabsContent value="booking" className="space-y-3">
+          <div className="flex flex-col gap-3">
             {/* Search */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search booking logs..."
-                value={bookingLogsSearch}
-                onChange={(e) => setBookingLogsSearch(e.target.value)}
-                className="max-w-sm"
+                placeholder="Search by student, lab, purpose, or ID..."
+                value={bookingSearch}
+                onChange={(e) => setBookingSearch(e.target.value)}
+                className="max-w-md text-xs"
               />
-              <Button onClick={loadBookingLogs} size="sm" variant="secondary">
+              <Button onClick={loadBookingLogs} size="sm" variant="secondary" className="text-xs">
                 Refresh
               </Button>
-              {(bookingLogsSearch || bookingStartDate !== startDateDefault || bookingEndDate !== endDateDefault) && (
+              {(bookingSearch || bookingStartDate !== academicYear.start || bookingEndDate !== academicYear.end) && (
                 <Button onClick={() => { 
-                  setBookingLogsSearch('');
-                  setBookingStartDate(startDateDefault);
-                  setBookingEndDate(endDateDefault);
+                  setBookingSearch('');
+                  setBookingStartDate(academicYear.start);
+                  setBookingEndDate(academicYear.end);
                   setTimeout(loadBookingLogs, 100);
-                }} size="sm" variant="outline">
+                }} size="sm" variant="outline" className="text-xs">
                   Clear
                 </Button>
               )}
@@ -1123,49 +932,38 @@ export default function FacultyLogsPage() {
             {/* Date Range Filter */}
             <div className="flex items-center gap-3">
               <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Date Range:</span>
+              <span className="text-xs text-muted-foreground">Date Range:</span>
               <Input
                 type="date"
                 value={bookingStartDate}
                 onChange={(e) => setBookingStartDate(e.target.value)}
-                className="w-[170px]"
-                placeholder="From"
+                className="w-[140px] text-xs"
               />
-              <span className="text-muted-foreground">to</span>
+              <span className="text-xs text-muted-foreground">to</span>
               <Input
                 type="date"
                 value={bookingEndDate}
                 onChange={(e) => setBookingEndDate(e.target.value)}
-                className="w-[170px]"
-                placeholder="To"
+                className="w-[140px] text-xs"
               />
-              <Button onClick={loadBookingLogs} size="sm" variant="secondary">
+              <Button onClick={loadBookingLogs} size="sm" variant="secondary" className="text-xs">
                 Apply Dates
               </Button>
             </div>
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
+            <Card><CardContent className="py-8 text-center text-xs text-muted-foreground">Loading...</CardContent></Card>
           ) : filteredBookingLogs.length === 0 ? (
-            <Card>
-              <CardContent className="py-12">
-                <div className="text-center text-muted-foreground">
-                  <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No lab booking logs found</p>
-                </div>
-              </CardContent>
-            </Card>
+            <Card><CardContent className="py-8 text-center text-xs text-muted-foreground">No booking logs found</CardContent></Card>
           ) : (
             <div className="space-y-3">
               {filteredBookingLogs.map((log) => (
-                <Card key={log.log_id}>
+                <Card key={log.id}>
                   <CardContent className="p-4 space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-blue-600" />
+                        <Building className="h-4 w-4 text-blue-600" />
                         <span className="font-medium text-sm">{log.lab_name}</span>
                         <span className="text-xs text-gray-500">•</span>
                         <span className="text-xs text-gray-600">
@@ -1178,11 +976,11 @@ export default function FacultyLogsPage() {
                     <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
                       <div className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        <span>{new Date(log.booking_date).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                        <span>{formatDate(log.booking_date)}</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        <span>{log.start_time} - {log.end_time}</span>
+                        <span>{formatTime(log.start_time)} - {formatTime(log.end_time)}</span>
                       </div>
                     </div>
 
@@ -1196,9 +994,9 @@ export default function FacultyLogsPage() {
                       variant="outline"
                       size="sm"
                       className="w-full text-xs h-7"
-                      onClick={() => toggleTimeline(log.log_id)}
+                      onClick={() => toggleTimeline(log.id)}
                     >
-                      {expandedTimelines.has(log.log_id) ? (
+                      {expandedTimelines.has(log.id) ? (
                         <>
                           <ChevronUp className="h-3 w-3 mr-1" />
                           Hide Timeline
@@ -1211,8 +1009,16 @@ export default function FacultyLogsPage() {
                       )}
                     </Button>
 
+                    {/* Timeline - Collapsible */}
+                    {expandedTimelines.has(log.id) && (
+                      <div className="pt-2 border-t">
+                        <div className="text-xs font-medium text-gray-700 mb-3">Approval Timeline:</div>
+                        <BookingLogTimeline log={log} />
+                      </div>
+                    )}
+
                     {/* PDF Buttons */}
-                    <div className="flex gap-2 mt-2">
+                    <div className="flex gap-2 pt-2 border-t">
                       <Button
                         size="sm"
                         variant="outline"
@@ -1231,14 +1037,6 @@ export default function FacultyLogsPage() {
                         Download PDF
                       </Button>
                     </div>
-
-                    {/* Timeline - Collapsible */}
-                    {expandedTimelines.has(log.log_id) && (
-                      <div className="pt-2 border-t">
-                        <div className="text-xs font-medium text-gray-700 mb-3">Approval Timeline:</div>
-                        <BookingLogTimeline log={log} />
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
               ))}
@@ -1246,28 +1044,28 @@ export default function FacultyLogsPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="component-logs" className="space-y-4">
-          {/* Filters */}
-          <div className="flex flex-col gap-4">
+        {/* Component Logs Tab */}
+        <TabsContent value="component" className="space-y-3">
+          <div className="flex flex-col gap-3">
             {/* Search */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search logs..."
-                value={componentLogsSearch}
-                onChange={(e) => setComponentLogsSearch(e.target.value)}
-                className="max-w-sm"
+                placeholder="Search by lab, requester, component, purpose..."
+                value={componentSearch}
+                onChange={(e) => setComponentSearch(e.target.value)}
+                className="max-w-md text-xs"
               />
-              <Button onClick={loadComponentLogs} size="sm" variant="secondary">
+              <Button onClick={loadComponentLogs} size="sm" variant="secondary" className="text-xs">
                 Refresh
               </Button>
-              {(componentLogsSearch || componentStartDate !== startDateDefault || componentEndDate !== endDateDefault) && (
+              {(componentSearch || componentStartDate !== academicYear.start || componentEndDate !== academicYear.end) && (
                 <Button onClick={() => { 
-                  setComponentLogsSearch('');
-                  setComponentStartDate(startDateDefault);
-                  setComponentEndDate(endDateDefault);
+                  setComponentSearch('');
+                  setComponentStartDate(academicYear.start);
+                  setComponentEndDate(academicYear.end);
                   setTimeout(loadComponentLogs, 100);
-                }} size="sm" variant="outline">
+                }} size="sm" variant="outline" className="text-xs">
                   Clear
                 </Button>
               )}
@@ -1276,49 +1074,38 @@ export default function FacultyLogsPage() {
             {/* Date Range Filter */}
             <div className="flex items-center gap-3">
               <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Date Range:</span>
+              <span className="text-xs text-muted-foreground">Date Range:</span>
               <Input
                 type="date"
                 value={componentStartDate}
                 onChange={(e) => setComponentStartDate(e.target.value)}
-                className="w-[170px]"
-                placeholder="From"
+                className="w-[140px] text-xs"
               />
-              <span className="text-muted-foreground">to</span>
+              <span className="text-xs text-muted-foreground">to</span>
               <Input
                 type="date"
                 value={componentEndDate}
                 onChange={(e) => setComponentEndDate(e.target.value)}
-                className="w-[170px]"
-                placeholder="To"
+                className="w-[140px] text-xs"
               />
-              <Button onClick={loadComponentLogs} size="sm" variant="secondary">
+              <Button onClick={loadComponentLogs} size="sm" variant="secondary" className="text-xs">
                 Apply Dates
               </Button>
             </div>
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
+            <Card><CardContent className="py-8 text-center text-xs text-muted-foreground">Loading...</CardContent></Card>
           ) : filteredComponentLogs.length === 0 ? (
-            <Card>
-              <CardContent className="py-12">
-                <div className="text-center text-muted-foreground">
-                  <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No component issue/return logs found</p>
-                </div>
-              </CardContent>
-            </Card>
+            <Card><CardContent className="py-8 text-center text-xs text-muted-foreground">No component logs found</CardContent></Card>
           ) : (
             <div className="space-y-3">
               {filteredComponentLogs.map((log) => (
-                <Card key={log.log_id}>
+                <Card key={log.id}>
                   <CardContent className="p-4 space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-blue-600" />
+                        <Building className="h-4 w-4 text-blue-600" />
                         <span className="font-medium text-sm">{log.lab_name}</span>
                         <span className="text-xs text-gray-500">•</span>
                         <span className="text-xs text-gray-600">
@@ -1333,12 +1120,12 @@ export default function FacultyLogsPage() {
                     <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
                       <div className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        <span>Issued: {new Date(log.issued_at).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                        <span>Issued: {formatDate(log.issued_at)}</span>
                       </div>
                       {log.returned_at && (
                         <div className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          <span>Returned: {new Date(log.returned_at).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                          <span>Returned: {formatDate(log.returned_at)}</span>
                         </div>
                       )}
                     </div>
@@ -1358,9 +1145,9 @@ export default function FacultyLogsPage() {
                       variant="outline"
                       size="sm"
                       className="w-full text-xs h-7"
-                      onClick={() => toggleTimeline(log.log_id)}
+                      onClick={() => toggleTimeline(log.id)}
                     >
-                      {expandedTimelines.has(log.log_id) ? (
+                      {expandedTimelines.has(log.id) ? (
                         <>
                           <ChevronUp className="h-3 w-3 mr-1" />
                           Hide Timeline
@@ -1373,8 +1160,16 @@ export default function FacultyLogsPage() {
                       )}
                     </Button>
 
+                    {/* Timeline - Collapsible */}
+                    {expandedTimelines.has(log.id) && (
+                      <div className="pt-2 border-t">
+                        <div className="text-xs font-medium text-gray-700 mb-3">Approval Timeline:</div>
+                        <ComponentLogTimeline log={log} />
+                      </div>
+                    )}
+
                     {/* PDF Buttons */}
-                    <div className="flex gap-2 mt-2">
+                    <div className="flex gap-2 pt-2 border-t">
                       <Button
                         size="sm"
                         variant="outline"
@@ -1393,14 +1188,6 @@ export default function FacultyLogsPage() {
                         Download PDF
                       </Button>
                     </div>
-
-                    {/* Timeline - Collapsible */}
-                    {expandedTimelines.has(log.log_id) && (
-                      <div className="pt-2 border-t">
-                        <div className="text-xs font-medium text-gray-700 mb-3">Approval Timeline:</div>
-                        <ComponentLogTimeline log={log} />
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
               ))}

@@ -62,7 +62,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     try {
       const details = await db.query(
         `SELECT r.*, l.name as lab_name,
-                u.name as requester_name,
+                u.name as requester_name, u.salutation as requester_salutation,
                 ls.name as lab_staff_name,
                 ls.salutation as lab_staff_salutation
          FROM component_requests r
@@ -90,6 +90,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         if (labStaffEmails.length > 0) {
           const emailData = emailTemplates.returnRequested({
             requesterName: req.requester_name,
+            requesterSalutation: req.requester_salutation,
             requesterRole: 'Student',
             labName: req.lab_name,
             requestId: requestId,

@@ -101,10 +101,44 @@ export async function POST(
 
     await db.query(updateQuery, updateParams)
 
-    // Log the activity
+    // Log the activity with enriched booking data
     const userInfo = await getUserInfoForLogging(userId)
-    const updatedBooking = await db.query('SELECT * FROM booking_requests WHERE id = ?', [id])
-    if (updatedBooking.rows.length > 0) {
+    
+    // Fetch complete booking details with all related names for the snapshot
+    const enrichedBooking = await db.query(
+      `SELECT 
+        br.*,
+        l.name as lab_name,
+        u.name as requester_name,
+        u.salutation as requester_salutation,
+        u.email as requester_email,
+        u.role as requester_role,
+        fac.name as faculty_name,
+        fac.salutation as faculty_salutation,
+        fac.email as faculty_email,
+        ls.name as lab_staff_name,
+        ls.salutation as lab_staff_salutation,
+        ls.email as lab_staff_email,
+        lc.name as lab_coordinator_name,
+        lc.salutation as lab_coordinator_salutation,
+        hod.name as hod_name,
+        hod.salutation as hod_salutation,
+        d.highest_approval_authority,
+        br.lab_staff_approved_at,
+        br.final_approver_role
+      FROM booking_requests br
+      JOIN labs l ON br.lab_id = l.id
+      JOIN users u ON br.requested_by = u.id
+      LEFT JOIN departments d ON l.department_id = d.id
+      LEFT JOIN users fac ON br.faculty_supervisor_id = fac.id
+      LEFT JOIN users ls ON br.lab_staff_approved_by = ls.id
+      LEFT JOIN users lc ON l.lab_coordinator_id = lc.id AND d.highest_approval_authority = 'lab_coordinator'
+      LEFT JOIN users hod ON d.hod_id = hod.id AND d.highest_approval_authority = 'hod'
+      WHERE br.id = ?`,
+      [id]
+    )
+    
+    if (enrichedBooking.rows.length > 0) {
       logLabBookingActivity({
         bookingId: Number(id),
         labId: bookingRequest.lab_id,
@@ -116,7 +150,7 @@ export async function POST(
         actionDescription: action === 'approve'
           ? `Approved booking request${remarks ? ': ' + remarks : ''}`
           : `Rejected booking request: ${remarks}`,
-        bookingSnapshot: updatedBooking.rows[0],
+        bookingSnapshot: enrichedBooking.rows[0],
         ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || null,
         userAgent: request.headers.get("user-agent") || null,
       }).catch(err => console.error("Activity logging failed:", err))
@@ -177,7 +211,7 @@ export async function POST(
              CASE 
                WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
                THEN coord.email
-               ELSE hod.email
+               ELSE d.hod_email
              END as email,
              CASE 
                WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 

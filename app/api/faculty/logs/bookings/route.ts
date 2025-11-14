@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
       FROM lab_booking_activity_logs lbal
       LEFT JOIN users requester ON requester.id = JSON_EXTRACT(lbal.booking_snapshot, '$.requested_by')
       LEFT JOIN labs ON labs.id = JSON_EXTRACT(lbal.booking_snapshot, '$.lab_id')
-      WHERE lbal.action = 'approved_by_hod'
+      WHERE 1=1
     `;
 
     const params: any[] = [];
@@ -92,6 +92,16 @@ export async function GET(req: NextRequest) {
         ? JSON.parse(log.booking_snapshot)
         : log.booking_snapshot;
 
+      // Determine the approval authority based on final_approver_role or presence of lab_coordinator fields
+      const finalApproverRole = snapshot?.final_approver_role
+      const hasLabCoordinator = !!snapshot?.lab_coordinator_name
+      const hasHOD = !!snapshot?.hod_name
+      
+      // Priority: final_approver_role > lab_coordinator_name > hod_name
+      const approvalAuthority = finalApproverRole === 'lab_coordinator' 
+        ? 'lab_coordinator' 
+        : (hasLabCoordinator ? 'lab_coordinator' : (hasHOD ? 'hod' : (snapshot?.highest_approval_authority || 'hod')))
+
       return {
         ...log,
         requester_name: log.requester_name || snapshot?.requester_name || 'Unknown',
@@ -104,11 +114,18 @@ export async function GET(req: NextRequest) {
         end_time: snapshot?.end_time || null,
         status: snapshot?.status || 'approved',
         faculty_supervisor_name: snapshot?.faculty_name || null,
+        faculty_supervisor_salutation: snapshot?.faculty_salutation || 'none',
         faculty_approved_at: snapshot?.faculty_approved_at || null,
         lab_staff_name: snapshot?.lab_staff_name || null,
+        lab_staff_salutation: snapshot?.lab_staff_salutation || 'none',
         lab_staff_approved_at: snapshot?.lab_staff_approved_at || null,
+        lab_coordinator_name: snapshot?.lab_coordinator_name || null,
+        lab_coordinator_salutation: snapshot?.lab_coordinator_salutation || 'none',
+        lab_coordinator_approved_at: snapshot?.lab_coordinator_approved_at || null,
         hod_name: snapshot?.hod_name || null,
-        hod_approved_at: snapshot?.hod_approved_at || log.created_at,
+        hod_salutation: snapshot?.hod_salutation || 'none',
+        hod_approved_at: snapshot?.hod_approved_at || null,
+        highest_approval_authority: approvalAuthority,
       };
     });
 

@@ -79,6 +79,7 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
           { name: "My Labs", href: withPrefix("/dashboard/labs"), icon: Building },
           { name: "Approve Requests", href: withPrefix("/dashboard/approve"), icon: UserCheck },
           { name: "Component Requests", href: withPrefix("/dashboard/component-requests"), icon: Package },
+          { name: "View Logs", href: withPrefix("/dashboard/logs"), icon: History },
           { name: "Analytics", href: withPrefix("/dashboard/analytics"), icon: BarChart3 },
         ]
 

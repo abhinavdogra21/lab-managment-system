@@ -103,28 +103,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const userInfo = await getUserInfoForLogging(user.userId)
     const updatedRequest = await db.query(
       `SELECT cr.*, l.name as lab_name, 
-              req.name as requester_name, req.email as requester_email, req.role as requester_role,
-              CASE 
-                WHEN fac.salutation IS NOT NULL 
-                THEN CONCAT(UPPER(fac.salutation), '. ', fac.name)
-                ELSE fac.name
-              END as faculty_name,
-              CASE 
-                WHEN ls.salutation IS NOT NULL 
-                THEN CONCAT(UPPER(ls.salutation), '. ', ls.name)
-                ELSE ls.name
-              END as lab_staff_name,
-              CASE 
-                WHEN hod.salutation IS NOT NULL 
-                THEN CONCAT(UPPER(hod.salutation), '. ', hod.name)
-                ELSE hod.name
-              END as hod_name
+              req.name as requester_name, req.email as requester_email, req.salutation as requester_salutation, req.role as requester_role,
+              fac.name as faculty_name, fac.salutation as faculty_salutation,
+              ls.name as lab_staff_name, ls.salutation as lab_staff_salutation,
+              hod.name as hod_name, hod.salutation as hod_salutation,
+              lc.name as lab_coordinator_name, lc.salutation as lab_coordinator_salutation
        FROM component_requests cr
        JOIN labs l ON cr.lab_id = l.id
        JOIN users req ON cr.requester_id = req.id
        LEFT JOIN users fac ON cr.faculty_approver_id = fac.id
        LEFT JOIN users ls ON cr.lab_staff_approver_id = ls.id
        LEFT JOIN users hod ON cr.hod_approver_id = hod.id
+       LEFT JOIN users lc ON l.lab_coordinator_id = lc.id AND cr.final_approver_role = 'lab_coordinator'
        WHERE cr.id = ?`,
       [requestId]
     )

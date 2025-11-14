@@ -60,7 +60,7 @@ export async function POST(
     try {
       const details = await db.query(
         `SELECT r.*, l.name as lab_name,
-                u.name as requester_name,
+                u.name as requester_name, u.salutation as requester_salutation,
                 ls.email as lab_staff_email,
                 ls.name as lab_staff_name,
                 ls.salutation as lab_staff_salutation
@@ -76,6 +76,7 @@ export async function POST(
         const req = details.rows[0]
         const emailData = emailTemplates.returnRequested({
           requesterName: req.requester_name,
+          requesterSalutation: req.requester_salutation,
           requesterRole: 'Faculty',
           labName: req.lab_name,
           requestId: requestId,

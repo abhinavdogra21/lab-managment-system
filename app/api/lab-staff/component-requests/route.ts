@@ -75,8 +75,8 @@ export async function GET(req: NextRequest) {
     const rows = await db.query(
       `SELECT r.*, l.name AS lab_name, l.department_id,
               d.highest_approval_authority, d.lab_coordinator_id,
-              ureq.name AS requester_name,
-              uf.name AS mentor_faculty_name,
+              ureq.name AS requester_name, ureq.salutation AS requester_salutation,
+              uf.name AS mentor_faculty_name, uf.salutation AS mentor_faculty_salutation,
               ul.name AS lab_staff_name,
               uh.name AS hod_name,
               uc.name AS lab_coordinator_name

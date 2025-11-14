@@ -170,7 +170,24 @@ export async function POST(
       }
       
       // Log the activity
-      const sel = await db.query(`SELECT * FROM component_requests WHERE id = ?`, [requestId])
+      const sel = await db.query(
+        `SELECT r.*, 
+                u.name as requester_name, u.salutation as requester_salutation, u.email as requester_email,
+                fac.name as faculty_name, fac.salutation as faculty_salutation,
+                ls.name as lab_staff_name, ls.salutation as lab_staff_salutation,
+                hod.name as hod_name, hod.salutation as hod_salutation,
+                lc.name as lab_coordinator_name, lc.salutation as lab_coordinator_salutation,
+                l.name as lab_name
+         FROM component_requests r
+         JOIN users u ON u.id = r.requester_id
+         JOIN labs l ON l.id = r.lab_id
+         LEFT JOIN users fac ON r.faculty_approver_id = fac.id
+         LEFT JOIN users ls ON r.lab_staff_approver_id = ls.id
+         LEFT JOIN users hod ON r.hod_approver_id = hod.id
+         LEFT JOIN users lc ON l.lab_coordinator_id = lc.id AND r.final_approver_role = 'lab_coordinator'
+         WHERE r.id = ?`,
+        [requestId]
+      )
       const userInfo = await getUserInfoForLogging(user.userId)
       if (sel.rows.length > 0) {
         const itemsDetails = await db.query(
@@ -233,7 +250,24 @@ export async function POST(
       }
       
       // Log the activity
-      const sel = await db.query(`SELECT * FROM component_requests WHERE id = ?`, [requestId])
+      const sel = await db.query(
+        `SELECT r.*, 
+                u.name as requester_name, u.salutation as requester_salutation, u.email as requester_email,
+                fac.name as faculty_name, fac.salutation as faculty_salutation,
+                ls.name as lab_staff_name, ls.salutation as lab_staff_salutation,
+                hod.name as hod_name, hod.salutation as hod_salutation,
+                lc.name as lab_coordinator_name, lc.salutation as lab_coordinator_salutation,
+                l.name as lab_name
+         FROM component_requests r
+         JOIN users u ON u.id = r.requester_id
+         JOIN labs l ON l.id = r.lab_id
+         LEFT JOIN users fac ON r.faculty_approver_id = fac.id
+         LEFT JOIN users ls ON r.lab_staff_approver_id = ls.id
+         LEFT JOIN users hod ON r.hod_approver_id = hod.id
+         LEFT JOIN users lc ON l.lab_coordinator_id = lc.id AND r.final_approver_role = 'lab_coordinator'
+         WHERE r.id = ?`,
+        [requestId]
+      )
       const userInfo = await getUserInfoForLogging(user.userId)
       if (sel.rows.length > 0) {
         const itemsDetails = await db.query(

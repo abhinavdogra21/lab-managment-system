@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
 import { verifyToken, hasRole } from "@/lib/auth"
-import { getLabBookingActivityLogs, getComponentActivityLogs } from "@/lib/activity-logger"
 
 /**
  * GET - Lab Staff: View activity logs for their assigned labs with date filters
@@ -27,7 +26,6 @@ export async function GET(req: NextRequest) {
     const startDate = searchParams.get("startDate") || undefined
     const endDate = searchParams.get("endDate") || undefined
     const requestedLabId = searchParams.get("labId") ? Number(searchParams.get("labId")) : undefined
-    const action = searchParams.get("action") || undefined
     const limit = searchParams.get("limit") ? Number(searchParams.get("limit")) : 50
     const offset = searchParams.get("offset") ? Number(searchParams.get("offset")) : 0
 
@@ -45,7 +43,7 @@ export async function GET(req: NextRequest) {
       if (assignedLabIds.length === 0) {
         return NextResponse.json({
           type,
-          filters: { startDate, endDate, labId: requestedLabId, action },
+          filters: { startDate, endDate, labId: requestedLabId },
           bookingLogs: [],
           componentLogs: [],
           totalCount: 0,
@@ -65,53 +63,244 @@ export async function GET(req: NextRequest) {
         startDate,
         endDate,
         labId: requestedLabId,
-        action,
       },
       bookingLogs: [],
       componentLogs: [],
       totalCount: 0,
     }
 
-    // Fetch booking logs
+    // Fetch booking logs with proper snapshot extraction
     if (type === "booking" || type === "all") {
-      const bookingLogs = await getLabBookingActivityLogs({
-        labId: requestedLabId,
-        action,
-        startDate,
-        endDate,
-        limit: type === "all" ? Math.ceil(limit / 2) : limit,
-        offset: type === "all" ? Math.floor(offset / 2) : offset,
-      })
+      let sql = `
+        SELECT 
+          lbal.id,
+          lbal.booking_id,
+          lbal.lab_id,
+          lbal.action,
+          lbal.booking_snapshot,
+          lbal.created_at,
+          labs.name as lab_name,
+          COALESCE(
+            JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_name')),
+            requester.name,
+            'Unknown'
+          ) as requester_name,
+          COALESCE(
+            JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_salutation')),
+            requester.salutation,
+            'none'
+          ) as requester_salutation,
+          COALESCE(
+            JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_email')),
+            requester.email,
+            ''
+          ) as requester_email,
+          COALESCE(
+            JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_role')),
+            requester.role,
+            'student'
+          ) as requester_role
+        FROM lab_booking_activity_logs lbal
+        LEFT JOIN users requester ON requester.id = JSON_EXTRACT(lbal.booking_snapshot, '$.requested_by')
+        LEFT JOIN labs ON labs.id = lbal.lab_id
+        WHERE 1=1
+      `
+      
+      const params: any[] = []
 
       // Filter by assigned labs if not admin
-      if (user.role !== "admin" && !requestedLabId) {
-        results.bookingLogs = bookingLogs.filter((log: any) => 
-          assignedLabIds.includes(log.lab_id)
-        )
-      } else {
-        results.bookingLogs = bookingLogs
+      if (user.role !== "admin") {
+        if (requestedLabId) {
+          sql += ` AND lbal.lab_id = ?`
+          params.push(requestedLabId)
+        } else if (assignedLabIds.length > 0) {
+          sql += ` AND lbal.lab_id IN (${assignedLabIds.join(',')})`
+        }
+      } else if (requestedLabId) {
+        sql += ` AND lbal.lab_id = ?`
+        params.push(requestedLabId)
       }
+
+      // Date filters
+      if (startDate) {
+        sql += ` AND DATE(lbal.created_at) >= ?`
+        params.push(startDate)
+      }
+      if (endDate) {
+        sql += ` AND DATE(lbal.created_at) <= ?`
+        params.push(endDate)
+      }
+
+      sql += ` ORDER BY lbal.created_at DESC LIMIT ? OFFSET ?`
+      params.push(type === "all" ? Math.ceil(limit / 2) : limit, type === "all" ? Math.floor(offset / 2) : offset)
+
+      const bookingResult = await db.query(sql, params)
+      
+      // Process logs to extract booking details from snapshot
+      results.bookingLogs = bookingResult.rows.map((log: any) => {
+        const snapshot = typeof log.booking_snapshot === 'string'
+          ? JSON.parse(log.booking_snapshot)
+          : log.booking_snapshot
+
+        // Determine the approval authority based on final_approver_role or presence of lab_coordinator fields
+        const finalApproverRole = snapshot?.final_approver_role
+        const hasLabCoordinator = !!snapshot?.lab_coordinator_name
+        const hasHOD = !!snapshot?.hod_name
+        
+        // Priority: final_approver_role > lab_coordinator_name > hod_name
+        const approvalAuthority = finalApproverRole === 'lab_coordinator' 
+          ? 'lab_coordinator' 
+          : (hasLabCoordinator ? 'lab_coordinator' : (hasHOD ? 'hod' : (snapshot?.highest_approval_authority || 'hod')))
+        
+        return {
+          id: log.id,
+          booking_id: log.booking_id,
+          lab_id: log.lab_id,
+          lab_name: log.lab_name || snapshot?.lab_name || 'Unknown Lab',
+          requester_name: log.requester_name || snapshot?.requester_name || 'Unknown',
+          requester_salutation: log.requester_salutation || snapshot?.requester_salutation || 'none',
+          requester_email: log.requester_email || snapshot?.requester_email || '',
+          requester_role: log.requester_role || snapshot?.requester_role || 'student',
+          purpose: snapshot?.purpose || '',
+          booking_date: snapshot?.booking_date || null,
+          start_time: snapshot?.start_time || null,
+          end_time: snapshot?.end_time || null,
+          status: snapshot?.status || 'approved',
+          faculty_supervisor_name: snapshot?.faculty_name || null,
+          faculty_supervisor_salutation: snapshot?.faculty_salutation || 'none',
+          faculty_approved_at: snapshot?.faculty_approved_at || null,
+          lab_staff_name: snapshot?.lab_staff_name || null,
+          lab_staff_salutation: snapshot?.lab_staff_salutation || 'none',
+          lab_staff_approved_at: snapshot?.lab_staff_approved_at || null,
+          lab_coordinator_name: snapshot?.lab_coordinator_name || null,
+          lab_coordinator_salutation: snapshot?.lab_coordinator_salutation || 'none',
+          lab_coordinator_approved_at: snapshot?.lab_coordinator_approved_at || null,
+          hod_name: snapshot?.hod_name || null,
+          hod_salutation: snapshot?.hod_salutation || 'none',
+          hod_approved_at: snapshot?.hod_approved_at || null,
+          highest_approval_authority: approvalAuthority,
+          created_at: log.created_at,
+        }
+      })
     }
 
-    // Fetch component logs
+    // Fetch component logs with proper snapshot extraction
     if (type === "component" || type === "all") {
-      const componentLogs = await getComponentActivityLogs({
-        labId: requestedLabId,
-        action,
-        startDate,
-        endDate,
-        limit: type === "all" ? Math.ceil(limit / 2) : limit,
-        offset: type === "all" ? Math.floor(offset / 2) : offset,
-      })
+      let sql = `
+        SELECT 
+          cal.id,
+          cal.entity_type,
+          cal.entity_id,
+          cal.lab_id,
+          cal.action,
+          cal.entity_snapshot,
+          cal.created_at,
+          labs.name as lab_name,
+          COALESCE(
+            JSON_UNQUOTE(JSON_EXTRACT(cal.entity_snapshot, '$.requester_name')),
+            requester.name,
+            'Unknown'
+          ) as requester_name,
+          COALESCE(
+            JSON_UNQUOTE(JSON_EXTRACT(cal.entity_snapshot, '$.requester_salutation')),
+            requester.salutation,
+            'none'
+          ) as requester_salutation,
+          COALESCE(
+            JSON_UNQUOTE(JSON_EXTRACT(cal.entity_snapshot, '$.requester_email')),
+            requester.email,
+            ''
+          ) as requester_email,
+          COALESCE(
+            JSON_UNQUOTE(JSON_EXTRACT(cal.entity_snapshot, '$.requester_role')),
+            requester.role,
+            'student'
+          ) as requester_role
+        FROM component_activity_logs cal
+        LEFT JOIN users requester ON requester.id = JSON_EXTRACT(cal.entity_snapshot, '$.requested_by')
+        LEFT JOIN labs ON labs.id = cal.lab_id
+        WHERE 1=1
+      `
+      
+      const params: any[] = []
 
       // Filter by assigned labs if not admin
-      if (user.role !== "admin" && !requestedLabId) {
-        results.componentLogs = componentLogs.filter((log: any) =>
-          assignedLabIds.includes(log.lab_id)
-        )
-      } else {
-        results.componentLogs = componentLogs
+      if (user.role !== "admin") {
+        if (requestedLabId) {
+          sql += ` AND cal.lab_id = ?`
+          params.push(requestedLabId)
+        } else if (assignedLabIds.length > 0) {
+          sql += ` AND cal.lab_id IN (${assignedLabIds.join(',')})`
+        }
+      } else if (requestedLabId) {
+        sql += ` AND cal.lab_id = ?`
+        params.push(requestedLabId)
       }
+
+      // Date filters
+      if (startDate) {
+        sql += ` AND DATE(cal.created_at) >= ?`
+        params.push(startDate)
+      }
+      if (endDate) {
+        sql += ` AND DATE(cal.created_at) <= ?`
+        params.push(endDate)
+      }
+
+      sql += ` ORDER BY cal.created_at DESC LIMIT ? OFFSET ?`
+      params.push(type === "all" ? Math.ceil(limit / 2) : limit, type === "all" ? Math.floor(offset / 2) : offset)
+
+      const componentResult = await db.query(sql, params)
+      
+      // Process logs to extract component details from snapshot
+      results.componentLogs = componentResult.rows.map((log: any) => {
+        const snapshot = typeof log.entity_snapshot === 'string'
+          ? JSON.parse(log.entity_snapshot)
+          : log.entity_snapshot
+
+        // Determine the approval authority based on final_approver_role or presence of lab_coordinator fields
+        const finalApproverRole = snapshot?.final_approver_role
+        const hasLabCoordinator = !!snapshot?.lab_coordinator_name
+        const hasHOD = !!snapshot?.hod_name
+        
+        // Priority: final_approver_role > lab_coordinator_name > hod_name
+        const approvalAuthority = finalApproverRole === 'lab_coordinator' 
+          ? 'lab_coordinator' 
+          : (hasLabCoordinator ? 'lab_coordinator' : (hasHOD ? 'hod' : (snapshot?.highest_approval_authority || 'hod')))
+        
+        return {
+          id: log.id,
+          entity_type: log.entity_type,
+          entity_id: log.entity_id,
+          lab_id: log.lab_id,
+          lab_name: log.lab_name || snapshot?.lab_name || 'Unknown Lab',
+          requester_name: log.requester_name || snapshot?.requester_name || 'Unknown',
+          requester_salutation: log.requester_salutation || snapshot?.requester_salutation || 'none',
+          requester_email: log.requester_email || snapshot?.requester_email || '',
+          requester_role: log.requester_role || snapshot?.requester_role || 'student',
+          purpose: snapshot?.purpose || '',
+          issued_at: snapshot?.issued_at || log.created_at,
+          return_date: snapshot?.return_date || null,
+          returned_at: snapshot?.returned_at || null,
+          actual_return_date: snapshot?.actual_return_date || null,
+          faculty_name: snapshot?.faculty_name || null,
+          faculty_salutation: snapshot?.faculty_salutation || 'none',
+          faculty_approved_at: snapshot?.faculty_approved_at || null,
+          lab_staff_name: snapshot?.lab_staff_name || null,
+          lab_staff_salutation: snapshot?.lab_staff_salutation || 'none',
+          lab_staff_approved_at: snapshot?.lab_staff_approved_at || null,
+          lab_coordinator_name: snapshot?.lab_coordinator_name || null,
+          lab_coordinator_salutation: snapshot?.lab_coordinator_salutation || 'none',
+          lab_coordinator_approved_at: snapshot?.lab_coordinator_approved_at || null,
+          hod_name: snapshot?.hod_name || null,
+          hod_salutation: snapshot?.hod_salutation || 'none',
+          hod_approved_at: snapshot?.hod_approved_at || null,
+          items: snapshot?.items || [],
+          components_list: snapshot?.components_list || '',
+          highest_approval_authority: approvalAuthority,
+          created_at: log.created_at,
+        }
+      })
     }
 
     results.totalCount = results.bookingLogs.length + results.componentLogs.length

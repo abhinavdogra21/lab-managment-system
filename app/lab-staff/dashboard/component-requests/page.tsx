@@ -17,6 +17,7 @@ interface RequestItem {
   lab_name: string
   requester_id: number
   requester_name: string
+  requester_salutation?: string
   initiator_role: 'student' | 'faculty'
   purpose?: string | null
   status: string
@@ -39,6 +40,7 @@ interface RequestItem {
   extension_approved_at?: string | null
   extension_remarks?: string | null
   mentor_faculty_name?: string
+  mentor_faculty_salutation?: string
   items: Array<{ 
     id: number
     component_id: number
@@ -62,6 +64,19 @@ export default function LabStaffComponentRequestsPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'issued' | 'return-pending' | 'returned' | 'rejected'>('all')
   const [expandedTimelines, setExpandedTimelines] = useState<Set<number>>(new Set())
   const [successDialog, setSuccessDialog] = useState<{ open: boolean; message: string }>({ open: false, message: '' })
+
+  // Helper function to format name with salutation
+  const formatNameWithSalutation = (name: string, salutation?: string): string => {
+    if (!salutation || salutation === 'none') return name
+    const salutationMap: Record<string, string> = {
+      'prof': 'Prof.',
+      'dr': 'Dr.',
+      'mr': 'Mr.',
+      'mrs': 'Mrs.'
+    }
+    const prefix = salutationMap[salutation] || ''
+    return prefix ? `${prefix} ${name}` : name
+  }
 
   const toggleTimeline = (id: number) => {
     setExpandedTimelines(prev => {
@@ -437,9 +452,9 @@ export default function LabStaffComponentRequestsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="text-sm text-muted-foreground">Requester: <span className="font-medium text-foreground">{r.requester_name}</span></div>
+                <div className="text-sm text-muted-foreground">Requester: <span className="font-medium text-foreground">{formatNameWithSalutation(r.requester_name, r.requester_salutation)}</span></div>
                 {r.mentor_faculty_name && (
-                  <div className="text-sm text-muted-foreground">Mentor: <span className="font-medium text-foreground">{r.mentor_faculty_name}</span></div>
+                  <div className="text-sm text-muted-foreground">Mentor: <span className="font-medium text-foreground">{formatNameWithSalutation(r.mentor_faculty_name, r.mentor_faculty_salutation)}</span></div>
                 )}
                 {r.purpose && (
                   <div className="text-sm">
