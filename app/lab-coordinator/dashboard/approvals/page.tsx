@@ -30,6 +30,8 @@ interface RequestItem {
   faculty_approved_at?: string | null
   lab_staff_approved_at?: string | null
   lab_coordinator_approved_at?: string | null
+  highest_approval_authority?: 'hod' | 'lab_coordinator'
+  lab_coordinator_id?: number | null
 }
 
 const TimelineView = ({ item, getStepStatus, getFinalApprovalStatus }: { 
@@ -37,18 +39,25 @@ const TimelineView = ({ item, getStepStatus, getFinalApprovalStatus }: {
   getStepStatus: any, 
   getFinalApprovalStatus: any 
 }) => {
+  // Only student bookings have 5 steps (where requested_by != faculty_supervisor_id)
+  // Faculty and TnP bookings have 4 steps (they book for themselves)
   const isStudentBooking = item.faculty_supervisor_id && item.requested_by !== item.faculty_supervisor_id
+  
+  // Determine the approval authority label based on department settings
+  const approvalAuthorityLabel = item.highest_approval_authority === 'lab_coordinator' 
+    ? 'Lab Coordinator Review' 
+    : 'Lab Coordinator Review'
   
   const allSteps = isStudentBooking ? [
     { name: 'Submitted', status: 'completed', icon: Clock },
     { name: 'Faculty Review', status: getStepStatus(item, 'Faculty Review'), icon: User },
     { name: 'Lab Staff Review', status: getStepStatus(item, 'Lab Staff Review'), icon: Users },
-    { name: 'Lab Coordinator Review', status: getStepStatus(item, 'Lab Coordinator Review'), icon: Building },
+    { name: approvalAuthorityLabel, status: getStepStatus(item, approvalAuthorityLabel), icon: Building },
     { name: 'Approved', status: getFinalApprovalStatus(item), icon: CheckCircle2 }
   ] : [
     { name: 'Submitted', status: 'completed', icon: Clock },
     { name: 'Lab Staff Review', status: getStepStatus(item, 'Lab Staff Review'), icon: Users },
-    { name: 'Lab Coordinator Review', status: getStepStatus(item, 'Lab Coordinator Review'), icon: Building },
+    { name: approvalAuthorityLabel, status: getStepStatus(item, approvalAuthorityLabel), icon: Building },
     { name: 'Approved', status: getFinalApprovalStatus(item), icon: CheckCircle2 }
   ]
 
@@ -279,9 +288,29 @@ export default function LabCoordinatorApprovePage() {
   const [approvedItems, setApprovedItems] = useState<RequestItem[]>([])
   const [rejectedItems, setRejectedItems] = useState<RequestItem[]>([])
   const [activeTab, setActiveTab] = useState<'pending'|'approved'|'rejected'>('pending')
+  const [activeType, setActiveType] = useState<'lab'|'components'>('lab')
   const [search, setSearch] = useState('')
   const [remarks, setRemarks] = useState<Record<number, string>>({})
   const [showTimeline, setShowTimeline] = useState<Record<number, boolean>>({})
+  const [userRole, setUserRole] = useState<string>('')
+
+  // Detect user role on mount
+  useEffect(() => {
+    try {
+      const userStr = localStorage.getItem('user')
+      if (userStr) {
+        const user = JSON.parse(userStr)
+        setUserRole(user.role || '')
+      }
+    } catch (error) {
+      console.error('Failed to get user role:', error)
+    }
+  }, [])
+
+  // Determine which API endpoint to use based on user role
+  const getApiEndpoint = () => {
+    return userRole === 'lab_coordinator' ? '/api/lab-coordinator' : '/api/hod'
+  }
 
   const handleRemarksChange = useCallback((requestId: number, value: string) => {
     setRemarks(prev => ({ ...prev, [requestId]: value }))
@@ -323,10 +352,14 @@ export default function LabCoordinatorApprovePage() {
   const loadAllLabRequests = async () => {
     setLoading(true)
     try {
+      const apiEndpoint = getApiEndpoint()
+      // Both Lab Coordinator and Lab Coordinator use 'pending_hod' status
+      // The difference is in the department's highest_approval_authority
+      
       const [pendingRes, approvedRes, rejectedRes] = await Promise.all([
-        fetch('/api/lab-coordinator/requests?status=pending_hod', { cache: 'no-store' }),
-        fetch('/api/lab-coordinator/requests?status=approved', { cache: 'no-store' }),
-        fetch('/api/lab-coordinator/requests?status=rejected', { cache: 'no-store' })
+        fetch(`${apiEndpoint}/requests?status=pending_hod`, { cache: 'no-store' }),
+        fetch(`${apiEndpoint}/requests?status=approved`, { cache: 'no-store' }),
+        fetch(`${apiEndpoint}/requests?status=rejected`, { cache: 'no-store' })
       ])
 
       if (pendingRes.ok) {
@@ -360,8 +393,10 @@ export default function LabCoordinatorApprovePage() {
   }
 
   useEffect(() => {
-    loadAllLabRequests()
-  }, [])
+    if (activeType === 'lab' && userRole) {
+      loadAllLabRequests()
+    }
+  }, [activeType, userRole])
 
   const handleAction = async (requestId: number, action: 'approve' | 'reject', overrideRemarks?: string) => {
     const requestRemarks = typeof overrideRemarks === 'string'
@@ -375,7 +410,8 @@ export default function LabCoordinatorApprovePage() {
 
     try {
       setActionLoading(requestId)
-      const res = await fetch(`/api/lab-coordinator/requests/${requestId}/action`, {
+      const apiEndpoint = getApiEndpoint()
+      const res = await fetch(`${apiEndpoint}/requests/${requestId}/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -437,22 +473,28 @@ export default function LabCoordinatorApprovePage() {
   }
 
   const getStepStatus = (item: RequestItem, stepName: string) => {
+    // For rejected requests, determine which step rejected it
     if (item.status === 'rejected') {
       if (stepName === 'Faculty Review') {
+        // If faculty approved, show completed, otherwise show rejected
         return item.faculty_approved_at ? 'completed' : 'rejected'
       }
       if (stepName === 'Lab Staff Review') {
+        // If lab staff approved, show completed, otherwise check if it reached this step
         if (item.lab_staff_approved_at) return 'completed'
-        if (item.faculty_approved_at) return 'rejected'
-        return 'waiting'
+        if (item.faculty_approved_at) return 'rejected' // Reached lab staff and was rejected
+        return 'waiting' // Never reached this step
       }
-      if (stepName === 'Lab Coordinator Review') {
+      // Handle both "Lab Coordinator Review" and "Lab Coordinator Review"
+      if (stepName === 'Lab Coordinator Review' || stepName === 'Lab Coordinator Review') {
+        // If Lab Coordinator/Lab Coordinator approved, show completed, otherwise check if it reached this step
         if (item.lab_coordinator_approved_at) return 'completed'
-        if (item.lab_staff_approved_at) return 'rejected'
-        return 'waiting'
+        if (item.lab_staff_approved_at) return 'rejected' // Reached Lab Coordinator/Lab Coordinator and was rejected
+        return 'waiting' // Never reached this step
       }
     }
     
+    // For non-rejected requests, use the existing logic
     if (stepName === 'Faculty Review') {
       if (item.status === 'pending_faculty') return 'pending'
       if (['pending_lab_staff', 'pending_hod', 'approved'].includes(item.status)) return 'completed'
@@ -462,7 +504,8 @@ export default function LabCoordinatorApprovePage() {
       if (['pending_hod', 'approved'].includes(item.status)) return 'completed'
       if (item.status === 'pending_faculty') return 'waiting'
     }
-    if (stepName === 'Lab Coordinator Review') {
+    // Handle both "Lab Coordinator Review" and "Lab Coordinator Review"
+    if (stepName === 'Lab Coordinator Review' || stepName === 'Lab Coordinator Review') {
       if (item.status === 'pending_hod') return 'pending'
       if (item.status === 'approved') return 'completed'
       if (['pending_faculty', 'pending_lab_staff'].includes(item.status)) return 'waiting'
@@ -474,6 +517,13 @@ export default function LabCoordinatorApprovePage() {
     if (item.status === 'approved') return 'completed'
     if (item.status === 'rejected') return 'rejected'
     return 'waiting'
+  }
+
+  // Helper to get approval authority label
+  const getApprovalAuthorityLabel = (item: RequestItem) => {
+    return item.highest_approval_authority === 'lab_coordinator' 
+      ? 'Lab Coordinator' 
+      : 'Lab Coordinator'
   }
 
   const toggleTimeline = (itemId: number) => {
@@ -500,11 +550,573 @@ export default function LabCoordinatorApprovePage() {
     }
   }
 
+  // Components approvals for Lab Coordinator
+  function LabCoordinatorComponentsApprovals() {
+    const { toast } = useToast()
+    const [loading, setLoading] = useState(false)
+    const [processingIds, setProcessingIds] = useState<Set<number>>(new Set())
+    const [activeTab, setActiveTab] = useState<'pending'|'approved'|'rejected'>('pending')
+    const [all, setAll] = useState<any[]>([])
+    const [remarks, setRemarks] = useState<Record<number, string>>({})
+    const [expandedTimelines, setExpandedTimelines] = useState<Set<number>>(new Set())
+
+    const toggleTimeline = (id: number) => {
+      setExpandedTimelines(prev => {
+        const newSet = new Set(prev)
+        if (newSet.has(id)) {
+          newSet.delete(id)
+        } else {
+          newSet.add(id)
+        }
+        return newSet
+      })
+    }
+
+    const getStepStatus = (request: any, step: string) => {
+      // For rejected requests, determine which step rejected it
+      if (request.status === 'rejected') {
+        if (step === 'Faculty Review') {
+          // If faculty approved, show completed, otherwise show rejected
+          return request.faculty_approved_at ? 'completed' : 'rejected'
+        }
+        if (step === 'Lab Staff Review') {
+          // If lab staff approved, show completed, otherwise check if it reached this step
+          if (request.lab_staff_approved_at) return 'completed'
+          if (request.faculty_approved_at) return 'rejected' // Reached lab staff and was rejected
+          return 'waiting' // Never reached this step
+        }
+        if (step === 'Lab Coordinator Review') {
+          // If Lab Coordinator approved, show completed, otherwise check if it reached this step
+          if (request.lab_coordinator_approved_at) return 'completed'
+          if (request.lab_staff_approved_at) return 'rejected' // Reached Lab Coordinator and was rejected
+          return 'waiting' // Never reached this step
+        }
+      }
+      
+      // For non-rejected requests, use status-based logic
+      if (step === 'Faculty Review') {
+        if (request.faculty_approved_at) return 'completed'
+        if (request.status === 'pending_faculty') return 'pending'
+        return 'waiting'
+      }
+      if (step === 'Lab Staff Review') {
+        if (request.lab_staff_approved_at) return 'completed'
+        if (request.status === 'pending_lab_staff') return 'pending'
+        if (!request.faculty_approved_at) return 'waiting'
+        return 'waiting'
+      }
+      if (step === 'Lab Coordinator Review') {
+        if (request.lab_coordinator_approved_at) return 'completed'
+        if (request.status === 'pending_hod') return 'pending'
+        if (!request.lab_staff_approved_at) return 'waiting'
+        return 'waiting'
+      }
+      return 'waiting'
+    }
+
+    const getFinalApprovalStatus = (request: any) => {
+      if (request.status === 'approved') return 'completed'
+      if (request.status === 'rejected') return 'rejected'
+      return 'waiting'
+    }
+
+    const loadAll = async () => {
+      setLoading(true)
+      try {
+        const res = await fetch('/api/hod/component-requests', { cache: 'no-store' })
+        const text = await res.text()
+        if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
+        const data = JSON.parse(text)
+        setAll(data.requests || [])
+      } catch (e: any) {
+        toast({ title: 'Failed to load', description: e?.message || 'Could not load component requests', variant: 'destructive' })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    useEffect(() => { loadAll() }, [])
+
+    const filtered = useMemo(() => {
+      if (activeTab === 'pending') return all.filter(r => r.status === 'pending_hod')
+      if (activeTab === 'approved') return all.filter(r => r.status === 'approved')
+      return all.filter(r => r.status === 'rejected')
+    }, [all, activeTab])
+
+    const counts = useMemo(() => ({
+      pending: all.filter(r => r.status === 'pending_hod').length,
+      approved: all.filter(r => r.status === 'approved').length,
+      rejected: all.filter(r => r.status === 'rejected').length,
+    }), [all])
+
+    const act = async (id: number, action: 'approve'|'reject') => {
+      // Prevent double-click: if already processing this request, ignore
+      if (processingIds.has(id)) {
+        return
+      }
+      
+      if (action === 'reject' && !remarks[id]) {
+        alert('⚠️ Remarks Required\n\nPlease provide remarks before rejecting the request.\n\nRemarks help explain the reason for rejection to the requester.')
+        return
+      }
+      try {
+        // Mark as processing
+        setProcessingIds(prev => new Set(prev).add(id))
+        
+        const res = await fetch(`/api/hod/component-requests/${id}/action`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, remarks: remarks[id] || null })
+        })
+        const text = await res.text()
+        if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
+        const successMessage = action === 'approve' 
+          ? '✓ Component request approved successfully! The request is now approved and the requester has been notified.'
+          : '✓ Component request rejected successfully. The requester has been notified with your remarks.'
+        setSuccessDialog({ open: true, message: successMessage })
+        setRemarks(prev => { const p = { ...prev }; delete p[id]; return p })
+        await loadAll()
+        setActiveTab(action === 'approve' ? 'approved' : 'rejected')
+      } catch (e: any) {
+        toast({ title: 'Action failed', description: e?.message || 'Could not update request', variant: 'destructive' })
+      } finally {
+        // Remove from processing
+        setProcessingIds(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(id)
+          return newSet
+        })
+      }
+    }
+
+    const badge = (status: string) => {
+      switch (status) {
+        case 'pending_faculty': return <Badge className="bg-orange-100 text-orange-800" variant="secondary">Pending Faculty</Badge>
+        case 'pending_lab_staff': return <Badge className="bg-blue-100 text-blue-800" variant="secondary">Pending Lab Staff</Badge>
+        case 'pending_hod': return <Badge className="bg-purple-100 text-purple-800" variant="secondary">Pending Lab Coordinator</Badge>
+        case 'approved': return <Badge className="bg-green-100 text-green-800" variant="secondary">Approved</Badge>
+        case 'rejected': return <Badge variant="destructive">Rejected</Badge>
+        default: return <Badge variant="outline">{status}</Badge>
+      }
+    }
+
+    return (
+      <div className="space-y-3">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-3">
+          <TabsList className="grid w-full grid-cols-3 max-w-md h-8">
+            <TabsTrigger value="pending" className="flex items-center gap-1 text-xs">
+              Pending
+              {counts.pending > 0 && <Badge variant="secondary" className="ml-1 text-xs bg-orange-100 text-orange-800 animate-pulse">{counts.pending}</Badge>}
+            </TabsTrigger>
+            <TabsTrigger value="approved" className="flex items-center gap-1 text-xs">
+              Approved
+              {counts.approved > 0 && <Badge variant="secondary" className="ml-1 text-xs bg-green-100 text-green-800">{counts.approved}</Badge>}
+            </TabsTrigger>
+            <TabsTrigger value="rejected" className="flex items-center gap-1 text-xs">
+              Rejected
+              {counts.rejected > 0 && <Badge variant="destructive" className="ml-1 text-xs">{counts.rejected}</Badge>}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="pending">
+            {loading ? (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">Loading...</CardContent></Card>
+            ) : filtered.length === 0 ? (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">No requests found</CardContent></Card>
+            ) : (
+              <div className="space-y-3">
+                {filtered.map((r: any) => (
+                  <Card key={r.id}>
+                    <CardContent className="p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-medium">{r.lab_name} • <span className="text-muted-foreground">{r.requester_name}</span></div>
+                        {badge(r.status)}
+                      </div>
+                      {r.purpose && (<div className="text-sm"><span className="text-muted-foreground">Purpose: </span>{r.purpose}</div>)}
+                      
+                      {/* View Timeline Button */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-xs"
+                        onClick={() => toggleTimeline(r.id)}
+                      >
+                        {expandedTimelines.has(r.id) ? (
+                          <>
+                            <ChevronUp className="h-3 w-3 mr-1" />
+                            Hide Timeline
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="h-3 w-3 mr-1" />
+                            View Timeline
+                          </>
+                        )}
+                      </Button>
+
+                      {/* Timeline - Collapsible */}
+                      {expandedTimelines.has(r.id) && (
+                        <div className="space-y-3 pt-2 border-t">
+                          <div className="px-2">
+                            <div className="flex items-center justify-between relative">
+                              <div className="absolute top-6 left-6 right-6 h-0.5 bg-gray-200"></div>
+                              {[
+                                { name: 'Submitted', status: 'completed', icon: Clock },
+                                { name: 'Faculty', status: getStepStatus(r, 'Faculty Review'), icon: User },
+                                { name: 'Lab Staff', status: getStepStatus(r, 'Lab Staff Review'), icon: Users },
+                                { name: getApprovalAuthorityLabel(r), status: getStepStatus(r, getApprovalAuthorityLabel(r) + ' Review'), icon: Building },
+                                { name: 'Final', status: getFinalApprovalStatus(r), icon: CheckCircle2 }
+                              ].map((step, index) => (
+                                <div key={index} className="flex flex-col items-center space-y-1 relative z-10">
+                                  <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center ${
+                                    step.status === 'completed' ? 'bg-green-100 border-green-300' : 
+                                    step.status === 'pending' ? 'bg-blue-100 border-blue-300' : 
+                                    step.status === 'rejected' ? 'bg-red-100 border-red-300' : 
+                                    'bg-white border-gray-300'
+                                  }`}>
+                                    <step.icon className={`h-4 w-4 ${
+                                      step.status === 'completed' ? 'text-green-600' : 
+                                      step.status === 'pending' ? 'text-blue-600' : 
+                                      step.status === 'rejected' ? 'text-red-600' : 
+                                      'text-gray-400'
+                                    }`} />
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="text-xs font-medium">{step.name}</p>
+                                    <p className={`text-xs ${
+                                      step.status === 'completed' ? 'text-green-600' : 
+                                      step.status === 'pending' ? 'text-blue-600' : 
+                                      step.status === 'rejected' ? 'text-red-600' : 
+                                      'text-gray-500'
+                                    }`}>
+                                      {step.status === 'completed' ? 'Done' : 
+                                       step.status === 'pending' ? 'In Progress' : 
+                                       step.status === 'rejected' ? 'Rejected' : 'Waiting'}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Previous Remarks */}
+                            <div className="mt-3 space-y-2">
+                              {r.faculty_remarks && (
+                                <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
+                                  <span className="font-medium">Faculty:</span> {r.faculty_remarks}
+                                </div>
+                              )}
+                              {r.lab_staff_remarks && (
+                                <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
+                                  <span className="font-medium">Lab Staff:</span> {r.lab_staff_remarks}
+                                </div>
+                              )}
+                              {r.lab_coordinator_remarks && (
+                                <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
+                                  <span className="font-medium">Lab Coordinator:</span> {r.lab_coordinator_remarks}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-1">
+                        {r.items?.map((it: any, idx: number) => (
+                          <div key={idx} className="text-sm flex items-center justify-between border rounded p-2">
+                            <div>
+                              <div className="font-medium">{it.component_name} {it.model ? `(${it.model})` : ''}</div>
+                              <div className="text-xs text-muted-foreground">{it.category || 'Uncategorized'}</div>
+                            </div>
+                            <div>Qty: <span className="font-medium">{it.quantity_requested}</span></div>
+                          </div>
+                        ))}
+                      </div>
+                      {r.status === 'pending_hod' && (
+                        <div className="space-y-2 pt-2 border-t">
+                          <Textarea placeholder="Remarks (optional for approval, required for rejection)" value={remarks[r.id] || ''} onChange={(e) => setRemarks(prev => ({ ...prev, [r.id]: e.target.value }))} />
+                          <div className="flex gap-2">
+                            <Button 
+                              className="flex-1" 
+                              onClick={() => act(r.id, 'approve')}
+                              disabled={processingIds.has(r.id)}
+                            >
+                              {processingIds.has(r.id) ? (
+                                <>Processing...</>
+                              ) : (
+                                <><Check className="h-4 w-4 mr-2" /> Approve</>
+                              )}
+                            </Button>
+                            <Button 
+                              className="flex-1" 
+                              variant="destructive" 
+                              onClick={() => act(r.id, 'reject')}
+                              disabled={processingIds.has(r.id)}
+                            >
+                              {processingIds.has(r.id) ? (
+                                <>Processing...</>
+                              ) : (
+                                <><X className="h-4 w-4 mr-2" /> Reject</>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="approved">
+            {loading ? (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">Loading...</CardContent></Card>
+            ) : filtered.length === 0 ? (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">No requests found</CardContent></Card>
+            ) : (
+              <div className="space-y-3">
+                {filtered.map((r: any) => (
+                  <Card key={r.id}><CardContent className="p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium">{r.lab_name} • <span className="text-muted-foreground">{r.requester_name}</span></div>
+                      {badge(r.status)}
+                    </div>
+                    {r.purpose && (<div className="text-sm"><span className="text-muted-foreground">Purpose: </span>{r.purpose}</div>)}
+                    
+                    {/* View Timeline Button */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs"
+                      onClick={() => toggleTimeline(r.id)}
+                    >
+                      {expandedTimelines.has(r.id) ? (
+                        <>
+                          <ChevronUp className="h-3 w-3 mr-1" />
+                          Hide Timeline
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="h-3 w-3 mr-1" />
+                          View Timeline
+                        </>
+                      )}
+                    </Button>
+
+                    {/* Timeline - Collapsible */}
+                    {expandedTimelines.has(r.id) && (
+                      <div className="space-y-3 pt-2 border-t">
+                        <div className="px-2">
+                          <div className="flex items-center justify-between relative">
+                            <div className="absolute top-6 left-6 right-6 h-0.5 bg-gray-200"></div>
+                            {(r.initiator_role === 'faculty' ? [
+                              { name: 'Submitted', status: 'completed', icon: Clock },
+                              { name: 'Lab Staff', status: getStepStatus(r, 'Lab Staff Review'), icon: Users },
+                              { name: getApprovalAuthorityLabel(r), status: getStepStatus(r, getApprovalAuthorityLabel(r) + ' Review'), icon: Building },
+                              { name: 'Final', status: getFinalApprovalStatus(r), icon: CheckCircle2 }
+                            ] : [
+                              { name: 'Submitted', status: 'completed', icon: Clock },
+                              { name: 'Faculty', status: getStepStatus(r, 'Faculty Review'), icon: User },
+                              { name: 'Lab Staff', status: getStepStatus(r, 'Lab Staff Review'), icon: Users },
+                              { name: getApprovalAuthorityLabel(r), status: getStepStatus(r, getApprovalAuthorityLabel(r) + ' Review'), icon: Building },
+                              { name: 'Final', status: getFinalApprovalStatus(r), icon: CheckCircle2 }
+                            ]).map((step, index) => (
+                              <div key={index} className="flex flex-col items-center space-y-1 relative z-10">
+                                <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center ${
+                                  step.status === 'completed' ? 'bg-green-100 border-green-300' : 
+                                  step.status === 'pending' ? 'bg-blue-100 border-blue-300' : 
+                                  step.status === 'rejected' ? 'bg-red-100 border-red-300' : 
+                                  'bg-white border-gray-300'
+                                }`}>
+                                  <step.icon className={`h-4 w-4 ${
+                                    step.status === 'completed' ? 'text-green-600' : 
+                                    step.status === 'pending' ? 'text-blue-600' : 
+                                    step.status === 'rejected' ? 'text-red-600' : 
+                                    'text-gray-400'
+                                  }`} />
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-xs font-medium">{step.name}</p>
+                                  <p className={`text-xs ${
+                                    step.status === 'completed' ? 'text-green-600' : 
+                                    step.status === 'pending' ? 'text-blue-600' : 
+                                    step.status === 'rejected' ? 'text-red-600' : 
+                                    'text-gray-500'
+                                  }`}>
+                                    {step.status === 'completed' ? 'Done' : 
+                                     step.status === 'pending' ? 'In Progress' : 
+                                     step.status === 'rejected' ? 'Rejected' : 'Waiting'}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Previous Remarks */}
+                          <div className="mt-3 space-y-2">
+                            {r.faculty_remarks && (
+                              <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
+                                <span className="font-medium">Faculty:</span> {r.faculty_remarks}
+                              </div>
+                            )}
+                            {r.lab_staff_remarks && (
+                              <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
+                                <span className="font-medium">Lab Staff:</span> {r.lab_staff_remarks}
+                              </div>
+                            )}
+                            {r.lab_coordinator_remarks && (
+                              <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
+                                <span className="font-medium">Lab Coordinator:</span> {r.lab_coordinator_remarks}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-1">
+                      {r.items?.map((it: any, idx: number) => (
+                        <div key={idx} className="text-sm flex items-center justify-between border rounded p-2">
+                          <div className="font-medium">{it.component_name} {it.model ? `(${it.model})` : ''}</div>
+                          <div>Qty: <span className="font-medium">{it.quantity_requested}</span></div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent></Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="rejected">
+            {loading ? (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">Loading...</CardContent></Card>
+            ) : filtered.length === 0 ? (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">No requests found</CardContent></Card>
+            ) : (
+              <div className="space-y-3">
+                {filtered.map((r: any) => (
+                  <Card key={r.id}><CardContent className="p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium">{r.lab_name} • <span className="text-muted-foreground">{r.requester_name}</span></div>
+                      {badge(r.status)}
+                    </div>
+                    {r.purpose && (<div className="text-sm"><span className="text-muted-foreground">Purpose: </span>{r.purpose}</div>)}
+                    
+                    {/* View Timeline Button */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs"
+                      onClick={() => toggleTimeline(r.id)}
+                    >
+                      {expandedTimelines.has(r.id) ? (
+                        <>
+                          <ChevronUp className="h-3 w-3 mr-1" />
+                          Hide Timeline
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="h-3 w-3 mr-1" />
+                          View Timeline
+                        </>
+                      )}
+                    </Button>
+
+                    {/* Timeline - Collapsible */}
+                    {expandedTimelines.has(r.id) && (
+                      <div className="space-y-3 pt-2 border-t">
+                        <div className="px-2">
+                          <div className="flex items-center justify-between relative">
+                            <div className="absolute top-6 left-6 right-6 h-0.5 bg-gray-200"></div>
+                            {(r.initiator_role === 'faculty' ? [
+                              { name: 'Submitted', status: 'completed', icon: Clock },
+                              { name: 'Lab Staff', status: getStepStatus(r, 'Lab Staff Review'), icon: Users },
+                              { name: getApprovalAuthorityLabel(r), status: getStepStatus(r, getApprovalAuthorityLabel(r) + ' Review'), icon: Building },
+                              { name: 'Final', status: getFinalApprovalStatus(r), icon: CheckCircle2 }
+                            ] : [
+                              { name: 'Submitted', status: 'completed', icon: Clock },
+                              { name: 'Faculty', status: getStepStatus(r, 'Faculty Review'), icon: User },
+                              { name: 'Lab Staff', status: getStepStatus(r, 'Lab Staff Review'), icon: Users },
+                              { name: getApprovalAuthorityLabel(r), status: getStepStatus(r, getApprovalAuthorityLabel(r) + ' Review'), icon: Building },
+                              { name: 'Final', status: getFinalApprovalStatus(r), icon: CheckCircle2 }
+                            ]).map((step, index) => (
+                              <div key={index} className="flex flex-col items-center space-y-1 relative z-10">
+                                <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center ${
+                                  step.status === 'completed' ? 'bg-green-100 border-green-300' : 
+                                  step.status === 'pending' ? 'bg-blue-100 border-blue-300' : 
+                                  step.status === 'rejected' ? 'bg-red-100 border-red-300' : 
+                                  'bg-white border-gray-300'
+                                }`}>
+                                  <step.icon className={`h-4 w-4 ${
+                                    step.status === 'completed' ? 'text-green-600' : 
+                                    step.status === 'pending' ? 'text-blue-600' : 
+                                    step.status === 'rejected' ? 'text-red-600' : 
+                                    'text-gray-400'
+                                  }`} />
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-xs font-medium">{step.name}</p>
+                                  <p className={`text-xs ${
+                                    step.status === 'completed' ? 'text-green-600' : 
+                                    step.status === 'pending' ? 'text-blue-600' : 
+                                    step.status === 'rejected' ? 'text-red-600' : 
+                                    'text-gray-500'
+                                  }`}>
+                                    {step.status === 'completed' ? 'Done' : 
+                                     step.status === 'pending' ? 'In Progress' : 
+                                     step.status === 'rejected' ? 'Rejected' : 'Waiting'}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Previous Remarks */}
+                          <div className="mt-3 space-y-2">
+                            {r.faculty_remarks && (
+                              <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
+                                <span className="font-medium">Faculty:</span> {r.faculty_remarks}
+                              </div>
+                            )}
+                            {r.lab_staff_remarks && (
+                              <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
+                                <span className="font-medium">Lab Staff:</span> {r.lab_staff_remarks}
+                              </div>
+                            )}
+                            {r.lab_coordinator_remarks && (
+                              <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
+                                <span className="font-medium">Lab Coordinator:</span> {r.lab_coordinator_remarks}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-1">
+                      {r.items?.map((it: any, idx: number) => (
+                        <div key={idx} className="text-sm flex items-center justify-between border rounded p-2">
+                          <div className="font-medium">{it.component_name} {it.model ? `(${it.model})` : ''}</div>
+                          <div>Qty: <span className="font-medium">{it.quantity_requested}</span></div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent></Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
         <Button variant="outline" size="sm" asChild>
-          <Link href="/lab-coordinator/dashboard">
+          <Link href="/hod/dashboard">
             <ArrowLeft className="h-4 w-4 mr-1" />
             Back
           </Link>
@@ -512,153 +1124,170 @@ export default function LabCoordinatorApprovePage() {
         <div>
           <h1 className="text-xl font-bold">Review Requests</h1>
           <p className="text-xs text-muted-foreground">
-            {activeTab === 'pending' ? `${pendingItems.length} lab requests pending your approval`
-              : activeTab === 'approved' ? `${approvedItems.length} lab requests you approved`
-              : `${rejectedItems.length} lab requests you rejected`}
+            {activeType === 'lab'
+              ? (activeTab === 'pending' ? `${pendingItems.length} lab requests pending your approval`
+                : activeTab === 'approved' ? `${approvedItems.length} lab requests you approved`
+                : `${rejectedItems.length} lab requests you rejected`)
+              : (activeTab === 'pending' ? `Component requests pending your approval` : activeTab === 'approved' ? `Component requests you approved` : `Component requests you rejected`)}
           </p>
         </div>
       </div>
 
-      <div className="max-w-md mb-2">
-        <input
-          type="text"
-          placeholder="Search by student, lab, faculty, purpose, or request ID..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full px-3 py-2 border rounded text-xs"
-        />
-      </div>
-
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-3">
-        <TabsList className="grid w-full grid-cols-3 max-w-md h-8">
-          <TabsTrigger value="pending" className="flex items-center gap-1 text-xs">
-            Pending
-            {pendingItems.length > 0 && <Badge variant="secondary" className="ml-1 text-xs bg-orange-100 text-orange-800 animate-pulse">{pendingItems.length}</Badge>}
-          </TabsTrigger>
-          <TabsTrigger value="approved" className="flex items-center gap-1 text-xs">
-            Approved
-            {approvedItems.length > 0 && <Badge variant="secondary" className="ml-1 text-xs bg-green-100 text-green-800">{approvedItems.length}</Badge>}
-          </TabsTrigger>
-          <TabsTrigger value="rejected" className="flex items-center gap-1 text-xs">
-            Rejected
-            {rejectedItems.length > 0 && <Badge variant="destructive" className="ml-1 text-xs">{rejectedItems.length}</Badge>}
-          </TabsTrigger>
+      <Tabs value={activeType} onValueChange={(v) => setActiveType(v as 'lab'|'components')} className="space-y-3">
+        <TabsList className="grid w-full grid-cols-2 max-w-md h-8">
+          <TabsTrigger value="lab" className="text-xs">Lab Bookings</TabsTrigger>
+          <TabsTrigger value="components" className="text-xs">Component Requests</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="pending" className="space-y-4">
-          {loading ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <p className="text-gray-500">Loading...</p>
-              </CardContent>
-            </Card>
-          ) : pendingItems.length === 0 ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <p className="text-gray-500">No pending approval requests</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {filteredPendingItems.map((item) => {
-                const remarkText = remarks[item.id] || ''
-                const showTimelineForItem = !!showTimeline[item.id]
+        {/* Lab bookings */}
+        <TabsContent value="lab" className="space-y-3">
+          <div className="max-w-md mb-2">
+            <input
+              type="text"
+              placeholder="Search by student, lab, faculty, purpose, or request ID..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full px-3 py-2 border rounded text-xs"
+            />
+          </div>
 
-                return (
-                  <RequestCard
-                    key={item.id}
-                    item={item}
-                    showActions={true}
-                    remark={remarkText}
-                    showTimelineForItem={showTimelineForItem}
-                    onRemarksChange={(val: string) => handleRemarksChange(item.id, val)}
-                    onToggleTimeline={() => toggleTimeline(item.id)}
-                    onAction={handleAction}
-                    actionLoading={actionLoading}
-                    formatDate={formatDate}
-                    formatTime={formatTime}
-                    getStatusBadge={getStatusBadge}
-                    getStepStatus={getStepStatus}
-                    getFinalApprovalStatus={getFinalApprovalStatus}
-                  />
-                )
-              })}
-            </div>
-          )}
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-3">
+            <TabsList className="grid w-full grid-cols-3 max-w-md h-8">
+              <TabsTrigger value="pending" className="flex items-center gap-1 text-xs">
+                Pending
+                {pendingItems.length > 0 && <Badge variant="secondary" className="ml-1 text-xs bg-orange-100 text-orange-800 animate-pulse">{pendingItems.length}</Badge>}
+              </TabsTrigger>
+              <TabsTrigger value="approved" className="flex items-center gap-1 text-xs">
+                Approved
+                {approvedItems.length > 0 && <Badge variant="secondary" className="ml-1 text-xs bg-green-100 text-green-800">{approvedItems.length}</Badge>}
+              </TabsTrigger>
+              <TabsTrigger value="rejected" className="flex items-center gap-1 text-xs">
+                Rejected
+                {rejectedItems.length > 0 && <Badge variant="destructive" className="ml-1 text-xs">{rejectedItems.length}</Badge>}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="pending" className="space-y-4">
+              {loading ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <p className="text-gray-500">Loading...</p>
+                  </CardContent>
+                </Card>
+              ) : pendingItems.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <p className="text-gray-500">No pending approval requests</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4">
+                  {filteredPendingItems.map((item) => {
+                    const remarkText = remarks[item.id] || ''
+                    const showTimelineForItem = !!showTimeline[item.id]
+
+                    return (
+                      <RequestCard
+                        key={item.id}
+                        item={item}
+                        showActions={true}
+                        remark={remarkText}
+                        showTimelineForItem={showTimelineForItem}
+                        onRemarksChange={(val: string) => handleRemarksChange(item.id, val)}
+                        onToggleTimeline={() => toggleTimeline(item.id)}
+                        onAction={handleAction}
+                        actionLoading={actionLoading}
+                        formatDate={formatDate}
+                        formatTime={formatTime}
+                        getStatusBadge={getStatusBadge}
+                        getStepStatus={getStepStatus}
+                        getFinalApprovalStatus={getFinalApprovalStatus}
+                      />
+                    )
+                  })}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="approved" className="space-y-4">
+              {loading ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <p className="text-gray-500">Loading...</p>
+                  </CardContent>
+                </Card>
+              ) : approvedItems.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <p className="text-gray-500">No approved requests</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4">
+                  {filteredApprovedItems.map((item) => (
+                    <RequestCard
+                      key={item.id}
+                      item={item}
+                      showActions={false}
+                      remark={remarks[item.id] || ''}
+                      showTimelineForItem={!!showTimeline[item.id]}
+                      onRemarksChange={(v: string) => handleRemarksChange(item.id, v)}
+                      onToggleTimeline={() => toggleTimeline(item.id)}
+                      onAction={handleAction}
+                      actionLoading={actionLoading}
+                      formatDate={formatDate}
+                      formatTime={formatTime}
+                      getStatusBadge={getStatusBadge}
+                      getStepStatus={getStepStatus}
+                      getFinalApprovalStatus={getFinalApprovalStatus}
+                    />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="rejected" className="space-y-4">
+              {loading ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <p className="text-gray-500">Loading...</p>
+                  </CardContent>
+                </Card>
+              ) : rejectedItems.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <p className="text-gray-500">No rejected requests</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4">
+                  {filteredRejectedItems.map((item) => (
+                    <RequestCard
+                      key={item.id}
+                      item={item}
+                      showActions={false}
+                      remark={remarks[item.id] || ''}
+                      showTimelineForItem={!!showTimeline[item.id]}
+                      onRemarksChange={(v: string) => handleRemarksChange(item.id, v)}
+                      onToggleTimeline={() => toggleTimeline(item.id)}
+                      onAction={handleAction}
+                      actionLoading={actionLoading}
+                      formatDate={formatDate}
+                      formatTime={formatTime}
+                      getStatusBadge={getStatusBadge}
+                      getStepStatus={getStepStatus}
+                      getFinalApprovalStatus={getFinalApprovalStatus}
+                    />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
-        <TabsContent value="approved" className="space-y-4">
-          {loading ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <p className="text-gray-500">Loading...</p>
-              </CardContent>
-            </Card>
-          ) : approvedItems.length === 0 ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <p className="text-gray-500">No approved requests</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {filteredApprovedItems.map((item) => (
-                <RequestCard
-                  key={item.id}
-                  item={item}
-                  showActions={false}
-                  remark={remarks[item.id] || ''}
-                  showTimelineForItem={!!showTimeline[item.id]}
-                  onRemarksChange={(v: string) => handleRemarksChange(item.id, v)}
-                  onToggleTimeline={() => toggleTimeline(item.id)}
-                  onAction={handleAction}
-                  actionLoading={actionLoading}
-                  formatDate={formatDate}
-                  formatTime={formatTime}
-                  getStatusBadge={getStatusBadge}
-                  getStepStatus={getStepStatus}
-                  getFinalApprovalStatus={getFinalApprovalStatus}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="rejected" className="space-y-4">
-          {loading ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <p className="text-gray-500">Loading...</p>
-              </CardContent>
-            </Card>
-          ) : rejectedItems.length === 0 ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <p className="text-gray-500">No rejected requests</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {filteredRejectedItems.map((item) => (
-                <RequestCard
-                  key={item.id}
-                  item={item}
-                  showActions={false}
-                  remark={remarks[item.id] || ''}
-                  showTimelineForItem={!!showTimeline[item.id]}
-                  onRemarksChange={(v: string) => handleRemarksChange(item.id, v)}
-                  onToggleTimeline={() => toggleTimeline(item.id)}
-                  onAction={handleAction}
-                  actionLoading={actionLoading}
-                  formatDate={formatDate}
-                  formatTime={formatTime}
-                  getStatusBadge={getStatusBadge}
-                  getStepStatus={getStepStatus}
-                  getFinalApprovalStatus={getFinalApprovalStatus}
-                />
-              ))}
-            </div>
-          )}
+        {/* Component requests */}
+        <TabsContent value="components" className="space-y-3">
+          <LabCoordinatorComponentsApprovals />
         </TabsContent>
       </Tabs>
 
