@@ -92,7 +92,7 @@ export async function POST(
     if (action === 'approve') {
       updateQuery = `
         UPDATE booking_requests 
-        SET status = ?, hod_approved_at = NOW(), hod_approved_by = ?, hod_remarks = ?
+        SET status = ?, hod_approved_at = NOW(), hod_approved_by = ?, hod_remarks = ?, final_approver_role = 'lab_coordinator'
         WHERE id = ?
       `
       updateParams = [newStatus, user.userId, remarks || null, requestId]
@@ -101,7 +101,7 @@ export async function POST(
       updateQuery = `
         UPDATE booking_requests 
         SET status = ?, hod_approved_at = NOW(), hod_approved_by = ?, hod_remarks = ?,
-            rejected_by = ?, rejected_at = NOW(), rejection_reason = ?
+            rejected_by = ?, rejected_at = NOW(), rejection_reason = ?, final_approver_role = 'lab_coordinator'
         WHERE id = ?
       `
       updateParams = [newStatus, user.userId, remarks || null, user.userId, remarks || 'Rejected by Lab Coordinator', requestId]
@@ -116,28 +116,24 @@ export async function POST(
       SELECT 
         br.*,
         u.name as requester_name,
+        u.salutation as requester_salutation,
         u.email as requester_email,
         u.role as requester_role,
         l.name as lab_name,
         l.code as lab_code,
-        CASE 
-          WHEN faculty.salutation IS NOT NULL 
-          THEN CONCAT(UPPER(faculty.salutation), '. ', faculty.name)
-          ELSE faculty.name
-        END as faculty_name,
+        d.highest_approval_authority,
+        faculty.name as faculty_name,
+        faculty.salutation as faculty_salutation,
         faculty.email as faculty_email,
-        CASE 
-          WHEN lab_staff.salutation IS NOT NULL 
-          THEN CONCAT(UPPER(lab_staff.salutation), '. ', lab_staff.name)
-          ELSE lab_staff.name
-        END as lab_staff_name,
+        lab_staff.name as lab_staff_name,
+        lab_staff.salutation as lab_staff_salutation,
         lab_staff.email as lab_staff_email,
-        CASE 
-          WHEN coordinator.salutation IS NOT NULL 
-          THEN CONCAT(UPPER(coordinator.salutation), '. ', coordinator.name)
-          ELSE coordinator.name
-        END as lab_coordinator_name,
-        coordinator.email as lab_coordinator_email
+        coordinator.name as lab_coordinator_name,
+        coordinator.salutation as lab_coordinator_salutation,
+        coordinator.email as lab_coordinator_email,
+        hod.name as hod_name,
+        hod.salutation as hod_salutation,
+        hod.email as hod_email
       FROM booking_requests br
       LEFT JOIN users u ON u.id = br.requested_by
       LEFT JOIN labs l ON l.id = br.lab_id
@@ -145,6 +141,7 @@ export async function POST(
       LEFT JOIN users faculty ON faculty.id = br.faculty_supervisor_id
       LEFT JOIN users lab_staff ON lab_staff.id = br.lab_staff_approved_by
       LEFT JOIN users coordinator ON coordinator.id = d.lab_coordinator_id
+      LEFT JOIN users hod ON hod.id = d.hod_id
       WHERE br.id = ?
     `, [requestId])
     

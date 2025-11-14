@@ -29,6 +29,7 @@ interface BookingWithTimeline {
   requested_by: number
   faculty_supervisor_id: number | null
   created_at: string
+  highest_approval_authority?: 'hod' | 'lab_coordinator'
   timeline: TimelineStep[]
 }
 
@@ -101,17 +102,22 @@ export default function TNPMyRequestsPage() {
     // Faculty and TnP bookings have 4 steps (they book for themselves)
     const isStudentBooking = request.faculty_supervisor_id && request.requested_by !== request.faculty_supervisor_id
     
+    // Dynamic approval authority label
+    const finalApprovalLabel = request.highest_approval_authority === 'lab_coordinator' 
+      ? 'Lab Coordinator Approval' 
+      : 'HOD Approval'
+    
     // For TnP bookings, show "Recommended" instead of "Approval" for Faculty and Lab Staff
     const allSteps = isStudentBooking ? [
       { name: 'Submitted', key: 'submitted', icon: CheckCircle, color: 'green' },
       { name: 'Faculty Recommendation', key: 'faculty', icon: Users, color: 'blue' },
       { name: 'Lab Staff Recommendation', key: 'lab_staff', icon: Users, color: 'blue' },
-      { name: 'HOD Approval', key: 'hod', icon: Building, color: 'purple' },
+      { name: finalApprovalLabel, key: 'hod', icon: Building, color: 'purple' },
       { name: 'Approved', key: 'approved', icon: CheckCircle, color: 'green' }
     ] : [
       { name: 'Submitted', key: 'submitted', icon: CheckCircle, color: 'green' },
       { name: 'Lab Staff Recommendation', key: 'lab_staff', icon: Users, color: 'blue' },
-      { name: 'HOD Approval', key: 'hod', icon: Building, color: 'purple' },
+      { name: finalApprovalLabel, key: 'hod', icon: Building, color: 'purple' },
       { name: 'Approved', key: 'approved', icon: CheckCircle, color: 'green' }
     ]
 
@@ -158,7 +164,10 @@ export default function TNPMyRequestsPage() {
               } else if (step.key === 'lab_staff') {
                 timelineStep = request.timeline.find(t => t.step_name === 'Lab Staff Approval')
               } else if (step.key === 'hod') {
-                timelineStep = request.timeline.find(t => t.step_name === 'HOD Approval')
+                // Look for either HOD Approval or Lab Coordinator Approval
+                timelineStep = request.timeline.find(t => 
+                  t.step_name === 'HOD Approval' || t.step_name === 'Lab Coordinator Approval'
+                )
               }
 
               const isCompleted = timelineStep?.step_status === 'completed'

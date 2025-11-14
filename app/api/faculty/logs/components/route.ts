@@ -76,16 +76,6 @@ export async function GET(req: NextRequest) {
         ? JSON.parse(log.entity_snapshot) 
         : log.entity_snapshot;
 
-      // Determine the approval authority based on final_approver_role or presence of lab_coordinator fields
-      const finalApproverRole = snapshot?.final_approver_role
-      const hasLabCoordinator = !!snapshot?.lab_coordinator_name
-      const hasHOD = !!snapshot?.hod_name
-      
-      // Priority: final_approver_role > lab_coordinator_name > hod_name
-      const approvalAuthority = finalApproverRole === 'lab_coordinator' 
-        ? 'lab_coordinator' 
-        : (hasLabCoordinator ? 'lab_coordinator' : (hasHOD ? 'hod' : (snapshot?.highest_approval_authority || 'hod')))
-
       return {
         ...log,
         requester_name: log.requester_name || 'Unknown',
@@ -111,7 +101,8 @@ export async function GET(req: NextRequest) {
         hod_name: snapshot?.hod_name || null,
         hod_salutation: snapshot?.hod_salutation || 'none',
         hod_approved_at: snapshot?.hod_approved_at || null,
-        highest_approval_authority: approvalAuthority,
+        highest_approval_authority: snapshot?.highest_approval_authority || 'hod',
+        final_approver_role: snapshot?.final_approver_role || null,
       };
     });
 

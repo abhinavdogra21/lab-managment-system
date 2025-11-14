@@ -41,6 +41,7 @@ interface ComponentLog {
   components_list?: string
   created_at?: string
   highest_approval_authority?: 'hod' | 'lab_coordinator'
+  final_approver_role?: 'hod' | 'lab_coordinator' | null
 }
 
 interface BookingLog {
@@ -69,6 +70,7 @@ interface BookingLog {
   hod_approved_at: string | null
   created_at?: string
   highest_approval_authority?: 'hod' | 'lab_coordinator'
+  final_approver_role?: 'hod' | 'lab_coordinator' | null
 }
 
 // Helper function to format names with salutation
@@ -88,12 +90,14 @@ const formatNameWithSalutation = (name: string | null, salutation?: string): str
 }
 
 const BookingLogTimeline = ({ log }: { log: BookingLog }) => {
-  // Determine the actual approver based on highest_approval_authority
-  const approvalAuthorityLabel = log.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'
-  const approverName = log.highest_approval_authority === 'lab_coordinator'
+  // Determine the actual approver based on final_approver_role (who ACTUALLY approved)
+  // Fall back to highest_approval_authority if final_approver_role is not set (old data)
+  const actualApproverRole = log.final_approver_role || log.highest_approval_authority
+  const approvalAuthorityLabel = actualApproverRole === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'
+  const approverName = actualApproverRole === 'lab_coordinator'
     ? formatNameWithSalutation(log.lab_coordinator_name || '', log.lab_coordinator_salutation)
     : formatNameWithSalutation(log.hod_name || '', log.hod_salutation)
-  const approvalDate = log.highest_approval_authority === 'lab_coordinator'
+  const approvalDate = actualApproverRole === 'lab_coordinator'
     ? log.lab_coordinator_approved_at
     : log.hod_approved_at
   const hasFinalApproval = log.lab_coordinator_name || log.hod_name
@@ -194,12 +198,14 @@ const BookingLogTimeline = ({ log }: { log: BookingLog }) => {
 }
 
 const ComponentLogTimeline = ({ log }: { log: ComponentLog }) => {
-  // Determine the actual approver based on highest_approval_authority
-  const approvalAuthorityLabel = log.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'
-  const approverName = log.highest_approval_authority === 'lab_coordinator'
+  // Determine the actual approver based on final_approver_role (who ACTUALLY approved)
+  // Fall back to highest_approval_authority if final_approver_role is not set (old data)
+  const actualApproverRole = log.final_approver_role || log.highest_approval_authority
+  const approvalAuthorityLabel = actualApproverRole === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'
+  const approverName = actualApproverRole === 'lab_coordinator'
     ? formatNameWithSalutation(log.lab_coordinator_name || '', log.lab_coordinator_salutation)
     : formatNameWithSalutation(log.hod_name || '', log.hod_salutation)
-  const approvalDate = log.highest_approval_authority === 'lab_coordinator'
+  const approvalDate = actualApproverRole === 'lab_coordinator'
     ? log.lab_coordinator_approved_at
     : log.hod_approved_at
   const hasFinalApproval = log.lab_coordinator_name || log.hod_name
@@ -684,14 +690,15 @@ export default function FacultyLogsPage() {
       doc.setFont('helvetica', 'bold')
       doc.text('✓', 20, yPos)
       
-      // Determine approval authority and name
-      const approvalAuthority = log.highest_approval_authority === 'lab_coordinator' 
+      // Determine approval authority and name based on who ACTUALLY approved
+      const actualApproverRole = log.final_approver_role || log.highest_approval_authority
+      const approvalAuthority = actualApproverRole === 'lab_coordinator' 
         ? 'LAB COORDINATOR' 
         : 'HoD'
-      const approverName = log.highest_approval_authority === 'lab_coordinator'
+      const approverName = actualApproverRole === 'lab_coordinator'
         ? formatNameWithSalutation(log.lab_coordinator_name || '', log.lab_coordinator_salutation)
         : formatNameWithSalutation(log.hod_name || '', log.hod_salutation)
-      const approvalDate = log.highest_approval_authority === 'lab_coordinator'
+      const approvalDate = actualApproverRole === 'lab_coordinator'
         ? log.lab_coordinator_approved_at
         : log.hod_approved_at
       
@@ -945,14 +952,15 @@ export default function FacultyLogsPage() {
       doc.setFont('helvetica', 'bold')
       doc.text('✓', 20, yPos)
       
-      // Determine approval authority and name
-      const approvalAuthority = log.highest_approval_authority === 'lab_coordinator' 
+      // Determine approval authority and name based on who ACTUALLY approved
+      const actualApproverRole = log.final_approver_role || log.highest_approval_authority
+      const approvalAuthority = actualApproverRole === 'lab_coordinator' 
         ? 'LAB COORDINATOR' 
         : 'HoD'
-      const approverName = log.highest_approval_authority === 'lab_coordinator'
+      const approverName = actualApproverRole === 'lab_coordinator'
         ? formatNameWithSalutation(log.lab_coordinator_name || '', log.lab_coordinator_salutation)
         : formatNameWithSalutation(log.hod_name || '', log.hod_salutation)
-      const approvalDate = log.highest_approval_authority === 'lab_coordinator'
+      const approvalDate = actualApproverRole === 'lab_coordinator'
         ? log.lab_coordinator_approved_at
         : log.hod_approved_at
       

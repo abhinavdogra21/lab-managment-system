@@ -57,7 +57,8 @@ export async function POST(
 
     // First, verify the request exists and is in the correct state
     let checkQuery = `
-      SELECT br.*, l.department_id, d.name as dept_name, d.highest_approval_authority, d.hod_id, d.lab_coordinator_id
+      SELECT br.*, l.department_id, d.name as dept_name, d.highest_approval_authority, 
+             d.hod_id, d.hod_email, d.lab_coordinator_id
       FROM booking_requests br
       JOIN labs l ON br.lab_id = l.id
       JOIN departments d ON l.department_id = d.id
@@ -93,7 +94,9 @@ export async function POST(
         }
       } else {
         // HOD authority - only HOD can approve
-        const isHOD = Number(booking.hod_id) === Number(user.userId)
+        // Check both hod_id and hod_email (in case of duplicate accounts)
+        const isHOD = Number(booking.hod_id) === Number(user.userId) || 
+                      (booking.hod_email && String(booking.hod_email).toLowerCase() === String(user.email || '').toLowerCase())
         if (!isHOD && !isLabCoordinator) {
           return NextResponse.json({ 
             error: "Only the HOD can approve this request." 
@@ -108,25 +111,32 @@ export async function POST(
 
     // Update the booking status
     const newStatus = action === 'approve' ? 'approved' : 'rejected'
+    
+    // Determine who is approving: lab_coordinator or hod
+    const isLabCoordinator = user.role === 'lab_coordinator' || Number(booking.lab_coordinator_id) === Number(user.userId)
+    const approverRole = (isLabCoordinator && booking.highest_approval_authority === 'lab_coordinator') 
+      ? 'lab_coordinator' 
+      : 'hod'
+    
     let updateQuery: string
     let updateParams: any[]
     
     if (action === 'approve') {
       updateQuery = `
         UPDATE booking_requests 
-        SET status = ?, hod_approved_at = NOW(), hod_approved_by = ?, hod_remarks = ?
+        SET status = ?, hod_approved_at = NOW(), hod_approved_by = ?, hod_remarks = ?, final_approver_role = ?
         WHERE id = ?
       `
-      updateParams = [newStatus, user.userId, remarks || null, requestId]
+      updateParams = [newStatus, user.userId, remarks || null, approverRole, requestId]
     } else {
       // For rejection, also set rejected_by and rejected_at
       updateQuery = `
         UPDATE booking_requests 
         SET status = ?, hod_approved_at = NOW(), hod_approved_by = ?, hod_remarks = ?,
-            rejected_by = ?, rejected_at = NOW(), rejection_reason = ?
+            rejected_by = ?, rejected_at = NOW(), rejection_reason = ?, final_approver_role = ?
         WHERE id = ?
       `
-      updateParams = [newStatus, user.userId, remarks || null, user.userId, remarks || 'Rejected by HOD', requestId]
+      updateParams = [newStatus, user.userId, remarks || null, user.userId, remarks || 'Rejected by HOD', approverRole, requestId]
     }
     
     await db.query(updateQuery, updateParams)
@@ -138,27 +148,23 @@ export async function POST(
       SELECT 
         br.*,
         u.name as requester_name,
+        u.salutation as requester_salutation,
         u.email as requester_email,
         u.role as requester_role,
         l.name as lab_name,
         l.code as lab_code,
-        CASE 
-          WHEN faculty.salutation IS NOT NULL 
-          THEN CONCAT(UPPER(faculty.salutation), '. ', faculty.name)
-          ELSE faculty.name
-        END as faculty_name,
+        d.highest_approval_authority,
+        faculty.name as faculty_name,
+        faculty.salutation as faculty_salutation,
         faculty.email as faculty_email,
-        CASE 
-          WHEN lab_staff.salutation IS NOT NULL 
-          THEN CONCAT(UPPER(lab_staff.salutation), '. ', lab_staff.name)
-          ELSE lab_staff.name
-        END as lab_staff_name,
+        lab_staff.name as lab_staff_name,
+        lab_staff.salutation as lab_staff_salutation,
         lab_staff.email as lab_staff_email,
-        CASE 
-          WHEN hod.salutation IS NOT NULL 
-          THEN CONCAT(UPPER(hod.salutation), '. ', hod.name)
-          ELSE hod.name
-        END as hod_name,
+        lc.name as lab_coordinator_name,
+        lc.salutation as lab_coordinator_salutation,
+        lc.email as lab_coordinator_email,
+        hod.name as hod_name,
+        hod.salutation as hod_salutation,
         hod.email as hod_email
       FROM booking_requests br
       LEFT JOIN users u ON u.id = br.requested_by
@@ -166,6 +172,7 @@ export async function POST(
       LEFT JOIN departments d ON l.department_id = d.id
       LEFT JOIN users faculty ON faculty.id = br.faculty_supervisor_id
       LEFT JOIN users lab_staff ON lab_staff.id = br.lab_staff_approved_by
+      LEFT JOIN users lc ON lc.id = d.lab_coordinator_id
       LEFT JOIN users hod ON hod.id = d.hod_id
       WHERE br.id = ?
     `, [requestId])
