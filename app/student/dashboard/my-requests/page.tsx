@@ -4,11 +4,10 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { Clock, CheckCircle, XCircle, User, Users, Building, Eye, Calendar, ArrowRight, Filter } from "lucide-react"
+import { Clock, CheckCircle, XCircle, User, Users, Building, Eye, Calendar, ArrowRight, Filter, ChevronUp, ChevronDown, CheckCircle2 } from "lucide-react"
 
 interface TimelineStep {
   step_name: string
@@ -30,6 +29,21 @@ interface BookingWithTimeline {
   status: string
   created_at: string
   highest_approval_authority?: 'hod' | 'lab_coordinator'
+  is_multi_lab?: boolean | number
+  multi_lab_approvals?: Array<{
+    lab_id: number
+    lab_name: string
+    lab_code: string
+    status: string
+    lab_staff_approved_at: string | null
+    lab_staff_approved_by: number | null
+    lab_staff_name: string | null
+    hod_approved_at: string | null
+    hod_approved_by: number | null
+    hod_name: string | null
+    responsible_person_name?: string
+    responsible_person_email?: string
+  }>
   timeline: TimelineStep[]
 }
 
@@ -39,6 +53,11 @@ export default function MyRequestsPage() {
   const [requests, setRequests] = useState<BookingWithTimeline[]>([])
   const [selectedRequest, setSelectedRequest] = useState<BookingWithTimeline | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [showTimeline, setShowTimeline] = useState<Record<number, boolean>>({})
+
+  const toggleTimeline = (id: number) => {
+    setShowTimeline(prev => ({ ...prev, [id]: !prev[id] }))
+  }
 
   useEffect(() => {
     loadMyRequests()
@@ -155,16 +174,108 @@ export default function MyRequestsPage() {
     ]
 
     return (
-      <div className="space-y-6">
-        {/* Request Details */}
-        <div className="text-sm space-y-1 p-4 bg-gray-50 rounded-lg">
-          <p><span className="font-medium">Lab:</span> {request.lab_name}</p>
-          <p><span className="font-medium">Faculty:</span> {request.faculty_name}</p>
-          <p><span className="font-medium">Date:</span> {new Date(request.date).toLocaleDateString()}</p>
-          <p><span className="font-medium">Time:</span> {request.start_time} - {request.end_time}</p>
-        </div>
+      <div className="space-y-4">
+        {/* View Timeline Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full text-xs"
+          onClick={() => toggleTimeline(request.id)}
+        >
+          {showTimeline[request.id] ? (
+            <>
+              <ChevronUp className="h-3 w-3 mr-1" />
+              Hide Timeline
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-3 w-3 mr-1" />
+              View Timeline
+            </>
+          )}
+        </Button>
 
-        {/* Horizontal Timeline */}
+        {/* Horizontal Timeline - Collapsible */}
+        {showTimeline[request.id] && (
+        <div className="space-y-3">
+          {/* Multi-Lab Approval Status */}
+          {(request.is_multi_lab === 1 || request.is_multi_lab === true) && request.multi_lab_approvals && request.multi_lab_approvals.length > 0 && (
+            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <h4 className="text-xs font-medium mb-2 flex items-center gap-1">
+                <Building className="h-3 w-3" />
+                Individual Lab Approval Status
+              </h4>
+              <div className="space-y-2">
+                {request.multi_lab_approvals.map((approval) => {
+                  // Determine display status
+                  let displayStatus = 'Pending Faculty'
+                  let badgeVariant: 'default' | 'secondary' | 'outline' | 'destructive' = 'outline'
+                  
+                  if (request.status === 'pending_faculty') {
+                    displayStatus = 'Pending Faculty'
+                    badgeVariant = 'outline'
+                  } else if (approval.status === 'approved') {
+                    displayStatus = '✓ Fully Approved'
+                    badgeVariant = 'default'
+                  } else if (approval.status === 'approved_by_lab_staff') {
+                    displayStatus = 'Pending HOD'
+                    badgeVariant = 'secondary'
+                  } else if (approval.status === 'pending' && request.status === 'pending_lab_staff') {
+                    displayStatus = 'Pending Lab Staff'
+                    badgeVariant = 'outline'
+                  } else if (approval.status === 'pending' && request.status === 'pending_hod') {
+                    displayStatus = 'Pending Lab Staff'
+                    badgeVariant = 'outline'
+                  } else if (approval.status === 'rejected') {
+                    displayStatus = 'Rejected'
+                    badgeVariant = 'destructive'
+                  }
+                  
+                  return (
+                    <div key={approval.lab_id} className="p-2 bg-white rounded border text-xs">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium">{approval.lab_name}</span>
+                        <Badge variant={badgeVariant} className="text-xs">{displayStatus}</Badge>
+                      </div>
+                      {approval.responsible_person_name && (
+                        <div className="text-xs text-muted-foreground mb-1">
+                          <span className="font-medium">Contact:</span> {approval.responsible_person_name}
+                          {approval.responsible_person_email && ` (${approval.responsible_person_email})`}
+                        </div>
+                      )}
+                      <div className="text-xs space-y-1 text-muted-foreground">
+                        {approval.lab_staff_approved_at && (
+                          <p className="flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3 text-green-600" />
+                            Lab Staff: {approval.lab_staff_name} - {new Date(approval.lab_staff_approved_at).toLocaleDateString()}
+                          </p>
+                        )}
+                        {approval.hod_approved_at && (
+                          <p className="flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3 text-green-600" />
+                            HOD: {approval.hod_name} - {new Date(approval.hod_approved_at).toLocaleDateString()}
+                          </p>
+                        )}
+                        {!approval.lab_staff_approved_at && request.status !== 'pending_faculty' && (
+                          <p className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 text-yellow-600" />
+                            Awaiting Lab Staff approval
+                          </p>
+                        )}
+                        {request.status === 'pending_faculty' && (
+                          <p className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 text-yellow-600" />
+                            Awaiting Faculty recommendation
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+          
         <div className="px-4">
           <div className="flex items-center justify-between relative">
             {/* Timeline line */}
@@ -209,6 +320,19 @@ export default function MyRequestsPage() {
                   {/* Step label */}
                   <div className="text-center">
                     <p className="text-xs font-medium">{step.name}</p>
+                    {/* Show progress for multi-lab Lab Staff step */}
+                    {(request.is_multi_lab === 1 || request.is_multi_lab === true) && request.multi_lab_approvals && step.name === 'Lab Staff Recommendation' && (
+                      <p className="text-xs text-blue-600 font-medium">
+                        {request.multi_lab_approvals.filter(a => a.lab_staff_approved_at).length}/{request.multi_lab_approvals.length}
+                      </p>
+                    )}
+                    {/* Show progress for multi-lab HOD step */}
+                    {(request.is_multi_lab === 1 || request.is_multi_lab === true) && request.multi_lab_approvals && 
+                     (step.name === 'HOD Approval' || step.name === 'Lab Coordinator Approval') && (
+                      <p className="text-xs text-blue-600 font-medium">
+                        {request.multi_lab_approvals.filter(a => a.hod_approved_at).length}/{request.multi_lab_approvals.length}
+                      </p>
+                    )}
                     <p className={`text-xs ${
                       step.status === 'completed' ? 'text-green-600' :
                       step.status === 'pending' ? 'text-blue-600' :
@@ -245,6 +369,8 @@ export default function MyRequestsPage() {
             </div>
           )}
         </div>
+        </div>
+        )}
       </div>
     )
   }
@@ -378,20 +504,6 @@ export default function MyRequestsPage() {
                     <p className="text-sm mt-2">{request.purpose}</p>
                   </div>
                   <div className="flex flex-col gap-2 items-end">
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <Eye className="h-4 w-4 mr-2" />
-                          View Timeline
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-3xl">
-                        <DialogHeader>
-                          <DialogTitle>Request Timeline</DialogTitle>
-                        </DialogHeader>
-                        <TimelineView request={request} />
-                      </DialogContent>
-                    </Dialog>
                     {/* Withdraw button for pending requests */}
                     {['pending_faculty','pending_lab_staff','pending_hod'].includes(request.status) && (
                       <Button
@@ -411,6 +523,11 @@ export default function MyRequestsPage() {
                       </Button>
                     )}
                   </div>
+                </div>
+                
+                {/* Inline Timeline Section */}
+                <div className="mt-4 pt-4 border-t">
+                  <TimelineView request={request} />
                 </div>
               </CardContent>
             </Card>

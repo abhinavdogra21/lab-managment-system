@@ -15,6 +15,7 @@ interface RequestItem {
   id: number
   student_name: string
   student_email: string
+  requester_role?: string
   lab_name: string
   booking_date: string
   start_time: string
@@ -32,6 +33,21 @@ interface RequestItem {
   lab_coordinator_approved_at?: string | null
   highest_approval_authority?: 'hod' | 'lab_coordinator'
   lab_coordinator_id?: number | null
+  is_multi_lab?: boolean
+  lab_ids?: string
+  multi_lab_approvals?: Array<{
+    lab_id: number
+    lab_name: string
+    status: string
+    lab_staff_approved_by: number | null
+    lab_staff_name?: string
+    hod_approved_by: number | null
+  }>
+  responsible_persons?: Array<{
+    lab_id: number
+    name: string
+    email: string
+  }>
 }
 
 const TimelineView = ({ item, getStepStatus, getFinalApprovalStatus }: { 
@@ -157,12 +173,57 @@ const RequestCard = React.memo(function RequestCardComponent({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Building className="h-4 w-4 text-blue-600" />
-            <span className="font-medium text-sm">{item.lab_name}</span>
+            <span className="font-medium text-sm">
+              {item.is_multi_lab ? `Multi-Lab Booking (${item.lab_name} + ${(JSON.parse(item.lab_ids || '[]').length - 1)} more)` : item.lab_name}
+            </span>
             <span className="text-xs text-gray-500">•</span>
             <span className="text-xs text-gray-600">{item.student_name}</span>
+            {item.requester_role && item.requester_role !== 'student' && (
+              <Badge variant="outline" className="text-xs">{item.requester_role}</Badge>
+            )}
           </div>
           {getStatusBadge(item.status)}
         </div>
+
+        {/* Multi-lab approval status */}
+        {item.is_multi_lab && item.multi_lab_approvals && item.multi_lab_approvals.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+            <div className="text-xs font-semibold text-blue-900">Multi-Lab Approval Status</div>
+            <div className="space-y-1.5">
+              {item.multi_lab_approvals.map((approval: any) => {
+                const allApproved = approval.status === 'approved_by_lab_staff'
+                return (
+                  <div key={approval.lab_id} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1.5">
+                    <div className="flex items-center gap-2">
+                      <Building className="h-3 w-3 text-blue-600" />
+                      <span className="font-medium">{approval.lab_name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {approval.lab_staff_name && (
+                        <span className="text-gray-600">by {approval.lab_staff_name}</span>
+                      )}
+                      {allApproved ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                      ) : (
+                        <Clock className="h-3.5 w-3.5 text-orange-500" />
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {item.responsible_persons && item.responsible_persons.length > 0 && (
+              <div className="text-xs text-blue-700 pt-1 border-t border-blue-200">
+                <span className="font-medium">Responsible Persons:</span>{' '}
+                {item.responsible_persons.map((rp: any, idx: number) => (
+                  <span key={rp.lab_id}>
+                    {rp.name} ({rp.email}){idx < item.responsible_persons!.length - 1 ? ', ' : ''}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
           <div className="flex items-center gap-1">

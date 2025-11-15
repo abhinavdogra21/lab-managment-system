@@ -34,6 +34,7 @@ interface BookingLog {
   id: number
   log_id?: number
   requester_name: string
+  requester_salutation?: string | null
   requester_email: string
   requester_role: string
   lab_name: string
@@ -43,9 +44,16 @@ interface BookingLog {
   purpose: string
   status: string
   faculty_name: string | null
+  faculty_salutation?: string | null
   faculty_email: string | null
   lab_staff_name: string | null
+  lab_staff_salutation?: string | null
   hod_name: string | null
+  hod_salutation?: string | null
+  lab_coordinator_name?: string | null
+  lab_coordinator_salutation?: string | null
+  responsible_person_name?: string | null
+  responsible_person_email?: string | null
   created_at: string
   faculty_approved_at: string | null
   lab_staff_approved_at: string | null
@@ -80,6 +88,22 @@ interface ComponentLog {
 
 export default function HODLabsPage() {
   const { toast } = useToast()
+  
+  // Helper function to format name with salutation
+  const formatNameWithSalutation = (name: string | null, salutation: string | null | undefined): string => {
+    if (!name) return 'N/A'
+    if (!salutation || salutation === 'none') return name
+    
+    const salutationMap: { [key: string]: string } = {
+      'prof': 'Prof.',
+      'dr': 'Dr.',
+      'mr': 'Mr.',
+      'mrs': 'Mrs.'
+    }
+    
+    const salutationPrefix = salutationMap[salutation.toLowerCase()]
+    return salutationPrefix ? `${salutationPrefix} ${name}` : name
+  }
   
   // Calculate default dates: Aug 1 (current year) to July 31 (next year)
   const getDefaultDates = () => {
@@ -272,7 +296,7 @@ export default function HODLabsPage() {
     yPos += 10
     
     doc.text(`Name:`, 20, yPos)
-    doc.text(log.requester_name, 70, yPos)
+    doc.text(formatNameWithSalutation(log.requester_name, log.requester_salutation), 70, yPos)
     yPos += 7
     
     doc.text(`Email:`, 20, yPos)
@@ -295,7 +319,7 @@ export default function HODLabsPage() {
       doc.text('✓', 20, yPos)
       doc.setFont('helvetica', 'normal')
       doc.text(`Recommended by Faculty:`, 25, yPos)
-      doc.text(log.faculty_name, 85, yPos)
+      doc.text(formatNameWithSalutation(log.faculty_name, log.faculty_salutation), 85, yPos)
       yPos += 7
       if (log.faculty_approved_at) {
         doc.setFontSize(9)
@@ -314,7 +338,7 @@ export default function HODLabsPage() {
       doc.text('✓', 20, yPos)
       doc.setFont('helvetica', 'normal')
       doc.text(`Recommended by Lab Staff:`, 25, yPos)
-      doc.text(log.lab_staff_name, 85, yPos)
+      doc.text(formatNameWithSalutation(log.lab_staff_name, log.lab_staff_salutation), 85, yPos)
       yPos += 7
       if (log.lab_staff_approved_at) {
         doc.setFontSize(9)
@@ -335,7 +359,7 @@ export default function HODLabsPage() {
       doc.setFont('helvetica', 'bold')
       doc.text(`APPROVED BY HOD:`, 25, yPos)
       doc.setFont('helvetica', 'normal')
-      doc.text(log.hod_name, 85, yPos)
+      doc.text(formatNameWithSalutation(log.hod_name, log.hod_salutation), 85, yPos)
       yPos += 7
       if (log.hod_approved_at) {
         doc.setFontSize(9)
@@ -994,7 +1018,7 @@ export default function HODLabsPage() {
                         <div className="flex items-center gap-2">
                           <Users className="h-4 w-4 text-muted-foreground" />
                           <div>
-                            <div className="text-sm font-medium">{log.requester_name}</div>
+                            <div className="text-sm font-medium">{formatNameWithSalutation(log.requester_name, log.requester_salutation)}</div>
                             <div className="text-xs text-muted-foreground">{log.requester_email}</div>
                             <Badge variant="outline" className="text-xs mt-1">{log.requester_role}</Badge>
                           </div>
@@ -1015,21 +1039,21 @@ export default function HODLabsPage() {
                             <div className="flex items-center gap-2 text-sm">
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                               <span className="text-muted-foreground">Recommended by Faculty:</span>
-                              <span className="font-medium">{log.faculty_name}</span>
+                              <span className="font-medium">{formatNameWithSalutation(log.faculty_name, log.faculty_salutation)}</span>
                             </div>
                           )}
                           {log.lab_staff_name && (
                             <div className="flex items-center gap-2 text-sm">
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                               <span className="text-muted-foreground">Recommended by Lab Staff:</span>
-                              <span className="font-medium">{log.lab_staff_name}</span>
+                              <span className="font-medium">{formatNameWithSalutation(log.lab_staff_name, log.lab_staff_salutation)}</span>
                             </div>
                           )}
                           {log.hod_name && (
                             <div className="flex items-center gap-2 text-sm">
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                               <span className="text-muted-foreground">Approved by HOD:</span>
-                              <span className="font-medium">{log.hod_name}</span>
+                              <span className="font-medium">{formatNameWithSalutation(log.hod_name, log.hod_salutation)}</span>
                             </div>
                           )}
                         </div>

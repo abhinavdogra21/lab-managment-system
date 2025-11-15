@@ -34,6 +34,7 @@ interface BookingLog {
   id: number
   log_id?: number
   requester_name: string
+  requester_salutation?: string | null
   requester_email: string
   requester_role: string
   lab_name: string
@@ -43,9 +44,13 @@ interface BookingLog {
   purpose: string
   status: string
   faculty_name: string | null
+  faculty_salutation?: string | null
   faculty_email: string | null
   lab_staff_name: string | null
+  lab_staff_salutation?: string | null
   lab_coordinator_name: string | null
+  lab_coordinator_salutation?: string | null
+  responsible_person_name?: string | null
   created_at: string
   faculty_approved_at: string | null
   lab_staff_approved_at: string | null
@@ -56,6 +61,7 @@ interface ComponentLog {
   id: number
   log_id?: number
   requester_name: string
+  requester_salutation?: string | null
   requester_email: string
   requester_role: string
   lab_name: string
@@ -66,20 +72,43 @@ interface ComponentLog {
   returned_at: string | null
   actual_return_date: string | null
   faculty_name: string | null
+  faculty_salutation?: string | null
   faculty_email: string | null
   faculty_approved_at: string | null
   lab_staff_name: string | null
+  lab_staff_salutation?: string | null
   lab_staff_email: string | null
   lab_staff_approved_at: string | null
   lab_coordinator_name: string | null
+  lab_coordinator_salutation?: string | null
   lab_coordinator_email: string | null
   lab_coordinator_approved_at: string | null
+  hod_name?: string | null
+  hod_salutation?: string | null
+  hod_email?: string | null
+  hod_approved_at?: string | null
   components_list: string
   created_at: string
 }
 
 export default function LabCoordinatorLabsPage() {
   const { toast } = useToast()
+  
+  // Helper function to format names with salutations
+  const formatNameWithSalutation = (name: string | null, salutation?: string | null): string => {
+    if (!name) return 'Unknown'
+    if (!salutation || salutation === 'none') return name
+    
+    const salutationMap: Record<string, string> = {
+      'prof': 'Prof.',
+      'dr': 'Dr.',
+      'mr': 'Mr.',
+      'mrs': 'Mrs.'
+    }
+    
+    const prefix = salutationMap[salutation.toLowerCase()]
+    return prefix ? `${prefix} ${name}` : name
+  }
   
   const getDefaultDates = () => {
     const today = new Date()
@@ -262,7 +291,7 @@ export default function LabCoordinatorLabsPage() {
     yPos += 10
     
     doc.text(`Name:`, 20, yPos)
-    doc.text(log.requester_name, 70, yPos)
+    doc.text(formatNameWithSalutation(log.requester_name, log.requester_salutation), 70, yPos)
     yPos += 7
     
     doc.text(`Email:`, 20, yPos)
@@ -283,7 +312,7 @@ export default function LabCoordinatorLabsPage() {
       doc.text('✓', 20, yPos)
       doc.setFont('helvetica', 'normal')
       doc.text(`Recommended by Faculty:`, 25, yPos)
-      doc.text(log.faculty_name, 85, yPos)
+      doc.text(formatNameWithSalutation(log.faculty_name, log.faculty_salutation), 85, yPos)
       yPos += 7
       if (log.faculty_approved_at) {
         doc.setFontSize(9)
@@ -301,7 +330,7 @@ export default function LabCoordinatorLabsPage() {
       doc.text('✓', 20, yPos)
       doc.setFont('helvetica', 'normal')
       doc.text(`Recommended by Lab Staff:`, 25, yPos)
-      doc.text(log.lab_staff_name, 85, yPos)
+      doc.text(formatNameWithSalutation(log.lab_staff_name, log.lab_staff_salutation), 85, yPos)
       yPos += 7
       if (log.lab_staff_approved_at) {
         doc.setFontSize(9)
@@ -321,7 +350,7 @@ export default function LabCoordinatorLabsPage() {
       doc.setFont('helvetica', 'bold')
       doc.text(`APPROVED BY LAB COORDINATOR:`, 25, yPos)
       doc.setFont('helvetica', 'normal')
-      doc.text(log.lab_coordinator_name, 110, yPos)
+      doc.text(formatNameWithSalutation(log.lab_coordinator_name, log.lab_coordinator_salutation), 110, yPos)
       yPos += 7
       if (log.lab_coordinator_approved_at) {
         doc.setFontSize(9)
@@ -331,6 +360,16 @@ export default function LabCoordinatorLabsPage() {
         doc.setFontSize(11)
         yPos += 7
       }
+    }
+    
+    if (log.responsible_person_name) {
+      doc.setFont('helvetica', 'bold')
+      doc.text('→', 20, yPos)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`Responsible Person:`, 25, yPos)
+      doc.text(log.responsible_person_name, 85, yPos)
+      yPos += 7
+      yPos += 3
     }
     
     yPos += 10
@@ -503,7 +542,7 @@ export default function LabCoordinatorLabsPage() {
     
     yPos = checkAddPage(yPos, 15)
     doc.text(`Requester:`, 20, yPos)
-    doc.text(log.requester_name, 85, yPos)
+    doc.text(formatNameWithSalutation(log.requester_name, log.requester_salutation), 85, yPos)
     yPos += 6
     doc.setFontSize(9)
     doc.setTextColor(100, 100, 100)
@@ -597,7 +636,7 @@ export default function LabCoordinatorLabsPage() {
       doc.text('✓', 20, yPos)
       doc.setFont('helvetica', 'normal')
       doc.text(`Recommended by Faculty:`, 25, yPos)
-      doc.text(log.faculty_name, 85, yPos)
+      doc.text(formatNameWithSalutation(log.faculty_name, log.faculty_salutation), 85, yPos)
       yPos += 7
       if (log.faculty_approved_at) {
         doc.setFontSize(9)
@@ -616,7 +655,7 @@ export default function LabCoordinatorLabsPage() {
       doc.text('✓', 20, yPos)
       doc.setFont('helvetica', 'normal')
       doc.text(`Recommended by Lab Staff:`, 25, yPos)
-      doc.text(log.lab_staff_name, 85, yPos)
+      doc.text(formatNameWithSalutation(log.lab_staff_name, log.lab_staff_salutation), 85, yPos)
       yPos += 7
       if (log.lab_staff_approved_at) {
         doc.setFontSize(9)
@@ -638,7 +677,7 @@ export default function LabCoordinatorLabsPage() {
       doc.setFont('helvetica', 'bold')
       doc.text(`APPROVED BY LAB COORDINATOR:`, 25, yPos)
       doc.setFont('helvetica', 'normal')
-      doc.text(log.lab_coordinator_name, 110, yPos)
+      doc.text(formatNameWithSalutation(log.lab_coordinator_name, log.lab_coordinator_salutation), 110, yPos)
       yPos += 7
       if (log.lab_coordinator_approved_at) {
         doc.setFontSize(9)
@@ -657,7 +696,7 @@ export default function LabCoordinatorLabsPage() {
       doc.setFont('helvetica', 'bold')
       doc.text(`APPROVED BY HOD:`, 25, yPos)
       doc.setFont('helvetica', 'normal')
-      doc.text(log.hod_name, 80, yPos)
+      doc.text(formatNameWithSalutation(log.hod_name, log.hod_salutation), 80, yPos)
       yPos += 7
       if (log.hod_approved_at) {
         doc.setFontSize(9)
@@ -967,7 +1006,7 @@ export default function LabCoordinatorLabsPage() {
                         <div className="flex items-center gap-2">
                           <Users className="h-4 w-4 text-muted-foreground" />
                           <div>
-                            <div className="text-sm font-medium">{log.requester_name}</div>
+                            <div className="text-sm font-medium">{formatNameWithSalutation(log.requester_name, log.requester_salutation)}</div>
                             <div className="text-xs text-muted-foreground">{log.requester_email}</div>
                             <Badge variant="outline" className="text-xs mt-1">{log.requester_role}</Badge>
                           </div>
@@ -986,21 +1025,28 @@ export default function LabCoordinatorLabsPage() {
                             <div className="flex items-center gap-2 text-sm">
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                               <span className="text-muted-foreground">Recommended by Faculty:</span>
-                              <span className="font-medium">{log.faculty_name}</span>
+                              <span className="font-medium">{formatNameWithSalutation(log.faculty_name, log.faculty_salutation)}</span>
                             </div>
                           )}
                           {log.lab_staff_name && (
                             <div className="flex items-center gap-2 text-sm">
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                               <span className="text-muted-foreground">Recommended by Lab Staff:</span>
-                              <span className="font-medium">{log.lab_staff_name}</span>
+                              <span className="font-medium">{formatNameWithSalutation(log.lab_staff_name, log.lab_staff_salutation)}</span>
                             </div>
                           )}
                           {log.lab_coordinator_name && (
                             <div className="flex items-center gap-2 text-sm">
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                               <span className="text-muted-foreground">Approved by Lab Coordinator:</span>
-                              <span className="font-medium">{log.lab_coordinator_name}</span>
+                              <span className="font-medium">{formatNameWithSalutation(log.lab_coordinator_name, log.lab_coordinator_salutation)}</span>
+                            </div>
+                          )}
+                          {log.responsible_person_name && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                              <span className="text-muted-foreground">Responsible Person:</span>
+                              <span className="font-medium">{log.responsible_person_name}</span>
                             </div>
                           )}
                         </div>
@@ -1131,7 +1177,7 @@ export default function LabCoordinatorLabsPage() {
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-muted-foreground" />
                         <div>
-                          <div className="text-sm font-medium">{log.requester_name}</div>
+                          <div className="text-sm font-medium">{formatNameWithSalutation(log.requester_name, log.requester_salutation)}</div>
                           <div className="text-xs text-muted-foreground">{log.requester_email}</div>
                           <Badge variant="outline" className="text-xs mt-1">{log.requester_role}</Badge>
                         </div>
@@ -1176,27 +1222,27 @@ export default function LabCoordinatorLabsPage() {
                           <div className="flex items-center gap-2 text-sm">
                             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                             <span className="text-muted-foreground">Recommended by Faculty:</span>
-                            <span className="font-medium">{log.faculty_name}</span>
+                            <span className="font-medium">{formatNameWithSalutation(log.faculty_name, log.faculty_salutation)}</span>
                           </div>
                         )}
                         {log.lab_staff_name && (
                           <div className="flex items-center gap-2 text-sm">
                             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                             <span className="text-muted-foreground">Recommended by Lab Staff:</span>
-                            <span className="font-medium">{log.lab_staff_name}</span>
+                            <span className="font-medium">{formatNameWithSalutation(log.lab_staff_name, log.lab_staff_salutation)}</span>
                           </div>
                         )}
                         {log.lab_coordinator_name ? (
                           <div className="flex items-center gap-2 text-sm">
                             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                             <span className="text-muted-foreground font-bold">APPROVED BY LAB COORDINATOR:</span>
-                            <span className="font-medium">{log.lab_coordinator_name}</span>
+                            <span className="font-medium">{formatNameWithSalutation(log.lab_coordinator_name, log.lab_coordinator_salutation)}</span>
                           </div>
                         ) : log.hod_name && (
                           <div className="flex items-center gap-2 text-sm">
                             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                             <span className="text-muted-foreground font-bold">APPROVED BY HOD:</span>
-                            <span className="font-medium">{log.hod_name}</span>
+                            <span className="font-medium">{formatNameWithSalutation(log.hod_name, log.hod_salutation)}</span>
                           </div>
                         )}
                       </div>

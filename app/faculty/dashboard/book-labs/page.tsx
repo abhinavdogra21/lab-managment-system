@@ -8,10 +8,11 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, ArrowRight, Clock, User, Building2, ChevronLeft, CheckCircle2 } from "lucide-react"
+import { CalendarIcon, ArrowRight, Clock, User, Building2, ChevronLeft, CheckCircle2, ChevronDown, MapPin } from "lucide-react"
 import { format } from "date-fns"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
@@ -24,7 +25,8 @@ export default function FacultyBookLabsPage() {
 	const [currentStep, setCurrentStep] = useState(1)
 	const [successDialog, setSuccessDialog] = useState<{ open: boolean; message: string }>({ open: false, message: '' })
 	const [labs, setLabs] = useState<Lab[]>([])
-	const [selectedLab, setSelectedLab] = useState<string>("")
+	const [selectedLabs, setSelectedLabs] = useState<string[]>([])
+	const [labSelectOpen, setLabSelectOpen] = useState(false)
 	const [selectedDate, setSelectedDate] = useState<Date>()
 	const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([])
 	const [bookedSlots, setBookedSlots] = useState<BookedSlotItem[]>([])
@@ -33,8 +35,31 @@ export default function FacultyBookLabsPage() {
 	const [endTime, setEndTime] = useState("")
 	const [purpose, setPurpose] = useState("")
 	const [loading, setLoading] = useState(false)
+	
+	// Person Responsible - array for multi-lab (each lab needs its own person)
+	const [responsiblePersons, setResponsiblePersons] = useState<{
+		lab_id: string
+		lab_name: string
+		name: string
+		email: string
+	}[]>([])
 
 	useEffect(() => { loadLabs() }, [])
+
+	// Auto-initialize responsiblePersons when selectedLabs changes
+	useEffect(() => {
+		if (selectedLabs.length > 0) {
+			const newPersons = selectedLabs.map(labId => ({
+				lab_id: labId,
+				lab_name: labs.find(l => l.id.toString() === labId)?.name || '',
+				name: '',
+				email: ''
+			}))
+			setResponsiblePersons(newPersons)
+		} else {
+			setResponsiblePersons([])
+		}
+	}, [selectedLabs, labs])
 
 	const loadLabs = async () => {
 		try {
@@ -68,12 +93,31 @@ export default function FacultyBookLabsPage() {
 		} catch { setBookedSlots([]) }
 	}
 
+	const loadCommonFreeSlots = async (labIds: string[], date: Date) => {
+		if (!labIds.length || !date) return
+		try {
+			const dateStr = format(date, 'yyyy-MM-dd')
+			const labIdsParam = labIds.join(',')
+			const res = await fetch(`/api/faculty/common-free-slots?lab_ids=${labIdsParam}&date=${dateStr}`)
+			if (res.ok) {
+				const data = await res.json()
+				setAvailableSlots(data.commonSlots || [])
+				setBookedSlots([])
+			} else {
+				setAvailableSlots([])
+				toast({ title: "Error", description: "Failed to load common free slots", variant: "destructive" })
+			}
+		} catch { setAvailableSlots([]) }
+	}
+
 	useEffect(() => {
-		if (selectedLab && selectedDate) {
-			loadAvailable(selectedLab, selectedDate)
-			loadBooked(selectedLab, selectedDate)
+		if (selectedLabs.length === 1 && selectedDate) {
+			loadAvailable(selectedLabs[0], selectedDate)
+			loadBooked(selectedLabs[0], selectedDate)
+		} else if (selectedLabs.length > 1 && selectedDate) {
+			loadCommonFreeSlots(selectedLabs, selectedDate)
 		}
-	}, [selectedLab, selectedDate])
+	}, [selectedLabs, selectedDate])
 
 	const hasConflict = () => {
 		if (!startTime || !endTime) return false
@@ -82,17 +126,28 @@ export default function FacultyBookLabsPage() {
 		return bookedSlots.some(b => (s < `${b.end_time}:00` && e > `${b.start_time}:00`))
 	}
 	const isInvalidTimeRange = () => !!startTime && !!endTime && startTime >= endTime
-	const isOutsideBusinessHours = () => {
-		if (!startTime || !endTime) return false
-		const [sh, sm] = startTime.split(':').map(Number)
-		const [eh, em] = endTime.split(':').map(Number)
-		const s = sh*60+sm, e = eh*60+em
-		return s < 8*60 || e > 20*60
+	// Removed business hours restriction - users can book labs at any time
+	const isOutsideBusinessHours = () => false
+
+	// Validation for person responsible email
+	const isValidResponsibleEmail = (email: string) => {
+		if (!email) return false
+		return email.toLowerCase().endsWith('@lnmiit.ac.in')
 	}
 
-	const canProceed2 = !!selectedLab
+	// Check if all responsible persons have filled data
+	const areAllResponsiblePersonsFilled = () => {
+		if (responsiblePersons.length === 0) return false
+		return responsiblePersons.every(rp => 
+			rp.name.trim() !== '' && 
+			rp.email.trim() !== '' && 
+			isValidResponsibleEmail(rp.email)
+		)
+	}
+
+	const canProceed2 = selectedLabs.length > 0
 	const canProceed3 = !!(canProceed2 && selectedDate && (selectedTimeSlot || (startTime && endTime && !hasConflict() && !isInvalidTimeRange() && !isOutsideBusinessHours())))
-	const canSubmit = !!(canProceed3 && purpose.trim())
+	const canSubmit = !!(canProceed3 && purpose.trim() && areAllResponsiblePersonsFilled())
 
 	const handleSubmit = async () => {
 		const manualSelected = !selectedTimeSlot && startTime && endTime
@@ -100,23 +155,32 @@ export default function FacultyBookLabsPage() {
 		setLoading(true)
 		try {
 			const [sTime, eTime] = selectedTimeSlot ? selectedTimeSlot.split(' - ') : [startTime, endTime]
+			const isMultiLab = selectedLabs.length > 1
 			const payload = {
-				lab_id: parseInt(selectedLab),
+				lab_id: isMultiLab ? null : parseInt(selectedLabs[0]),
+				lab_ids: isMultiLab ? selectedLabs.map(id => parseInt(id)) : null,
+				is_multi_lab: isMultiLab,
 				booking_date: format(selectedDate!, 'yyyy-MM-dd'),
 				start_time: sTime,
 				end_time: eTime,
-				purpose: purpose.trim()
+				purpose: purpose.trim(),
+				responsible_persons: responsiblePersons.map(rp => ({
+					lab_id: parseInt(rp.lab_id),
+					name: rp.name.trim(),
+					email: rp.email.trim().toLowerCase()
+				}))
 			}
 			const res = await fetch('/api/faculty/booking-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
 			const data = await res.json()
 			if (!res.ok) throw new Error(data?.error || 'Failed to submit')
 			setCurrentStep(1)
-			setSelectedLab("")
+			setSelectedLabs([])
 			setSelectedDate(undefined)
 			setSelectedTimeSlot("")
 			setStartTime("")
 			setEndTime("")
 			setPurpose("")
+			setResponsiblePersons([])
 			setSuccessDialog({ 
 				open: true, 
 				message: '✓ Lab booking request submitted successfully! Your request has been sent to Lab Staff for review and will then proceed to HOD for final approval.'
@@ -161,19 +225,69 @@ export default function FacultyBookLabsPage() {
 						</CardHeader>
 						<CardContent className="space-y-4">
 							<div>
-								<Label>Lab <span className="text-red-600">*</span></Label>
-								<Select value={selectedLab} onValueChange={setSelectedLab}>
-									<SelectTrigger>
-										<SelectValue placeholder="Select Lab" />
-									</SelectTrigger>
-									<SelectContent>
-										{labs.map(lab => (
-											<SelectItem key={lab.id} value={lab.id.toString()}>
-												{lab.name} ({lab.code})
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
+								<Label>Lab(s) <span className="text-red-600">*</span></Label>
+								<p className="text-xs text-muted-foreground mb-2">Select one or multiple labs</p>
+								<Popover open={labSelectOpen} onOpenChange={setLabSelectOpen}>
+									<PopoverTrigger asChild>
+										<Button variant="outline" className="w-full justify-between" role="combobox">
+											<span className="truncate">
+												{selectedLabs.length === 0 
+													? "Select lab(s)" 
+													: selectedLabs.length === 1
+													? labs.find(l => l.id.toString() === selectedLabs[0])?.name
+													: `${selectedLabs.length} labs selected`
+												}
+											</span>
+											<ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+										</Button>
+									</PopoverTrigger>
+									<PopoverContent className="w-full p-3" align="start">
+										<div className="space-y-2">
+											{labs.map(lab => (
+												<div key={lab.id} className="flex items-center space-x-2">
+													<Checkbox
+														id={`lab-${lab.id}`}
+														checked={selectedLabs.includes(lab.id.toString())}
+														onCheckedChange={(checked) => {
+															if (checked) {
+																// Check if any lab is already selected from a different department
+																if (selectedLabs.length > 0) {
+																	const firstSelectedLab = labs.find(l => l.id.toString() === selectedLabs[0])
+																	if (firstSelectedLab && firstSelectedLab.department_id !== lab.department_id) {
+																		toast({
+																			title: "Different Department",
+																			description: "You can only book labs from the same department in a multi-lab booking",
+																			variant: "destructive"
+																		})
+																		return
+																	}
+																}
+																setSelectedLabs([...selectedLabs, lab.id.toString()])
+															} else {
+																setSelectedLabs(selectedLabs.filter(id => id !== lab.id.toString()))
+															}
+														}}
+													/>
+													<label htmlFor={`lab-${lab.id}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer">
+														{lab.name} ({lab.code})
+													</label>
+												</div>
+											))}
+										</div>
+										{selectedLabs.length > 0 && (
+											<div className="mt-3 pt-3 border-t">
+												<Button size="sm" variant="ghost" className="w-full" onClick={() => setSelectedLabs([])}>
+													Clear Selection
+												</Button>
+											</div>
+										)}
+									</PopoverContent>
+								</Popover>
+								{selectedLabs.length > 1 && (
+									<p className="text-xs text-blue-600 mt-1">
+										ℹ️ Multi-lab booking: Common free slots will be shown
+									</p>
+								)}
 							</div>
 							<div className="pt-4">
 								<Button onClick={() => setCurrentStep(2)} disabled={!canProceed2} className="w-full">
@@ -252,11 +366,11 @@ export default function FacultyBookLabsPage() {
 									<div className="grid grid-cols-2 gap-4">
 										<div>
 											<Label>Start Time (HH:MM)</Label>
-											<Input type="time" min="08:00" max="20:00" value={startTime} onChange={(e) => { setStartTime(e.target.value); setSelectedTimeSlot("") }} />
+											<Input type="time" value={startTime} onChange={(e) => { setStartTime(e.target.value); setSelectedTimeSlot("") }} />
 										</div>
 										<div>
 											<Label>End Time (HH:MM)</Label>
-											<Input type="time" min="08:00" max="20:00" value={endTime} onChange={(e) => { setEndTime(e.target.value); setSelectedTimeSlot("") }} />
+											<Input type="time" value={endTime} onChange={(e) => { setEndTime(e.target.value); setSelectedTimeSlot("") }} />
 										</div>
 									</div>
 
@@ -270,11 +384,6 @@ export default function FacultyBookLabsPage() {
 											{isInvalidTimeRange() && (
 												<div className="p-3 border border-red-200 bg-red-50 text-sm text-red-700 rounded flex items-center gap-2">
 													<Clock className="h-4 w-4" /> End time must be after start time.
-												</div>
-											)}
-											{isOutsideBusinessHours() && (
-												<div className="p-3 border border-amber-200 bg-amber-50 text-sm text-amber-800 rounded flex items-center gap-2">
-													<Clock className="h-4 w-4" /> Lab bookings are only allowed between 8:00 AM and 8:00 PM.
 												</div>
 											)}
 										</div>
@@ -298,6 +407,66 @@ export default function FacultyBookLabsPage() {
 							</CardTitle>
 						</CardHeader>
 						<CardContent className="space-y-4">
+							{/* Person Responsible Section */}
+							<div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
+								<div className="flex items-center gap-2 text-blue-900 font-medium">
+									<User className="h-4 w-4" />
+									<span>Person Responsible for Each Lab</span>
+								</div>
+								<p className="text-sm text-blue-800">
+									Each lab requires a responsible person who will be held accountable for any damages during the booking period.
+								</p>
+								
+								<div className="space-y-3">
+									{responsiblePersons.map((rp, index) => (
+										<div key={rp.lab_id} className="p-3 bg-white border rounded-md space-y-3">
+											<div className="flex items-center gap-2 text-sm font-medium text-blue-900">
+												<MapPin className="h-4 w-4" />
+												<span>{rp.lab_name}</span>
+											</div>
+											
+											<div>
+												<Label className="text-blue-900 text-xs">
+													Full Name <span className="text-red-600">*</span>
+												</Label>
+												<Input 
+													placeholder="Enter full name"
+													value={rp.name}
+													onChange={(e) => {
+														const updated = [...responsiblePersons]
+														updated[index].name = e.target.value
+														setResponsiblePersons(updated)
+													}}
+													className="bg-white"
+												/>
+											</div>
+
+											<div>
+												<Label className="text-blue-900 text-xs">
+													Email Address <span className="text-red-600">*</span>
+												</Label>
+												<Input 
+													type="email"
+													placeholder="example@lnmiit.ac.in"
+													value={rp.email}
+													onChange={(e) => {
+														const updated = [...responsiblePersons]
+														updated[index].email = e.target.value
+														setResponsiblePersons(updated)
+													}}
+													className={`bg-white ${rp.email && !isValidResponsibleEmail(rp.email) ? 'border-red-500' : ''}`}
+												/>
+												{rp.email && !isValidResponsibleEmail(rp.email) && (
+													<p className="text-xs text-red-600 mt-1">
+														Email must end with @lnmiit.ac.in
+													</p>
+												)}
+											</div>
+										</div>
+									))}
+								</div>
+							</div>
+
 							<div>
 								<Label>Purpose of Lab Use <span className="text-red-600">*</span></Label>
 								<Textarea placeholder="Describe why you need the lab" value={purpose} onChange={(e) => setPurpose(e.target.value)} rows={4} />

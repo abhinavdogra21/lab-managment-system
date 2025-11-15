@@ -43,16 +43,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Invalid token" }, { status: 401 })
     }
 
-  // Get labs assigned to this staff
-  const assignedLabsRes = await db.query("SELECT lab_id FROM lab_staff_assignments WHERE staff_id = ?", [userId])
-  const assignedLabIds = assignedLabsRes.rows.map((row: any) => row.lab_id)
+  // Get labs where this user is the HEAD lab staff (not just assigned)
+  const assignedLabsRes = await db.query("SELECT id FROM labs WHERE staff_id = ?", [userId])
+  const assignedLabIds = assignedLabsRes.rows.map((row: any) => row.id)
   console.log('Lab Staff API Debug:', { userId, assignedLabIds })
   if (assignedLabIds.length === 0) {
     return NextResponse.json({ success: true, requests: [] })
   }
 
+    // First, get all bookings where this lab staff is involved
+    // For single-lab: lab_id matches
+    // For multi-lab: check multi_lab_approvals table
     let query = `
-      SELECT 
+      SELECT DISTINCT
         br.*,
         u.name as student_name,
         u.email as student_email,
@@ -71,19 +74,34 @@ export async function GET(request: NextRequest) {
       LEFT JOIN users f ON br.faculty_supervisor_id = f.id
       LEFT JOIN users s ON br.lab_staff_approved_by = s.id
       LEFT JOIN users h ON br.hod_approved_by = h.id
-      WHERE br.lab_id IN (${assignedLabIds.map(() => '?').join(',')})
-        AND (l.staff_id IS NULL OR l.staff_id = ?)
+      LEFT JOIN multi_lab_approvals mla ON (br.id = mla.booking_request_id AND mla.lab_id IN (${assignedLabIds.map(() => '?').join(',')}))
+      WHERE (
+        (br.is_multi_lab = 0 AND br.lab_id IN (${assignedLabIds.map(() => '?').join(',')}))
+        OR
+        (br.is_multi_lab = 1 AND mla.lab_id IN (${assignedLabIds.map(() => '?').join(',')}))
+      )
     `
-    const params: any[] = [...assignedLabIds, userId]
+    const params: any[] = [...assignedLabIds, ...assignedLabIds, ...assignedLabIds]
 
     if (status === "pending_lab_staff") {
-      query += " AND br.status = ?"
+      // For single-lab: check booking_requests.status
+      // For multi-lab: check if THIS specific lab's status in multi_lab_approvals is 'pending'
+      query += ` AND (
+        (br.is_multi_lab = 0 AND br.status = ?)
+        OR
+        (br.is_multi_lab = 1 AND mla.status = 'pending')
+      )`
       params.push("pending_lab_staff")
     } else if (status === "all") {
       query += " AND br.status IN (?, ?, ?, ?)"
       params.push("pending_lab_staff", "pending_hod", "approved", "rejected")
     } else if (status === "approved") {
-      query += " AND br.status IN (?, ?)"
+      // For multi-lab: show only if THIS lab's status is 'approved_by_lab_staff' or 'approved'
+      query += ` AND (
+        (br.is_multi_lab = 0 AND br.status IN (?, ?))
+        OR
+        (br.is_multi_lab = 1 AND mla.status IN ('approved_by_lab_staff', 'approved'))
+      )`
       params.push("pending_hod", "approved")
     } else if (status === "rejected") {
       query += " AND br.status = ?"
@@ -97,9 +115,69 @@ export async function GET(request: NextRequest) {
     const requests = result.rows
   console.log('Lab Staff API Debug: requests found', requests.length)
 
+    // Fetch multi-lab details for multi-lab bookings
+    const requestsWithMultiLabData = await Promise.all(
+      requests.map(async (booking: any) => {
+        if (booking.is_multi_lab === 1 || booking.is_multi_lab === true) {
+          // Parse lab_ids
+          let labIds: number[] = []
+          if (Array.isArray(booking.lab_ids)) {
+            labIds = booking.lab_ids
+          } else if (Buffer.isBuffer(booking.lab_ids)) {
+            labIds = JSON.parse(booking.lab_ids.toString('utf-8'))
+          } else if (typeof booking.lab_ids === 'string') {
+            labIds = JSON.parse(booking.lab_ids)
+          }
+
+          // Get all lab names
+          if (labIds.length > 0) {
+            const labNamesResult = await db.query(
+              `SELECT id, name, code FROM labs WHERE id IN (${labIds.map(() => '?').join(',')}) ORDER BY code`,
+              labIds
+            )
+            booking.lab_names = labNamesResult.rows.map((l: any) => l.name).join(', ')
+
+            // Get multi-lab approval details
+            const approvalsResult = await db.query(
+              `SELECT mla.*, l.name as lab_name, l.code as lab_code,
+                      ls.name as lab_staff_name, h.name as hod_name
+               FROM multi_lab_approvals mla
+               JOIN labs l ON mla.lab_id = l.id
+               LEFT JOIN users ls ON mla.lab_staff_approved_by = ls.id
+               LEFT JOIN users h ON mla.hod_approved_by = h.id
+               WHERE mla.booking_request_id = ?
+               ORDER BY l.code`,
+              [booking.id]
+            )
+            booking.multi_lab_approvals = approvalsResult.rows
+            
+            // Fetch responsible persons for each lab
+            const responsiblePersonsResult = await db.query(
+              `SELECT lab_id, name, email
+               FROM multi_lab_responsible_persons
+               WHERE booking_request_id = ?
+               ORDER BY lab_id`,
+              [booking.id]
+            )
+            
+            // Add responsible person to each approval
+            booking.multi_lab_approvals = booking.multi_lab_approvals.map((approval: any) => {
+              const responsible = responsiblePersonsResult.rows.find((rp: any) => rp.lab_id === approval.lab_id)
+              return {
+                ...approval,
+                responsible_person_name: responsible?.name,
+                responsible_person_email: responsible?.email
+              }
+            })
+          }
+        }
+        return booking
+      })
+    )
+
     // Build timeline for each request
     const requestsWithTimeline = await Promise.all(
-      requests.map(async (request: any) => {
+      requestsWithMultiLabData.map(async (request: any) => {
         const timeline: any[] = []
 
         // Submission step

@@ -62,10 +62,11 @@ export async function GET(request: NextRequest) {
     scheduleEntries = [...scheduleEntries, ...timetableResult.rows]
 
     // Get booking requests for the specific date (only approved bookings)
+    // For multi-lab bookings, we need to get entries for ALL labs, not just br.lab_id
     const bookingsQuery = labId
       ? `SELECT 
-           CONCAT('booking_', br.id) as id,
-           br.lab_id,
+           CONCAT('booking_', br.id, '_', COALESCE(mla.lab_id, br.lab_id)) as id,
+           COALESCE(mla.lab_id, br.lab_id) as lab_id,
            l.name as lab_name,
            l.code as lab_code,
            br.start_time,
@@ -74,16 +75,18 @@ export async function GET(request: NextRequest) {
            br.purpose,
            'booking' as type,
            u.name as booker_name,
-           br.status
+           br.status,
+           br.is_multi_lab
          FROM booking_requests br
-         JOIN labs l ON br.lab_id = l.id
+         LEFT JOIN multi_lab_approvals mla ON br.id = mla.booking_request_id AND br.is_multi_lab = 1
+         JOIN labs l ON COALESCE(mla.lab_id, br.lab_id) = l.id
          JOIN users u ON br.requested_by = u.id
-         WHERE br.booking_date = ? AND br.lab_id = ?
+         WHERE br.booking_date = ? AND COALESCE(mla.lab_id, br.lab_id) = ?
          AND br.status = 'approved'
          ORDER BY br.start_time`
       : `SELECT 
-           CONCAT('booking_', br.id) as id,
-           br.lab_id,
+           CONCAT('booking_', br.id, '_', COALESCE(mla.lab_id, br.lab_id)) as id,
+           COALESCE(mla.lab_id, br.lab_id) as lab_id,
            l.name as lab_name,
            l.code as lab_code,
            br.start_time,
@@ -92,9 +95,11 @@ export async function GET(request: NextRequest) {
            br.purpose,
            'booking' as type,
            u.name as booker_name,
-           br.status
+           br.status,
+           br.is_multi_lab
          FROM booking_requests br
-         JOIN labs l ON br.lab_id = l.id
+         LEFT JOIN multi_lab_approvals mla ON br.id = mla.booking_request_id AND br.is_multi_lab = 1
+         JOIN labs l ON COALESCE(mla.lab_id, br.lab_id) = l.id
          JOIN users u ON br.requested_by = u.id
          WHERE br.booking_date = ?
          AND br.status = 'approved'

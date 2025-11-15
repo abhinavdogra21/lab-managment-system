@@ -15,6 +15,7 @@ interface RequestItem {
   id: number
   student_name: string
   student_email: string
+  student_salutation?: string
   lab_name: string
   booking_date: string
   start_time: string
@@ -32,6 +33,24 @@ interface RequestItem {
   hod_approved_at?: string | null
   highest_approval_authority?: 'hod' | 'lab_coordinator'
   lab_coordinator_id?: number | null
+  is_multi_lab?: number | boolean
+  lab_ids?: number[]
+  multi_lab_approvals?: MultiLabApproval[]
+}
+
+interface MultiLabApproval {
+  id: number
+  lab_id: number
+  lab_name: string
+  status: string
+  lab_staff_approved_by?: number
+  lab_staff_approved_at?: string
+  lab_staff_remarks?: string
+  lab_staff_name?: string
+  hod_approved_by?: number
+  hod_approved_at?: string
+  responsible_person_name?: string
+  responsible_person_email?: string
 }
 
 const TimelineView = ({ item, getStepStatus, getFinalApprovalStatus }: { 
@@ -90,7 +109,14 @@ const TimelineView = ({ item, getStepStatus, getFinalApprovalStatus }: {
                   'text-gray-500'
                 }`}>
                   {step.status === 'completed' ? 'Done' : 
-                   step.status === 'pending' ? 'In Progress' : 
+                   step.status === 'pending' ? (
+                     step.name === 'Lab Staff Review' && item.is_multi_lab && item.multi_lab_approvals ? (
+                       <>
+                         {item.multi_lab_approvals.filter((a: MultiLabApproval) => a.lab_staff_approved_at).length}/
+                         {item.multi_lab_approvals.length}
+                       </>
+                     ) : 'In Progress'
+                   ) : 
                    step.status === 'rejected' ? 'Rejected' : 'Waiting'}
                 </p>
               </div>
@@ -157,12 +183,69 @@ const RequestCard = React.memo(function RequestCardComponent({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Building className="h-4 w-4 text-blue-600" />
-            <span className="font-medium text-sm">{item.lab_name}</span>
+            {item.is_multi_lab ? (
+              <span className="font-medium text-sm">
+                Multi-Lab Booking ({item.multi_lab_approvals?.length || 0} labs)
+              </span>
+            ) : (
+              <span className="font-medium text-sm">{item.lab_name}</span>
+            )}
             <span className="text-xs text-gray-500">•</span>
             <span className="text-xs text-gray-600">{item.student_name}</span>
           </div>
           {getStatusBadge(item.status)}
         </div>
+
+        {/* Multi-lab details */}
+        {item.is_multi_lab && item.multi_lab_approvals && item.multi_lab_approvals.length > 0 && (
+          <div className="space-y-2 bg-blue-50 p-3 rounded">
+            <div className="text-xs font-medium text-blue-900">Selected Labs:</div>
+            {item.multi_lab_approvals.map((approval: MultiLabApproval) => (
+              <div key={approval.lab_id} className="bg-white p-2 rounded space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-gray-700">{approval.lab_name}</span>
+                  <Badge 
+                    variant={
+                      approval.status === 'approved' ? 'default' : 
+                      approval.status === 'approved_by_lab_staff' ? 'default' :
+                      approval.status === 'pending' ? 'secondary' : 
+                      'destructive'
+                    }
+                    className="text-xs"
+                  >
+                    {approval.status === 'approved' ? 'Approved by HOD' : 
+                     approval.status === 'approved_by_lab_staff' ? 'Pending HOD' :
+                     approval.status === 'pending' ? 'Pending Lab Staff' : 'Rejected'}
+                  </Badge>
+                </div>
+                {approval.responsible_person_name && (
+                  <div className="text-blue-700">
+                    <p className="flex items-center gap-2 text-xs">
+                      <User className="h-3 w-3" />
+                      Responsible: {approval.responsible_person_name}
+                    </p>
+                    {approval.responsible_person_email && (
+                      <p className="text-xs ml-5">{approval.responsible_person_email}</p>
+                    )}
+                  </div>
+                )}
+                {approval.lab_staff_approved_at && (
+                  <div className="text-xs text-gray-600">
+                    Lab Staff: {approval.lab_staff_name} 
+                    <span className="text-gray-400 ml-1">
+                      ({new Date(approval.lab_staff_approved_at).toLocaleDateString()})
+                    </span>
+                  </div>
+                )}
+                {approval.lab_staff_remarks && (
+                  <div className="text-xs text-gray-600 italic">
+                    "{approval.lab_staff_remarks}"
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
           <div className="flex items-center gap-1">
@@ -500,6 +583,23 @@ export default function HODApprovePage() {
       if (['pending_lab_staff', 'pending_hod', 'approved'].includes(item.status)) return 'completed'
     }
     if (stepName === 'Lab Staff Review') {
+      // For multi-lab bookings, check individual lab approvals
+      if ((item.is_multi_lab === 1 || item.is_multi_lab === true) && item.multi_lab_approvals) {
+        const totalLabs = item.multi_lab_approvals.length
+        const approvedLabs = item.multi_lab_approvals.filter((a: MultiLabApproval) => a.lab_staff_approved_at).length
+        
+        if (approvedLabs === totalLabs) {
+          return 'completed' // All labs approved
+        } else if (approvedLabs > 0) {
+          return 'pending' // Some labs approved (show as "In Progress")
+        } else {
+          // No labs approved yet
+          if (item.status === 'pending_lab_staff') return 'pending'
+          return 'waiting'
+        }
+      }
+      
+      // Single lab booking logic
       if (item.status === 'pending_lab_staff') return 'pending'
       if (['pending_hod', 'approved'].includes(item.status)) return 'completed'
       if (item.status === 'pending_faculty') return 'waiting'

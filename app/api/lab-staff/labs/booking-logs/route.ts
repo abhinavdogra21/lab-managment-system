@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
           l.name AS lab_name,
           d.name AS department_name,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_name')) AS requester_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_salutation')) AS requester_salutation,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_email')) AS requester_email,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_role')) AS requester_role,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.booking_date')) AS booking_date,
@@ -56,11 +57,18 @@ export async function GET(request: NextRequest) {
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.purpose')) AS purpose,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.status')) AS status,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.faculty_name')) AS faculty_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.faculty_salutation')) AS faculty_salutation,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.faculty_approved_at')) AS faculty_approved_at,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.lab_staff_name')) AS lab_staff_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.lab_staff_salutation')) AS lab_staff_salutation,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.lab_staff_approved_at')) AS lab_staff_approved_at,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.hod_name')) AS hod_name,
-          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.hod_approved_at')) AS hod_approved_at
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.hod_salutation')) AS hod_salutation,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.hod_approved_at')) AS hod_approved_at,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.lab_coordinator_name')) AS lab_coordinator_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.lab_coordinator_salutation')) AS lab_coordinator_salutation,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.responsible_person_name')) AS responsible_person_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.responsible_person_email')) AS responsible_person_email
         FROM lab_booking_activity_logs lbal
         JOIN labs l ON lbal.lab_id = l.id
         JOIN departments d ON l.department_id = d.id
@@ -91,6 +99,7 @@ export async function GET(request: NextRequest) {
           l.name AS lab_name,
           d.name AS department_name,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_name')) AS requester_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_salutation')) AS requester_salutation,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_email')) AS requester_email,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_role')) AS requester_role,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.booking_date')) AS booking_date,
@@ -99,11 +108,18 @@ export async function GET(request: NextRequest) {
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.purpose')) AS purpose,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.status')) AS status,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.faculty_name')) AS faculty_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.faculty_salutation')) AS faculty_salutation,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.faculty_approved_at')) AS faculty_approved_at,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.lab_staff_name')) AS lab_staff_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.lab_staff_salutation')) AS lab_staff_salutation,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.lab_staff_approved_at')) AS lab_staff_approved_at,
           JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.hod_name')) AS hod_name,
-          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.hod_approved_at')) AS hod_approved_at
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.hod_salutation')) AS hod_salutation,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.hod_approved_at')) AS hod_approved_at,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.lab_coordinator_name')) AS lab_coordinator_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.lab_coordinator_salutation')) AS lab_coordinator_salutation,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.responsible_person_name')) AS responsible_person_name,
+          JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.responsible_person_email')) AS responsible_person_email
         FROM lab_booking_activity_logs lbal
         JOIN labs l ON lbal.lab_id = l.id
         JOIN departments d ON l.department_id = d.id

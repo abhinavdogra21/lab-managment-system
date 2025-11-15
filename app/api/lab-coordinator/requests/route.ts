@@ -47,14 +47,17 @@ export async function GET(request: NextRequest) {
         br.faculty_approved_at,
         br.lab_staff_approved_at,
         br.hod_approved_at,
+        br.is_multi_lab,
+        br.lab_ids,
         s.name as student_name,
         s.email as student_email,
+        s.role as requester_role,
         f.name as faculty_name,
         l.name as lab_name,
         d.highest_approval_authority
       FROM booking_requests br
       JOIN users s ON br.requested_by = s.id
-      JOIN users f ON br.faculty_supervisor_id = f.id
+      LEFT JOIN users f ON br.faculty_supervisor_id = f.id
       JOIN labs l ON br.lab_id = l.id
       JOIN departments d ON l.department_id = d.id
     `
@@ -92,9 +95,47 @@ export async function GET(request: NextRequest) {
 
     const result = await db.query(query, params)
     
+    // Fetch multi-lab approval details for multi-lab bookings
+    const requestsWithMultiLabData = await Promise.all(
+      result.rows.map(async (request: any) => {
+        if (request.is_multi_lab) {
+          // Fetch multi-lab approvals
+          const approvalsResult = await db.query(
+            `SELECT 
+              mla.lab_id,
+              mla.status,
+              mla.lab_staff_approved_by,
+              mla.hod_approved_by,
+              l.name as lab_name,
+              ls.name as lab_staff_name
+            FROM multi_lab_approvals mla
+            LEFT JOIN labs l ON l.id = mla.lab_id
+            LEFT JOIN users ls ON ls.id = mla.lab_staff_approved_by
+            WHERE mla.booking_request_id = ?`,
+            [request.id]
+          )
+          
+          // Fetch responsible persons
+          const responsiblePersonsResult = await db.query(
+            `SELECT lab_id, name, email
+            FROM multi_lab_responsible_persons
+            WHERE booking_request_id = ?`,
+            [request.id]
+          )
+          
+          return {
+            ...request,
+            multi_lab_approvals: approvalsResult.rows,
+            responsible_persons: responsiblePersonsResult.rows
+          }
+        }
+        return request
+      })
+    )
+    
     return NextResponse.json({ 
-      requests: result.rows,
-      total: result.rows.length
+      requests: requestsWithMultiLabData,
+      total: requestsWithMultiLabData.length
     })
   } catch (error) {
     console.error("Error fetching Lab Coordinator requests:", error)

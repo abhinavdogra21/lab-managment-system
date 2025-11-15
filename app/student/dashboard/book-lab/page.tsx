@@ -8,10 +8,11 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, ArrowRight, Clock, MapPin, User, Building2, ChevronLeft, CheckCircle2 } from "lucide-react"
+import { CalendarIcon, ArrowRight, Clock, MapPin, User, Building2, ChevronLeft, CheckCircle2, ChevronDown } from "lucide-react"
 import { format } from "date-fns"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
@@ -41,6 +42,8 @@ interface TimeSlot {
   start_time: string
   end_time: string
   is_available: boolean
+  duration_minutes?: number
+  display?: string
 }
 
 interface BookedSlotItem {
@@ -70,11 +73,40 @@ export default function BookLabPage() {
   // Form states
   const [selectedDepartment, setSelectedDepartment] = useState<string>("")
   const [selectedFaculty, setSelectedFaculty] = useState<string>("")
-  const [selectedLab, setSelectedLab] = useState<string>("")
+  const [selectedLabs, setSelectedLabs] = useState<string[]>([]) // Changed to array for multi-lab
   const [selectedDate, setSelectedDate] = useState<Date>()
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>("")
   const [purpose, setPurpose] = useState("")
   const [remarks, setRemarks] = useState("")
+  const [labSelectOpen, setLabSelectOpen] = useState(false) // For multi-select dropdown
+  
+  // Person Responsible fields - array for multi-lab support
+  const [responsiblePersons, setResponsiblePersons] = useState<{
+    lab_id: string
+    lab_name: string
+    name: string
+    email: string
+  }[]>([])
+
+  // Initialize responsible persons array when labs are selected
+  useEffect(() => {
+    if (selectedLabs.length > 0) {
+      // Get lab names
+      const newResponsiblePersons = selectedLabs.map(labId => {
+        const lab = labs.find(l => l.id.toString() === labId)
+        const existing = responsiblePersons.find(rp => rp.lab_id === labId)
+        return existing || {
+          lab_id: labId,
+          lab_name: lab?.name || `Lab ${labId}`,
+          name: '',
+          email: ''
+        }
+      })
+      setResponsiblePersons(newResponsiblePersons)
+    } else {
+      setResponsiblePersons([])
+    }
+  }, [selectedLabs, labs])
 
   useEffect(() => {
     loadDepartments()
@@ -190,10 +222,34 @@ export default function BookLabPage() {
     }
   }
 
+  const loadCommonFreeSlots = async (labIds: string[], date: Date) => {
+    if (!labIds.length || !date) return
+    try {
+      const dateStr = format(date, 'yyyy-MM-dd')
+      const labIdsParam = labIds.join(',')
+      console.log(`Loading common free slots for labs ${labIdsParam} on ${dateStr}`)
+      const res = await fetch(`/api/student/common-free-slots?lab_ids=${labIdsParam}&date=${dateStr}`)
+      
+      if (res.ok) {
+        const data = await res.json()
+        console.log("Common free slots data:", data)
+        setAvailableSlots(data.commonSlots || [])
+        setBookedSlots([]) // Clear booked slots display for multi-lab
+      } else {
+        console.error("Failed to fetch common free slots:", res.status)
+        setAvailableSlots([])
+        toast({ title: "Error", description: "Failed to load common free slots", variant: "destructive" })
+      }
+    } catch (error) {
+      console.error("Failed to load common free slots:", error)
+      setAvailableSlots([])
+    }
+  }
+
   const handleDepartmentChange = (value: string) => {
     setSelectedDepartment(value)
     setSelectedFaculty("")
-    setSelectedLab("")
+    setSelectedLabs([])
     setFaculties([])
     setLabs([])
     loadFaculties(value)
@@ -201,21 +257,26 @@ export default function BookLabPage() {
   }
 
   const handleLabAndDateChange = () => {
-    if (selectedLab && selectedDate) {
-  loadAvailableSlots(selectedLab, selectedDate)
-  loadBookedSchedule(selectedLab, selectedDate)
+    // For single lab - show booked slots
+    if (selectedLabs.length === 1 && selectedDate) {
+      loadAvailableSlots(selectedLabs[0], selectedDate)
+      loadBookedSchedule(selectedLabs[0], selectedDate)
+    }
+    // For multiple labs - load common free slots
+    else if (selectedLabs.length > 1 && selectedDate) {
+      loadCommonFreeSlots(selectedLabs, selectedDate)
     }
   }
 
   useEffect(() => {
     handleLabAndDateChange()
-  }, [selectedLab, selectedDate])
+  }, [selectedLabs, selectedDate])
 
   const handleSubmit = async () => {
     if (loading) return // Prevent double submission
     const manualSelected = !selectedTimeSlot && startTime && endTime
-    if (!selectedDepartment || !selectedFaculty || !selectedLab || !selectedDate || (!selectedTimeSlot && !manualSelected) || !purpose.trim()) {
-      toast({ title: "Missing Information", description: "Please fill all required fields", variant: "destructive" })
+    if (!selectedDepartment || !selectedFaculty || selectedLabs.length === 0 || !selectedDate || (!selectedTimeSlot && !manualSelected) || !purpose.trim() || !areAllResponsiblePersonsFilled()) {
+      toast({ title: "Missing Information", description: "Please fill all required fields including person responsible details for each lab", variant: "destructive" })
       return
     }
 
@@ -238,13 +299,22 @@ export default function BookLabPage() {
     try {
       const [sTime, eTime] = selectedTimeSlot ? selectedTimeSlot.split(' - ') : [startTime, endTime]
       if (!sTime || !eTime) throw new Error("Invalid time range")
+      
+      const isMultiLab = selectedLabs.length > 1
       const requestData = {
-        lab_id: parseInt(selectedLab),
+        lab_id: isMultiLab ? null : parseInt(selectedLabs[0]),
+        lab_ids: isMultiLab ? selectedLabs.map(id => parseInt(id)) : null,
+        is_multi_lab: isMultiLab,
         faculty_supervisor_id: parseInt(selectedFaculty),
         booking_date: format(selectedDate, 'yyyy-MM-dd'),
         start_time: sTime,
         end_time: eTime,
-        purpose: purpose.trim()
+        purpose: purpose.trim(),
+        responsible_persons: responsiblePersons.map(rp => ({
+          lab_id: parseInt(rp.lab_id),
+          name: rp.name.trim(),
+          email: rp.email.trim().toLowerCase()
+        }))
       }
 
       const res = await fetch("/api/student/booking-requests", {
@@ -257,22 +327,24 @@ export default function BookLabPage() {
 
   if (!res.ok) throw new Error(data?.error || "Failed to submit request")
 
+  const labText = isMultiLab ? `${selectedLabs.length} labs` : 'lab'
   setSuccessDialog({ 
     open: true, 
-    message: '✓ Lab booking request submitted successfully! Your request has been sent to the faculty supervisor for approval. You will be notified once it is reviewed.'
+    message: `✓ ${labText.charAt(0).toUpperCase() + labText.slice(1)} booking request submitted successfully! Your request has been sent to the faculty supervisor for approval. You will be notified once it is reviewed.`
   })
       
       // Reset form
       setCurrentStep(1)
       setSelectedDepartment("")
       setSelectedFaculty("")
-      setSelectedLab("")
+      setSelectedLabs([])
       setSelectedDate(undefined)
       setSelectedTimeSlot("")
   setStartTime("")
   setEndTime("")
       setPurpose("")
       setRemarks("")
+      setResponsiblePersons([])
       
     } catch (error: any) {
       toast({ title: "Submission Failed", description: error?.message || "Failed to submit request", variant: "destructive" })
@@ -305,31 +377,34 @@ export default function BookLabPage() {
 
   const isInvalidTimeRange = () => !!startTime && !!endTime && startTime >= endTime
 
-  const isOutsideBusinessHours = () => {
-    if (!startTime || !endTime) return false
-    const start = parseInt(startTime.split(':')[0])
-    const end = parseInt(endTime.split(':')[0])
-    const startMinutes = parseInt(startTime.split(':')[1])
-    const endMinutes = parseInt(endTime.split(':')[1])
-    
-    // Convert to minutes for easier comparison
-    const startTotalMinutes = start * 60 + startMinutes
-    const endTotalMinutes = end * 60 + endMinutes
-    
-    // Business hours: 8:00 AM (480 minutes) to 8:00 PM (1200 minutes)
-    const businessStart = 8 * 60 // 8:00 AM
-    const businessEnd = 20 * 60 // 8:00 PM
-    
-    return startTotalMinutes < businessStart || endTotalMinutes > businessEnd
+  // Removed business hours restriction - users can book labs at any time
+  const isOutsideBusinessHours = () => false
+
+  // Validation for person responsible email
+  const isValidResponsibleEmail = (email: string) => {
+    if (!email) return false
+    return email.toLowerCase().endsWith('@lnmiit.ac.in')
   }
 
-  const canProceedToStep2 = selectedDepartment && selectedFaculty && selectedLab
+  // Check if all responsible persons are filled
+  const areAllResponsiblePersonsFilled = () => {
+    if (responsiblePersons.length === 0) return false
+    return responsiblePersons.every(rp => 
+      rp.name.trim() !== '' && isValidResponsibleEmail(rp.email)
+    )
+  }
+
+  const canProceedToStep2 = selectedDepartment && selectedFaculty && selectedLabs.length > 0
   const canProceedToStep3 = !!(canProceedToStep2 && selectedDate && (selectedTimeSlot || (startTime && endTime && !hasConflict() && !isInvalidTimeRange() && !isOutsideBusinessHours())))
-  const canSubmit = !!(canProceedToStep3 && purpose.trim())
+  const canSubmit = !!(canProceedToStep3 && purpose.trim() && areAllResponsiblePersonsFilled())
 
   const getSelectedDepartmentName = () => departments.find(d => d.id.toString() === selectedDepartment)?.name || ""
   const getSelectedFacultyName = () => faculties.find(f => f.id.toString() === selectedFaculty)?.name || ""
-  const getSelectedLabName = () => labs.find(l => l.id.toString() === selectedLab)?.name || ""
+  const getSelectedLabsText = () => {
+    if (selectedLabs.length === 0) return ""
+    if (selectedLabs.length === 1) return labs.find(l => l.id.toString() === selectedLabs[0])?.name || ""
+    return `${selectedLabs.length} labs selected`
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
@@ -414,19 +489,81 @@ export default function BookLabPage() {
 
               {selectedDepartment && (
                 <div>
-                  <Label>Lab <span className="text-red-600">*</span></Label>
-                  <Select value={selectedLab} onValueChange={setSelectedLab}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Lab" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {labs.map(lab => (
-                        <SelectItem key={lab.id} value={lab.id.toString()}>
-                          {lab.name} ({lab.code})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Lab(s) <span className="text-red-600">*</span></Label>
+                  <p className="text-xs text-muted-foreground mb-2">Select one or multiple labs</p>
+                  <Popover open={labSelectOpen} onOpenChange={setLabSelectOpen}>
+                    <PopoverTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-between"
+                        role="combobox"
+                      >
+                        <span className="truncate">
+                          {selectedLabs.length === 0 
+                            ? "Select lab(s)" 
+                            : selectedLabs.length === 1
+                            ? labs.find(l => l.id.toString() === selectedLabs[0])?.name
+                            : `${selectedLabs.length} labs selected`
+                          }
+                        </span>
+                        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-3" align="start">
+                      <div className="space-y-2">
+                        {labs.map(lab => (
+                          <div key={lab.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`lab-${lab.id}`}
+                              checked={selectedLabs.includes(lab.id.toString())}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  // Check if any lab is already selected from a different department
+                                  if (selectedLabs.length > 0) {
+                                    const firstSelectedLab = labs.find(l => l.id.toString() === selectedLabs[0])
+                                    if (firstSelectedLab && firstSelectedLab.department_id !== lab.department_id) {
+                                      toast({
+                                        title: "Different Department",
+                                        description: "You can only book labs from the same department in a multi-lab booking",
+                                        variant: "destructive"
+                                      })
+                                      return
+                                    }
+                                  }
+                                  setSelectedLabs([...selectedLabs, lab.id.toString()])
+                                } else {
+                                  setSelectedLabs(selectedLabs.filter(id => id !== lab.id.toString()))
+                                }
+                              }}
+                            />
+                            <label
+                              htmlFor={`lab-${lab.id}`}
+                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                            >
+                              {lab.name} ({lab.code})
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                      {selectedLabs.length > 0 && (
+                        <div className="mt-3 pt-3 border-t">
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="w-full"
+                            onClick={() => setSelectedLabs([])}
+                          >
+                            Clear Selection
+                          </Button>
+                        </div>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                  {selectedLabs.length > 1 && (
+                    <p className="text-xs text-blue-600 mt-1">
+                      ℹ️ Multi-lab booking: Common free slots will be shown
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -455,7 +592,7 @@ export default function BookLabPage() {
               <div className="text-sm text-muted-foreground">
                 <p>Department: <span className="font-medium">{getSelectedDepartmentName()}</span></p>
                 <p>Faculty: <span className="font-medium">{getSelectedFacultyName()}</span></p>
-                <p>Lab: <span className="font-medium">{getSelectedLabName()}</span></p>
+                <p>Lab(s): <span className="font-medium">{getSelectedLabsText()}</span></p>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -486,6 +623,53 @@ export default function BookLabPage() {
 
               {selectedDate && (
                 <div className="space-y-4">
+                  {/* Show Available Slots for Multi-Lab */}
+                  {selectedLabs.length > 1 && availableSlots.length > 0 && (
+                    <div>
+                      <Label>Common Available Time Slots</Label>
+                      <div className="space-y-2 mt-2">
+                        {availableSlots.map((slot, i) => {
+                          const durationMinutes = slot.duration_minutes || 0
+                          const hours = Math.floor(durationMinutes / 60)
+                          const minutes = durationMinutes % 60
+                          const durationText = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
+                          
+                          return (
+                            <div key={i} className="p-3 rounded border bg-green-50 border-green-200 text-sm">
+                              <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                  <Clock className="h-4 w-4 text-green-600" />
+                                  <span className="font-medium">
+                                    {slot.display || `${slot.start_time.substring(0, 5)} - ${slot.end_time.substring(0, 5)}`}
+                                  </span>
+                                </div>
+                                <Badge variant="outline" className="bg-white text-green-700">
+                                  {durationText} free
+                                </Badge>
+                              </div>
+                              <p className="text-muted-foreground text-xs mt-1">
+                                Available across all {selectedLabs.length} selected labs
+                              </p>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Show message if no common slots for multi-lab */}
+                  {selectedLabs.length > 1 && availableSlots.length === 0 && bookedSlots.length === 0 && (
+                    <div className="p-4 border rounded-md bg-green-50 border-green-200">
+                      <div className="flex items-center gap-2 text-green-700 mb-2">
+                        <Clock className="h-5 w-5" />
+                        <span className="font-medium">Fully Available</span>
+                      </div>
+                      <p className="text-sm text-green-600">
+                        All selected labs are completely free on this date. You can book any time from 00:00 to 23:59.
+                      </p>
+                    </div>
+                  )}
+                  
                   <div>
                     <Label>Booked/Scheduled Slots</Label>
                     {bookedSlots.length === 0 ? (
@@ -518,11 +702,11 @@ export default function BookLabPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label>Start Time (HH:MM)</Label>
-                      <Input type="time" min="08:00" max="20:00" value={startTime} onChange={(e) => { setStartTime(e.target.value); setSelectedTimeSlot("") }} />
+                      <Input type="time" value={startTime} onChange={(e) => { setStartTime(e.target.value); setSelectedTimeSlot("") }} />
                     </div>
                     <div>
                       <Label>End Time (HH:MM)</Label>
-                      <Input type="time" min="08:00" max="20:00" value={endTime} onChange={(e) => { setEndTime(e.target.value); setSelectedTimeSlot("") }} />
+                      <Input type="time" value={endTime} onChange={(e) => { setEndTime(e.target.value); setSelectedTimeSlot("") }} />
                     </div>
                   </div>
                   
@@ -539,12 +723,6 @@ export default function BookLabPage() {
                         <div className="p-3 border border-red-200 bg-red-50 text-sm text-red-700 rounded flex items-center gap-2">
                           <Clock className="h-4 w-4" />
                           End time must be after start time.
-                        </div>
-                      )}
-                      {isOutsideBusinessHours() && (
-                        <div className="p-3 border border-amber-200 bg-amber-50 text-sm text-amber-800 rounded flex items-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          Lab bookings are only allowed between 8:00 AM and 8:00 PM.
                         </div>
                       )}
                     </div>
@@ -581,12 +759,75 @@ export default function BookLabPage() {
               <div className="text-sm text-muted-foreground space-y-1">
                 <p>Department: <span className="font-medium">{getSelectedDepartmentName()}</span></p>
                 <p>Faculty: <span className="font-medium">{getSelectedFacultyName()}</span></p>
-                <p>Lab: <span className="font-medium">{getSelectedLabName()}</span></p>
+                <p>Lab(s): <span className="font-medium">{getSelectedLabsText()}</span></p>
                 <p>Date: <span className="font-medium">{selectedDate ? format(selectedDate, "PPP") : ""}</span></p>
                 <p>Time: <span className="font-medium">{selectedTimeSlot || (startTime && endTime ? `${startTime} - ${endTime}` : "")}</span></p>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Person Responsible Section - One for Each Lab */}
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-4">
+                <div className="flex items-center gap-2 text-blue-900 font-medium">
+                  <User className="h-4 w-4" />
+                  <span>Person Responsible for {selectedLabs.length > 1 ? 'Each Lab' : 'Lab'}</span>
+                </div>
+                <p className="text-sm text-blue-800">
+                  {selectedLabs.length > 1 
+                    ? 'Each lab requires a responsible person who will be held accountable for any damages during the booking period.'
+                    : 'This person will be held accountable for any damages to the lab during the booking period.'
+                  }
+                </p>
+                
+                <div className="space-y-4">
+                  {responsiblePersons.map((rp, index) => (
+                    <div key={rp.lab_id} className="p-3 bg-white border border-blue-200 rounded-md space-y-3">
+                      <div className="font-medium text-sm text-blue-900 flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        {rp.lab_name}
+                      </div>
+                      
+                      <div>
+                        <Label className="text-sm">
+                          Full Name <span className="text-red-600">*</span>
+                        </Label>
+                        <Input 
+                          placeholder="Enter full name"
+                          value={rp.name}
+                          onChange={(e) => {
+                            const updated = [...responsiblePersons]
+                            updated[index].name = e.target.value
+                            setResponsiblePersons(updated)
+                          }}
+                          className="mt-1"
+                        />
+                      </div>
+
+                      <div>
+                        <Label className="text-sm">
+                          Email Address <span className="text-red-600">*</span>
+                        </Label>
+                        <Input 
+                          type="email"
+                          placeholder="example@lnmiit.ac.in"
+                          value={rp.email}
+                          onChange={(e) => {
+                            const updated = [...responsiblePersons]
+                            updated[index].email = e.target.value
+                            setResponsiblePersons(updated)
+                          }}
+                          className={`mt-1 ${rp.email && !isValidResponsibleEmail(rp.email) ? 'border-red-500' : ''}`}
+                        />
+                        {rp.email && !isValidResponsibleEmail(rp.email) && (
+                          <p className="text-xs text-red-600 mt-1">
+                            Email must end with @lnmiit.ac.in
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div>
                 <Label>Purpose of Lab Use <span className="text-red-600">*</span></Label>
                 <Textarea 

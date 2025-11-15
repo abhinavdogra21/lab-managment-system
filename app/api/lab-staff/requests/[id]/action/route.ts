@@ -45,22 +45,56 @@ export async function POST(
     }
 
     const bookingRequest = requestResult.rows[0]
+    const isMultiLab = bookingRequest.is_multi_lab === 1 || bookingRequest.is_multi_lab === true
 
-    // Authorization: ensure this staff is allowed to act on this lab's requests
-    const labAuth = await db.query(
-      `SELECT 
-         l.staff_id AS head_staff_id,
-         EXISTS(SELECT 1 FROM lab_staff_assignments la WHERE la.lab_id = l.id AND la.staff_id = ?) AS is_assigned
-       FROM labs l WHERE l.id = ?`,
-      [userId, bookingRequest.lab_id]
-    )
-    const authRow = labAuth.rows[0]
-    const isAssigned = authRow && (authRow.is_assigned === 1 || authRow.is_assigned === true || authRow.is_assigned === '1')
-    if (!isAssigned) {
-      return NextResponse.json({ success: false, error: "Not authorized for this lab" }, { status: 403 })
-    }
-    if (authRow.head_staff_id && Number(authRow.head_staff_id) !== Number(userId)) {
-      return NextResponse.json({ success: false, error: "Only head lab staff can process this request" }, { status: 403 })
+    // For multi-lab bookings, check which specific lab this staff is approving
+    let targetLabId = bookingRequest.lab_id
+    if (isMultiLab && bookingRequest.lab_ids) {
+      // Parse lab_ids JSON - handle Buffer/String/Array formats
+      let labIds: number[] = []
+      if (Array.isArray(bookingRequest.lab_ids)) {
+        labIds = bookingRequest.lab_ids
+      } else if (Buffer.isBuffer(bookingRequest.lab_ids)) {
+        labIds = JSON.parse(bookingRequest.lab_ids.toString('utf-8'))
+      } else if (typeof bookingRequest.lab_ids === 'string') {
+        labIds = JSON.parse(bookingRequest.lab_ids)
+      }
+      
+      // Check if this staff is the HEAD lab staff for ANY of the labs in this booking
+      const staffLabs = await db.query(
+        `SELECT l.id FROM labs l 
+         WHERE l.id IN (${labIds.map(() => '?').join(',')})
+         AND l.staff_id = ?`,
+        [...labIds, userId]
+      )
+      
+      if (staffLabs.rows.length === 0) {
+        return NextResponse.json(
+          { success: false, error: "Not authorized. Only head lab staff can approve multi-lab bookings." },
+          { status: 403 }
+        )
+      }
+      
+      // For multi-lab, we'll update the specific lab's approval status
+      targetLabId = staffLabs.rows[0].id
+    } else {
+      // Single lab authorization check - must be head lab staff
+      const labAuth = await db.query(
+        `SELECT l.staff_id AS head_staff_id FROM labs l WHERE l.id = ?`,
+        [bookingRequest.lab_id]
+      )
+      
+      if (labAuth.rows.length === 0) {
+        return NextResponse.json({ success: false, error: "Lab not found" }, { status: 404 })
+      }
+      
+      const authRow = labAuth.rows[0]
+      if (!authRow.head_staff_id || Number(authRow.head_staff_id) !== Number(userId)) {
+        return NextResponse.json({ 
+          success: false, 
+          error: "Not authorized. Only head lab staff can approve bookings." 
+        }, { status: 403 })
+      }
     }
 
     // Update the request based on action
@@ -69,21 +103,79 @@ export async function POST(
     let updateParams: any[]
 
     if (action === 'approve') {
-      // Move to next step (HOD approval)
-      newStatus = 'pending_hod'
-      updateQuery = `
-        UPDATE booking_requests 
-        SET 
-          status = ?,
-          lab_staff_approved_at = NOW(),
-          lab_staff_approved_by = ?,
-          lab_staff_remarks = ?
-        WHERE id = ?
-      `
-      updateParams = [newStatus, userId, remarks || null, id]
+      if (isMultiLab) {
+        // Update specific lab's approval status in multi_lab_approvals
+        await db.query(`
+          UPDATE multi_lab_approvals
+          SET status = 'approved_by_lab_staff',
+              lab_staff_approved_by = ?,
+              lab_staff_approved_at = NOW(),
+              lab_staff_remarks = ?
+          WHERE booking_request_id = ? AND lab_id = ?
+        `, [userId, remarks || null, id, targetLabId])
+        
+        // Check if ALL labs have been approved by lab staff
+        const allApprovals = await db.query(`
+          SELECT COUNT(*) as total,
+                 SUM(CASE WHEN status = 'approved_by_lab_staff' THEN 1 ELSE 0 END) as approved
+          FROM multi_lab_approvals
+          WHERE booking_request_id = ?
+        `, [id])
+        
+        const total = Number(allApprovals.rows[0].total)
+        const approved = Number(allApprovals.rows[0].approved || 0)
+        const allApproved = total === approved
+        
+        console.log(`Multi-lab approval check: ${approved}/${total} labs approved by staff`)
+        
+        if (allApproved) {
+          // All lab staff approved - move to HOD
+          newStatus = 'pending_hod'
+          updateQuery = `
+            UPDATE booking_requests 
+            SET status = ?, 
+                lab_staff_approved_at = NOW(),
+                lab_staff_approved_by = ?
+            WHERE id = ?
+          `
+          updateParams = [newStatus, userId, id]
+          console.log(`All labs approved! Moving booking ${id} to pending_hod status`)
+        } else {
+          // Still waiting for other lab staff approvals
+          newStatus = 'pending_lab_staff'
+          updateQuery = `SELECT 1` // No-op
+          updateParams = []
+        }
+      } else {
+        // Single lab approval - move to HOD
+        newStatus = 'pending_hod'
+        updateQuery = `
+          UPDATE booking_requests 
+          SET 
+            status = ?,
+            lab_staff_approved_at = NOW(),
+            lab_staff_approved_by = ?,
+            lab_staff_remarks = ?
+          WHERE id = ?
+        `
+        updateParams = [newStatus, userId, remarks || null, id]
+      }
     } else {
       // Reject the request
       newStatus = 'rejected'
+      
+      if (isMultiLab) {
+        // If ANY lab staff rejects, entire multi-lab booking is rejected
+        await db.query(`
+          UPDATE multi_lab_approvals
+          SET status = 'rejected', 
+              lab_staff_approved_by = ?,
+              lab_staff_approved_at = NOW(),
+              lab_staff_remarks = ?
+          WHERE booking_request_id = ?
+        `, [userId, remarks || null, id])
+      }
+      
       updateQuery = `
         UPDATE booking_requests 
         SET 
@@ -99,7 +191,9 @@ export async function POST(
       updateParams = [newStatus, userId, remarks || null, userId, remarks || 'Rejected by lab staff', id]
     }
 
-    await db.query(updateQuery, updateParams)
+    if (updateParams.length > 0) {
+      await db.query(updateQuery, updateParams)
+    }
 
     // Log the activity with enriched booking data
     const userInfo = await getUserInfoForLogging(userId)
@@ -187,101 +281,164 @@ export async function POST(
     // Send email notifications
     try {
       if (action === 'approve') {
-        // Email to student with salutation
-        const studentEmailData = emailTemplates.labBookingApproved({
-          requesterName: updatedRequest.student_name,
-          requesterSalutation: updatedRequest.student_salutation,
-          labName: updatedRequest.lab_name,
-          bookingDate: updatedRequest.booking_date,
-          startTime: updatedRequest.start_time,
-          endTime: updatedRequest.end_time,
-          requestId: Number(id),
-          approverRole: 'Lab Staff',
-          nextStep: 'Your request is now pending HoD approval'
-        })
-
-        await sendEmail({
-          to: updatedRequest.student_email,
-          ...studentEmailData
-        }).catch(err => console.error('Email send failed:', err))
-
-        // Email to HOD or Lab Coordinator based on department's highest_approval_authority
-        const approver = await db.query(
-          `SELECT 
-             CASE 
-               WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
-               THEN coord.email
-               ELSE d.hod_email
-             END as email,
-             CASE 
-               WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
-               THEN coord.name
-               ELSE hod.name
-             END as name,
-             CASE 
-               WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
-               THEN coord.salutation
-               ELSE hod.salutation
-             END as salutation,
-             CASE 
-               WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
-               THEN coord.department
-               ELSE hod.department
-             END as department,
-             d.name as department_name,
-             d.highest_approval_authority,
-             CASE 
-               WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
-               THEN 'Lab Coordinator'
-               ELSE 'HOD'
-             END as approver_role
-           FROM labs l
-           JOIN departments d ON l.department_id = d.id
-           LEFT JOIN users hod ON d.hod_id = hod.id
-           LEFT JOIN users coord ON d.lab_coordinator_id = coord.id
-           WHERE l.id = ?
-           LIMIT 1`,
-          [updatedRequest.lab_id]
-        )
-        
-        if (approver.rows.length > 0 && approver.rows[0].email) {
-          // Format requester name with salutation
-          let formattedRequesterName = updatedRequest.student_name
-          if (updatedRequest.student_salutation && updatedRequest.student_salutation !== 'none') {
-            const salutationMap: { [key: string]: string } = {
-              'prof': 'Prof.',
-              'dr': 'Dr.',
-              'mr': 'Mr.',
-              'mrs': 'Mrs.'
-            }
-            const salutation = salutationMap[updatedRequest.student_salutation.toLowerCase()] || ''
-            formattedRequesterName = salutation ? `${salutation} ${updatedRequest.student_name}` : updatedRequest.student_name
+        // For multi-lab, get lab name that was just approved
+        let approvedLabName = updatedRequest.lab_name
+        if (isMultiLab) {
+          const labInfo = await db.query(
+            'SELECT name FROM labs WHERE id = ?',
+            [targetLabId]
+          )
+          if (labInfo.rows.length > 0) {
+            approvedLabName = labInfo.rows[0].name
           }
+        }
 
-          const approverEmailData = emailTemplates.labBookingCreated({
-            requesterName: formattedRequesterName,
-            requesterRole: formatRole(updatedRequest.requester_role),
-            labName: updatedRequest.lab_name,
-            bookingDate: updatedRequest.booking_date,
-            startTime: updatedRequest.start_time,
-            endTime: updatedRequest.end_time,
-            purpose: updatedRequest.purpose || 'Not specified',
-            requestId: Number(id),
-            recipientName: approver.rows[0].name,
-            recipientSalutation: approver.rows[0].salutation
-          })
+        // Email to student with salutation
+        let nextStep: string
+        if (isMultiLab) {
+          // Check how many labs still pending
+          const pendingLabs = await db.query(`
+            SELECT COUNT(*) as pending_count
+            FROM multi_lab_approvals
+            WHERE booking_request_id = ? AND status = 'pending'
+          `, [id])
+          
+          const pendingCount = pendingLabs.rows[0].pending_count
+          
+          if (pendingCount > 0) {
+            nextStep = `Lab ${approvedLabName} approved. Waiting for approval from ${pendingCount} more lab(s).`
+          } else {
+            nextStep = 'All labs approved! Your request is now pending HoD approval.'
+          }
+        } else {
+          nextStep = 'Your request is now pending HoD approval'
+        }
 
-          await sendEmail({
-            to: approver.rows[0].email,
-            ...approverEmailData
-          }).catch(err => console.error('Email send failed:', err))
+        // DO NOT email student when lab staff approves - only email HOD
+        // Student will only be notified when final HOD approval is done
+
+        // Only send HOD email when ALL labs approved (for multi-lab) or immediately (for single lab)
+        const shouldNotifyHOD = !isMultiLab || newStatus === 'pending_hod'
+        
+        if (shouldNotifyHOD) {
+          // Email to HOD or Lab Coordinator based on department's highest_approval_authority
+          const approver = await db.query(
+            `SELECT 
+               CASE 
+                 WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
+                 THEN coord.email
+                 ELSE d.hod_email
+               END as email,
+               CASE 
+                 WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
+                 THEN coord.name
+                 ELSE hod.name
+               END as name,
+               CASE 
+                 WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
+                 THEN coord.salutation
+                 ELSE hod.salutation
+               END as salutation,
+               CASE 
+                 WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
+                 THEN coord.department
+                 ELSE hod.department
+               END as department,
+               d.name as department_name,
+               d.highest_approval_authority,
+               CASE 
+                 WHEN d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL 
+                 THEN 'Lab Coordinator'
+                 ELSE 'HOD'
+               END as approver_role
+             FROM labs l
+             JOIN departments d ON l.department_id = d.id
+             LEFT JOIN users hod ON d.hod_id = hod.id
+             LEFT JOIN users coord ON d.lab_coordinator_id = coord.id
+             WHERE l.id = ?
+             LIMIT 1`,
+            [updatedRequest.lab_id]
+          )
+          
+          if (approver.rows.length > 0 && approver.rows[0].email) {
+            // Format requester name with salutation
+            let formattedRequesterName = updatedRequest.student_name
+            if (updatedRequest.student_salutation && updatedRequest.student_salutation !== 'none') {
+              const salutationMap: { [key: string]: string } = {
+                'prof': 'Prof.',
+                'dr': 'Dr.',
+                'mr': 'Mr.',
+                'mrs': 'Mrs.'
+              }
+              const salutation = salutationMap[updatedRequest.student_salutation.toLowerCase()] || ''
+              formattedRequesterName = salutation ? `${salutation} ${updatedRequest.student_name}` : updatedRequest.student_name
+            }
+
+            // For multi-lab, get all lab names
+            let labDetails = updatedRequest.lab_name
+            if (isMultiLab && bookingRequest.lab_ids) {
+              // Parse lab_ids JSON - handle Buffer/String/Array formats
+              let labIds: number[] = []
+              if (Array.isArray(bookingRequest.lab_ids)) {
+                labIds = bookingRequest.lab_ids
+              } else if (Buffer.isBuffer(bookingRequest.lab_ids)) {
+                labIds = JSON.parse(bookingRequest.lab_ids.toString('utf-8'))
+              } else if (typeof bookingRequest.lab_ids === 'string') {
+                labIds = JSON.parse(bookingRequest.lab_ids)
+              }
+              
+              const labs = await db.query(
+                `SELECT name FROM labs WHERE id IN (${labIds.map(() => '?').join(',')}) ORDER BY code`,
+                labIds
+              )
+              labDetails = labs.rows.map((l: any) => l.name).join(', ')
+            }
+
+            const approverEmailData = emailTemplates.labBookingCreated({
+              requesterName: formattedRequesterName,
+              requesterRole: formatRole(updatedRequest.requester_role),
+              labName: isMultiLab ? `Multiple Labs (${labDetails})` : updatedRequest.lab_name,
+              bookingDate: updatedRequest.booking_date,
+              startTime: updatedRequest.start_time,
+              endTime: updatedRequest.end_time,
+              purpose: updatedRequest.purpose || 'Not specified',
+              requestId: Number(id),
+              recipientName: approver.rows[0].name,
+              recipientSalutation: approver.rows[0].salutation
+            })
+
+            await sendEmail({
+              to: approver.rows[0].email,
+              ...approverEmailData
+            }).catch(err => console.error('Email send failed:', err))
+          }
         }
       } else {
+        // Rejection - Email to student with multi-lab details if applicable
+        let labDetails = updatedRequest.lab_name
+        if (isMultiLab && bookingRequest.lab_ids) {
+          // Parse lab_ids JSON - handle Buffer/String/Array formats
+          let labIds: number[] = []
+          if (Array.isArray(bookingRequest.lab_ids)) {
+            labIds = bookingRequest.lab_ids
+          } else if (Buffer.isBuffer(bookingRequest.lab_ids)) {
+            labIds = JSON.parse(bookingRequest.lab_ids.toString('utf-8'))
+          } else if (typeof bookingRequest.lab_ids === 'string') {
+            labIds = JSON.parse(bookingRequest.lab_ids)
+          }
+          
+          const labs = await db.query(
+            `SELECT name FROM labs WHERE id IN (${labIds.map(() => '?').join(',')}) ORDER BY code`,
+            labIds
+          )
+          labDetails = labs.rows.map((l: any) => l.name).join(', ')
+        }
+
         // Email to student for rejection with salutation
         const emailData = emailTemplates.labBookingRejected({
           requesterName: updatedRequest.student_name,
           requesterSalutation: updatedRequest.student_salutation,
-          labName: updatedRequest.lab_name,
+          labName: isMultiLab ? `Multiple Labs (${labDetails})` : updatedRequest.lab_name,
           bookingDate: updatedRequest.booking_date,
           startTime: updatedRequest.start_time,
           endTime: updatedRequest.end_time,

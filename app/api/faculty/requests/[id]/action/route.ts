@@ -88,7 +88,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         const details = await db.query(
           `SELECT u.name as student_name, u.email as student_email, u.salutation as student_salutation,
                   l.name as lab_name, l.id as lab_id,
-                  br.booking_date, br.start_time, br.end_time
+                  br.booking_date, br.start_time, br.end_time, br.is_multi_lab, br.lab_ids
            FROM booking_requests br
            JOIN users u ON u.id = br.requested_by
            JOIN labs l ON l.id = br.lab_id
@@ -99,40 +99,51 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         if (details.rows.length > 0) {
           const booking = details.rows[0]
           
-          // Email to student
-          const studentEmailData = emailTemplates.labBookingApproved({
-            requesterName: booking.student_name,
-            requesterSalutation: booking.student_salutation,
-            labName: booking.lab_name,
-            bookingDate: booking.booking_date,
-            startTime: booking.start_time,
-            endTime: booking.end_time,
-            requestId: id,
-            approverRole: 'Faculty',
-            nextStep: 'Your request is now pending Lab Staff approval'
-          })
+          // Handle multi-lab bookings - get all lab names
+          let labNamesText = booking.lab_name
+          let labIds = [booking.lab_id]
+          
+          if ((booking.is_multi_lab === 1 || booking.is_multi_lab === true) && booking.lab_ids) {
+            try {
+              // Parse lab_ids (handle Buffer/String/Array)
+              if (Array.isArray(booking.lab_ids)) {
+                labIds = booking.lab_ids
+              } else if (Buffer.isBuffer(booking.lab_ids)) {
+                labIds = JSON.parse(booking.lab_ids.toString('utf-8'))
+              } else if (typeof booking.lab_ids === 'string') {
+                labIds = JSON.parse(booking.lab_ids)
+              }
+              
+              // Get all lab names
+              const labNamesResult = await db.query(
+                `SELECT name FROM labs WHERE id IN (${labIds.map(() => '?').join(',')}) ORDER BY code`,
+                labIds
+              )
+              labNamesText = labNamesResult.rows.map((l: any) => l.name).join(', ')
+            } catch (e) {
+              console.error('Error parsing multi-lab data for email:', e)
+            }
+          }
+          
+          // DO NOT email student when faculty approves - only email lab staff
+          // Student will only be notified when final HOD approval is done
 
-          await sendEmail({
-            to: booking.student_email,
-            ...studentEmailData
-          }).catch(err => console.error('Email send failed:', err))
-
-          // Email to head lab staff only
+          // Email to lab staff of ALL selected labs (only head lab staff per lab)
           const labStaff = await db.query(
-            `SELECT u.email, u.name, u.salutation
-             FROM users u
-             JOIN labs l ON l.staff_id = u.id
-             WHERE u.role = 'lab_staff' AND l.id = ?`,
-            [booking.lab_id]
+            `SELECT u.email, u.name, u.salutation, l.name as lab_name, l.id as lab_id
+             FROM labs l
+             JOIN users u ON l.staff_id = u.id
+             WHERE u.role = 'lab_staff' AND l.id IN (${labIds.map(() => '?').join(',')})`,
+            labIds
           )
           
           if (labStaff.rows.length > 0) {
-            // Send to each lab staff with their specific salutation
+            // Send to each lab's head staff member
             for (const staff of labStaff.rows) {
               const labStaffEmailData = emailTemplates.labBookingCreated({
                 requesterName: booking.student_name,
                 requesterRole: 'Student',
-                labName: booking.lab_name,
+                labName: labNamesText, // Show all labs in multi-lab booking
                 bookingDate: booking.booking_date,
                 startTime: booking.start_time,
                 endTime: booking.end_time,
@@ -184,7 +195,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         const details = await db.query(
           `SELECT u.name as student_name, u.email as student_email, u.salutation as student_salutation,
                   l.name as lab_name,
-                  br.booking_date, br.start_time, br.end_time,
+                  br.booking_date, br.start_time, br.end_time, br.is_multi_lab, br.lab_ids,
                   f.name as faculty_name
            FROM booking_requests br
            JOIN users u ON u.id = br.requested_by
@@ -196,10 +207,41 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
         if (details.rows.length > 0) {
           const booking = details.rows[0]
+          
+          // Handle multi-lab bookings - get all lab names
+          let labNamesText = booking.lab_name
+          
+          if ((booking.is_multi_lab === 1 || booking.is_multi_lab === true) && booking.lab_ids) {
+            try {
+              // Parse lab_ids
+              let labIds: number[]
+              if (Array.isArray(booking.lab_ids)) {
+                labIds = booking.lab_ids
+              } else if (Buffer.isBuffer(booking.lab_ids)) {
+                labIds = JSON.parse(booking.lab_ids.toString('utf-8'))
+              } else if (typeof booking.lab_ids === 'string') {
+                labIds = JSON.parse(booking.lab_ids)
+              } else {
+                labIds = []
+              }
+              
+              if (labIds.length > 0) {
+                // Get all lab names
+                const labNamesResult = await db.query(
+                  `SELECT name FROM labs WHERE id IN (${labIds.map(() => '?').join(',')}) ORDER BY code`,
+                  labIds
+                )
+                labNamesText = labNamesResult.rows.map((l: any) => l.name).join(', ')
+              }
+            } catch (e) {
+              console.error('Error parsing multi-lab data for rejection email:', e)
+            }
+          }
+          
           const emailData = emailTemplates.labBookingRejected({
             requesterName: booking.student_name,
             requesterSalutation: booking.student_salutation,
-            labName: booking.lab_name,
+            labName: labNamesText,
             bookingDate: booking.booking_date,
             startTime: booking.start_time,
             endTime: booking.end_time,

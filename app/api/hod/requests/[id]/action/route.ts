@@ -109,6 +109,27 @@ export async function POST(
       return NextResponse.json({ error: "Request is not pending HOD approval" }, { status: 400 })
     }
 
+    // For multi-lab bookings, verify ALL labs have been approved by lab staff
+    const isMultiLab = booking.is_multi_lab === 1 || booking.is_multi_lab === true
+    
+    if (isMultiLab) {
+      const allApprovals = await db.query(`
+        SELECT COUNT(*) as total,
+               SUM(CASE WHEN status = 'approved_by_lab_staff' THEN 1 ELSE 0 END) as approved
+        FROM multi_lab_approvals
+        WHERE booking_request_id = ?
+      `, [requestId])
+      
+      const total = Number(allApprovals.rows[0].total)
+      const approved = Number(allApprovals.rows[0].approved || 0)
+      
+      if (total !== approved) {
+        return NextResponse.json({ 
+          error: `Cannot approve: Only ${approved} of ${total} labs have been approved by Lab Staff` 
+        }, { status: 400 })
+      }
+    }
+
     // Update the booking status
     const newStatus = action === 'approve' ? 'approved' : 'rejected'
     
@@ -128,6 +149,19 @@ export async function POST(
         WHERE id = ?
       `
       updateParams = [newStatus, user.userId, remarks || null, approverRole, requestId]
+      
+      // For multi-lab bookings, update all multi_lab_approvals rows to 'approved' status
+      // Note: hod_approved_by and hod_approved_at are set, but hod_remarks should NOT be duplicated
+      // The overall HOD remarks are stored in booking_requests.hod_remarks
+      if (isMultiLab) {
+        await db.query(`
+          UPDATE multi_lab_approvals
+          SET status = 'approved',
+              hod_approved_by = ?,
+              hod_approved_at = NOW()
+          WHERE booking_request_id = ?
+        `, [user.userId, requestId])
+      }
     } else {
       // For rejection, also set rejected_by and rejected_at
       updateQuery = `
@@ -137,79 +171,172 @@ export async function POST(
         WHERE id = ?
       `
       updateParams = [newStatus, user.userId, remarks || null, user.userId, remarks || 'Rejected by HOD', approverRole, requestId]
+      
+      // For multi-lab bookings, mark all multi_lab_approvals as rejected
+      // Note: hod_remarks should NOT be duplicated - it's in booking_requests.hod_remarks
+      if (isMultiLab) {
+        await db.query(`
+          UPDATE multi_lab_approvals
+          SET status = 'rejected',
+              hod_approved_by = ?,
+              hod_approved_at = NOW()
+          WHERE booking_request_id = ?
+        `, [user.userId, requestId])
+      }
     }
     
     await db.query(updateQuery, updateParams)
 
     // Log the activity
     const userInfo = await getUserInfoForLogging(user.userId)
-    // Get complete booking details with requester, lab, and faculty info with salutations
-    const bookingDetails = await db.query(`
-      SELECT 
-        br.*,
-        u.name as requester_name,
-        u.salutation as requester_salutation,
-        u.email as requester_email,
-        u.role as requester_role,
-        l.name as lab_name,
-        l.code as lab_code,
-        d.highest_approval_authority,
-        faculty.name as faculty_name,
-        faculty.salutation as faculty_salutation,
-        faculty.email as faculty_email,
-        lab_staff.name as lab_staff_name,
-        lab_staff.salutation as lab_staff_salutation,
-        lab_staff.email as lab_staff_email,
-        lc.name as lab_coordinator_name,
-        lc.salutation as lab_coordinator_salutation,
-        lc.email as lab_coordinator_email,
-        hod.name as hod_name,
-        hod.salutation as hod_salutation,
-        hod.email as hod_email
-      FROM booking_requests br
-      LEFT JOIN users u ON u.id = br.requested_by
-      LEFT JOIN labs l ON l.id = br.lab_id
-      LEFT JOIN departments d ON l.department_id = d.id
-      LEFT JOIN users faculty ON faculty.id = br.faculty_supervisor_id
-      LEFT JOIN users lab_staff ON lab_staff.id = br.lab_staff_approved_by
-      LEFT JOIN users lc ON lc.id = d.lab_coordinator_id
-      LEFT JOIN users hod ON hod.id = d.hod_id
-      WHERE br.id = ?
-    `, [requestId])
     
-    if (bookingDetails.rows.length > 0) {
-      // Determine the actual approver role based on user's role and department settings
-      const isLabCoordinator = user.role === 'lab_coordinator' || 
-                               (booking.highest_approval_authority === 'lab_coordinator' && 
-                                booking.lab_coordinator_id === user.userId)
-      const approverRoleForLog = isLabCoordinator ? 'lab_coordinator' : 'hod'
-      const actionLabel = action === 'approve' 
-        ? (isLabCoordinator ? 'approved_by_lab_coordinator' : 'approved_by_hod')
-        : (isLabCoordinator ? 'rejected_by_lab_coordinator' : 'rejected_by_hod')
+    // For multi-lab bookings, create separate log entries for each lab
+    if (isMultiLab && booking.lab_ids) {
+      // Parse lab_ids
+      let labIds: number[] = []
+      if (Array.isArray(booking.lab_ids)) {
+        labIds = booking.lab_ids
+      } else if (Buffer.isBuffer(booking.lab_ids)) {
+        labIds = JSON.parse(booking.lab_ids.toString('utf-8'))
+      } else if (typeof booking.lab_ids === 'string') {
+        labIds = JSON.parse(booking.lab_ids)
+      }
       
-      logLabBookingActivity({
-        bookingId: requestId,
-        labId: booking.lab_id,
-        actorUserId: userInfo?.userId || null,
-        actorName: userInfo?.name || null,
-        actorEmail: userInfo?.email || null,
-        actorRole: approverRoleForLog as any,
-        action: actionLabel,
-        actionDescription: action === 'approve' 
-          ? `Approved booking request${remarks ? ': ' + remarks : ''}`
-          : `Rejected booking request: ${remarks}`,
-        bookingSnapshot: bookingDetails.rows[0],
-        ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || null,
-        userAgent: request.headers.get("user-agent") || null,
-      }).catch(err => console.error("Activity logging failed:", err))
+      // Get details for each lab with their specific approvers
+      for (const labId of labIds) {
+        const bookingDetails = await db.query(`
+          SELECT 
+            br.*,
+            u.name as requester_name,
+            u.salutation as requester_salutation,
+            u.email as requester_email,
+            u.role as requester_role,
+            l.name as lab_name,
+            l.code as lab_code,
+            d.highest_approval_authority,
+            faculty.name as faculty_name,
+            faculty.salutation as faculty_salutation,
+            faculty.email as faculty_email,
+            mla.lab_staff_approved_by as lab_staff_id,
+            lab_staff.name as lab_staff_name,
+            lab_staff.salutation as lab_staff_salutation,
+            lab_staff.email as lab_staff_email,
+            lc.name as lab_coordinator_name,
+            lc.salutation as lab_coordinator_salutation,
+            lc.email as lab_coordinator_email,
+            hod.name as hod_name,
+            hod.salutation as hod_salutation,
+            hod.email as hod_email,
+            rp.name as responsible_person_name,
+            rp.email as responsible_person_email
+          FROM booking_requests br
+          LEFT JOIN users u ON u.id = br.requested_by
+          LEFT JOIN labs l ON l.id = ?
+          LEFT JOIN departments d ON l.department_id = d.id
+          LEFT JOIN users faculty ON faculty.id = br.faculty_supervisor_id
+          LEFT JOIN multi_lab_approvals mla ON mla.booking_request_id = br.id AND mla.lab_id = ?
+          LEFT JOIN users lab_staff ON lab_staff.id = mla.lab_staff_approved_by
+          LEFT JOIN users lc ON lc.id = d.lab_coordinator_id
+          LEFT JOIN users hod ON hod.id = d.hod_id
+          LEFT JOIN multi_lab_responsible_persons rp ON rp.booking_request_id = br.id AND rp.lab_id = ?
+          WHERE br.id = ?
+        `, [labId, labId, labId, requestId])
+        
+        if (bookingDetails.rows.length > 0) {
+          const isLabCoordinator = user.role === 'lab_coordinator' || 
+                                   (booking.highest_approval_authority === 'lab_coordinator' && 
+                                    booking.lab_coordinator_id === user.userId)
+          const approverRoleForLog = isLabCoordinator ? 'lab_coordinator' : 'hod'
+          const actionLabel = action === 'approve' 
+            ? (isLabCoordinator ? 'approved_by_lab_coordinator' : 'approved_by_hod')
+            : (isLabCoordinator ? 'rejected_by_lab_coordinator' : 'rejected_by_hod')
+          
+          logLabBookingActivity({
+            bookingId: requestId,
+            labId: labId,
+            actorUserId: userInfo?.userId || null,
+            actorName: userInfo?.name || null,
+            actorEmail: userInfo?.email || null,
+            actorRole: approverRoleForLog as any,
+            action: actionLabel,
+            actionDescription: action === 'approve' 
+              ? `Approved multi-lab booking for ${bookingDetails.rows[0].lab_name}${remarks ? ': ' + remarks : ''}`
+              : `Rejected multi-lab booking for ${bookingDetails.rows[0].lab_name}: ${remarks}`,
+            bookingSnapshot: bookingDetails.rows[0],
+            ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || null,
+            userAgent: request.headers.get("user-agent") || null,
+          }).catch(err => console.error(`Activity logging failed for lab ${labId}:`, err))
+        }
+      }
+    } else {
+      // Single lab booking - create one log entry
+      const bookingDetails = await db.query(`
+        SELECT 
+          br.*,
+          u.name as requester_name,
+          u.salutation as requester_salutation,
+          u.email as requester_email,
+          u.role as requester_role,
+          l.name as lab_name,
+          l.code as lab_code,
+          d.highest_approval_authority,
+          faculty.name as faculty_name,
+          faculty.salutation as faculty_salutation,
+          faculty.email as faculty_email,
+          lab_staff.name as lab_staff_name,
+          lab_staff.salutation as lab_staff_salutation,
+          lab_staff.email as lab_staff_email,
+          lc.name as lab_coordinator_name,
+          lc.salutation as lab_coordinator_salutation,
+          lc.email as lab_coordinator_email,
+          hod.name as hod_name,
+          hod.salutation as hod_salutation,
+          hod.email as hod_email
+        FROM booking_requests br
+        LEFT JOIN users u ON u.id = br.requested_by
+        LEFT JOIN labs l ON l.id = br.lab_id
+        LEFT JOIN departments d ON l.department_id = d.id
+        LEFT JOIN users faculty ON faculty.id = br.faculty_supervisor_id
+        LEFT JOIN users lab_staff ON lab_staff.id = br.lab_staff_approved_by
+        LEFT JOIN users lc ON lc.id = d.lab_coordinator_id
+        LEFT JOIN users hod ON hod.id = d.hod_id
+        WHERE br.id = ?
+      `, [requestId])
+      
+      if (bookingDetails.rows.length > 0) {
+        const isLabCoordinator = user.role === 'lab_coordinator' || 
+                                 (booking.highest_approval_authority === 'lab_coordinator' && 
+                                  booking.lab_coordinator_id === user.userId)
+        const approverRoleForLog = isLabCoordinator ? 'lab_coordinator' : 'hod'
+        const actionLabel = action === 'approve' 
+          ? (isLabCoordinator ? 'approved_by_lab_coordinator' : 'approved_by_hod')
+          : (isLabCoordinator ? 'rejected_by_lab_coordinator' : 'rejected_by_hod')
+        
+        logLabBookingActivity({
+          bookingId: requestId,
+          labId: booking.lab_id,
+          actorUserId: userInfo?.userId || null,
+          actorName: userInfo?.name || null,
+          actorEmail: userInfo?.email || null,
+          actorRole: approverRoleForLog as any,
+          action: actionLabel,
+          actionDescription: action === 'approve' 
+            ? `Approved booking request${remarks ? ': ' + remarks : ''}`
+            : `Rejected booking request: ${remarks}`,
+          bookingSnapshot: bookingDetails.rows[0],
+          ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || null,
+          userAgent: request.headers.get("user-agent") || null,
+        }).catch(err => console.error("Activity logging failed:", err))
+      }
     }
 
     // Send email notification to student
     try {
       const studentDetails = await db.query(
         `SELECT u.name as student_name, u.email as student_email, u.salutation as student_salutation,
+                u.role as requester_role,
                 l.name as lab_name,
-                br.booking_date, br.start_time, br.end_time,
+                br.booking_date, br.start_time, br.end_time, br.purpose, br.is_multi_lab, br.lab_ids,
                 hod.name as hod_name
          FROM booking_requests br
          JOIN users u ON u.id = br.requested_by
@@ -222,6 +349,27 @@ export async function POST(
       if (studentDetails.rows.length > 0) {
         const student = studentDetails.rows[0]
         
+        // For multi-lab, get all lab names
+        let labDetails = student.lab_name
+        if (isMultiLab && booking.lab_ids) {
+          let labIds: number[] = []
+          if (Array.isArray(booking.lab_ids)) {
+            labIds = booking.lab_ids
+          } else if (Buffer.isBuffer(booking.lab_ids)) {
+            labIds = JSON.parse(booking.lab_ids.toString('utf-8'))
+          } else if (typeof booking.lab_ids === 'string') {
+            labIds = JSON.parse(booking.lab_ids)
+          }
+          
+          if (labIds.length > 0) {
+            const labs = await db.query(
+              `SELECT name FROM labs WHERE id IN (${labIds.map(() => '?').join(',')})`,
+              labIds
+            )
+            labDetails = labs.rows.map((l: any) => l.name).join(', ')
+          }
+        }
+        
         // Determine the actual approver role for display
         const isLabCoordinator = user.role === 'lab_coordinator' || 
                                  (booking.highest_approval_authority === 'lab_coordinator' && 
@@ -232,7 +380,7 @@ export async function POST(
           const emailData = emailTemplates.labBookingApproved({
             requesterName: student.student_name,
             requesterSalutation: student.student_salutation,
-            labName: student.lab_name,
+            labName: isMultiLab ? `Multiple Labs (${labDetails})` : student.lab_name,
             bookingDate: student.booking_date,
             startTime: student.start_time,
             endTime: student.end_time,
@@ -245,11 +393,123 @@ export async function POST(
             to: student.student_email,
             ...emailData
           }).catch(err => console.error('Email send failed:', err))
+          
+          // Send confirmation emails to ALL responsible persons
+          if (isMultiLab || booking.responsible_person_name) {
+            const responsiblePersons = await db.query(`
+              SELECT rp.name, rp.email, l.name as lab_name, l.id as lab_id,
+                     u.name as lab_staff_name, u.salutation as lab_staff_salutation
+              FROM multi_lab_responsible_persons rp
+              JOIN labs l ON rp.lab_id = l.id
+              LEFT JOIN users u ON l.staff_id = u.id
+              WHERE rp.booking_request_id = ?
+            `, [requestId])
+            
+            // If no multi-lab entries but has responsible person (old single-lab bookings)
+            if (responsiblePersons.rows.length === 0 && booking.responsible_person_name) {
+              responsiblePersons.rows.push({
+                name: booking.responsible_person_name,
+                email: booking.responsible_person_email,
+                lab_name: student.lab_name
+              })
+            }
+            
+            // Format requester name with salutation
+            let formattedRequesterName = student.student_name
+            if (student.student_salutation && student.student_salutation !== 'none') {
+              const salutationMap: { [key: string]: string } = {
+                'prof': 'Prof.',
+                'dr': 'Dr.',
+                'mr': 'Mr.',
+                'mrs': 'Mrs.'
+              }
+              const salutation = salutationMap[student.student_salutation.toLowerCase()] || ''
+              formattedRequesterName = salutation ? `${salutation} ${student.student_name}` : student.student_name
+            }
+            
+            // Format requester role
+            const formatRole = (role: string) => {
+              const roleMap: { [key: string]: string } = {
+                'student': 'Student',
+                'faculty': 'Faculty',
+                'others': 'Others/TnP',
+                'lab_staff': 'Lab Staff',
+                'hod': 'HOD',
+                'lab_coordinator': 'Lab Coordinator',
+                'admin': 'Admin'
+              }
+              return roleMap[role] || role.charAt(0).toUpperCase() + role.slice(1)
+            }
+            
+            for (const person of responsiblePersons.rows) {
+              // Format lab staff name with salutation
+              let labStaffContact = `Lab staff for ${person.lab_name}`
+              if (person.lab_staff_name) {
+                const salutationMap: { [key: string]: string } = {
+                  'prof': 'Prof.',
+                  'dr': 'Dr.',
+                  'mr': 'Mr.',
+                  'mrs': 'Mrs.'
+                }
+                const salutation = person.lab_staff_salutation ? salutationMap[person.lab_staff_salutation.toLowerCase()] || '' : ''
+                labStaffContact = salutation ? `${salutation} ${person.lab_staff_name}` : person.lab_staff_name
+              }
+              
+              await sendEmail({
+                to: person.email,
+                subject: `Lab Booking Confirmed - You are responsible for ${person.lab_name}`,
+                html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #1a73e8;">Lab Booking Confirmed</h2>
+                    
+                    <p>Dear ${person.name},</p>
+                    
+                    <p>You have been designated as the <strong>person responsible</strong> for the following lab booking:</p>
+                    
+                    <div style="background-color: #f5f5f5; padding: 15px; border-left: 4px solid #1a73e8; margin: 20px 0;">
+                      <p style="margin: 5px 0;"><strong>Lab:</strong> ${person.lab_name}</p>
+                      <p style="margin: 5px 0;"><strong>Date:</strong> ${new Date(student.booking_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                      <p style="margin: 5px 0;"><strong>Time:</strong> ${student.start_time} - ${student.end_time}</p>
+                      <p style="margin: 5px 0;"><strong>Booked by:</strong> ${formattedRequesterName} (${formatRole(student.requester_role)})</p>
+                      <p style="margin: 5px 0;"><strong>Email:</strong> ${student.student_email}</p>
+                      <p style="margin: 5px 0;"><strong>Purpose:</strong> ${student.purpose || 'Not specified'}</p>
+                    </div>
+                    
+                    <h3 style="color: #1a73e8;">Your Responsibilities:</h3>
+                    <ul style="line-height: 1.8;">
+                      <li>Ensure the lab is used according to the stated purpose</li>
+                      <li>Be present during the booking time or coordinate with the lab staff</li>
+                      <li>Report any issues or damages to lab staff immediately</li>
+                      <li>Ensure the lab is properly cleaned and equipment is returned after use</li>
+                    </ul>
+                    
+                    <p style="background-color: #fff3cd; padding: 10px; border-left: 4px solid #ffc107; margin: 20px 0;">
+                      <strong>⏰ Reminder:</strong> You will receive a reminder 2 hours before the booking starts.
+                    </p>
+                    
+                    <p>If you have any questions or concerns, please contact:</p>
+                    <ul>
+                      <li>The person who made the booking: ${student.student_email}</li>
+                      <li>${labStaffContact} (Head Lab Staff for ${person.lab_name})</li>
+                    </ul>
+                    
+                    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                    
+                    <p style="color: #666; font-size: 12px;">
+                      This is an automated notification from the Lab Management System. 
+                      Please do not reply to this email.
+                    </p>
+                  </div>
+                `
+              }).catch(err => console.error(`Failed to send email to responsible person ${person.email}:`, err))
+            }
+          }
         } else {
+          // Rejection email
           const emailData = emailTemplates.labBookingRejected({
             requesterName: student.student_name,
             requesterSalutation: student.student_salutation,
-            labName: student.lab_name,
+            labName: isMultiLab ? `Multiple Labs (${labDetails})` : student.lab_name,
             bookingDate: student.booking_date,
             startTime: student.start_time,
             endTime: student.end_time,

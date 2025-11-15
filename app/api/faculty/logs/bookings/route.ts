@@ -41,8 +41,8 @@ export async function GET(req: NextRequest) {
         labs.name as lab_name
       FROM lab_booking_activity_logs lbal
       LEFT JOIN users requester ON requester.id = JSON_EXTRACT(lbal.booking_snapshot, '$.requested_by')
-      LEFT JOIN labs ON labs.id = JSON_EXTRACT(lbal.booking_snapshot, '$.lab_id')
-      WHERE 1=1
+      LEFT JOIN labs ON labs.id = lbal.lab_id
+      WHERE lbal.action IN ('approved_by_hod', 'approved_by_lab_coordinator')
     `;
 
     const params: any[] = [];
@@ -95,6 +95,7 @@ export async function GET(req: NextRequest) {
       return {
         ...log,
         requester_name: log.requester_name || snapshot?.requester_name || 'Unknown',
+        requester_salutation: snapshot?.requester_salutation || null,
         requester_email: log.requester_email || snapshot?.requester_email || '',
         requester_role: log.requester_role || snapshot?.requester_role || 'student',
         lab_name: log.lab_name || snapshot?.lab_name || 'Unknown Lab',
@@ -104,16 +105,16 @@ export async function GET(req: NextRequest) {
         end_time: snapshot?.end_time || null,
         status: snapshot?.status || 'approved',
         faculty_supervisor_name: snapshot?.faculty_name || null,
-        faculty_supervisor_salutation: snapshot?.faculty_salutation || 'none',
+        faculty_supervisor_salutation: snapshot?.faculty_salutation || null,
         faculty_approved_at: snapshot?.faculty_approved_at || null,
         lab_staff_name: snapshot?.lab_staff_name || null,
-        lab_staff_salutation: snapshot?.lab_staff_salutation || 'none',
+        lab_staff_salutation: snapshot?.lab_staff_salutation || null,
         lab_staff_approved_at: snapshot?.lab_staff_approved_at || null,
         lab_coordinator_name: snapshot?.lab_coordinator_name || null,
-        lab_coordinator_salutation: snapshot?.lab_coordinator_salutation || 'none',
+        lab_coordinator_salutation: snapshot?.lab_coordinator_salutation || null,
         lab_coordinator_approved_at: snapshot?.lab_coordinator_approved_at || null,
         hod_name: snapshot?.hod_name || null,
-        hod_salutation: snapshot?.hod_salutation || 'none',
+        hod_salutation: snapshot?.hod_salutation || null,
         hod_approved_at: snapshot?.hod_approved_at || null,
         highest_approval_authority: snapshot?.highest_approval_authority || 'hod',
         final_approver_role: snapshot?.final_approver_role || null,

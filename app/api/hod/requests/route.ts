@@ -57,17 +57,22 @@ export async function GET(request: NextRequest) {
         br.faculty_approved_at,
         br.lab_staff_approved_at,
         br.hod_approved_at,
+        br.is_multi_lab,
+        br.lab_id,
+        br.lab_ids,
         s.name as student_name,
         s.email as student_email,
-        f.name as faculty_name,
+        s.salutation as student_salutation,
+        COALESCE(f.name, 'N/A') as faculty_name,
         l.name as lab_name,
         d.highest_approval_authority,
-        d.lab_coordinator_id
+        d.lab_coordinator_id,
+        d.id as department_id
       FROM booking_requests br
       JOIN users s ON br.requested_by = s.id
-      JOIN users f ON br.faculty_supervisor_id = f.id
-      JOIN labs l ON br.lab_id = l.id
-      JOIN departments d ON l.department_id = d.id
+      LEFT JOIN users f ON br.faculty_supervisor_id = f.id
+      LEFT JOIN labs l ON br.lab_id = l.id
+      LEFT JOIN departments d ON l.department_id = d.id
     `
 
     const params: any[] = []
@@ -111,9 +116,69 @@ export async function GET(request: NextRequest) {
 
     const result = await db.query(query, params)
     
+    // For multi-lab bookings, fetch additional details
+    const requests = await Promise.all(result.rows.map(async (booking: any) => {
+      // Parse lab_ids if it's a multi-lab booking
+      let labIds: number[] = []
+      if (booking.is_multi_lab) {
+        if (Array.isArray(booking.lab_ids)) {
+          labIds = booking.lab_ids
+        } else if (Buffer.isBuffer(booking.lab_ids)) {
+          labIds = JSON.parse(booking.lab_ids.toString('utf-8'))
+        } else if (typeof booking.lab_ids === 'string') {
+          labIds = JSON.parse(booking.lab_ids)
+        }
+
+        // Fetch multi-lab approvals
+        const approvalsResult = await db.query(`
+          SELECT 
+            mla.id,
+            mla.lab_id,
+            mla.status,
+            mla.lab_staff_approved_by,
+            mla.lab_staff_approved_at,
+            mla.lab_staff_remarks,
+            mla.hod_approved_by,
+            mla.hod_approved_at,
+            l.name as lab_name,
+            ls.name as lab_staff_name
+          FROM multi_lab_approvals mla
+          JOIN labs l ON mla.lab_id = l.id
+          LEFT JOIN users ls ON mla.lab_staff_approved_by = ls.id
+          WHERE mla.booking_request_id = ?
+          ORDER BY l.name
+        `, [booking.id])
+
+        // Fetch responsible persons
+        const responsiblePersonsResult = await db.query(`
+          SELECT lab_id, name, email
+          FROM multi_lab_responsible_persons
+          WHERE booking_request_id = ?
+        `, [booking.id])
+
+        // Map responsible persons to approvals
+        const multiLabApprovals = approvalsResult.rows.map((approval: any) => {
+          const responsible = responsiblePersonsResult.rows.find((rp: any) => rp.lab_id === approval.lab_id)
+          return {
+            ...approval,
+            responsible_person_name: responsible?.name,
+            responsible_person_email: responsible?.email
+          }
+        })
+
+        return {
+          ...booking,
+          lab_ids: labIds,
+          multi_lab_approvals: multiLabApprovals
+        }
+      }
+
+      return booking
+    }))
+    
     return NextResponse.json({ 
-      requests: result.rows,
-      total: result.rows.length
+      requests,
+      total: requests.length
     })
   } catch (error) {
     console.error("Error fetching HOD requests:", error)

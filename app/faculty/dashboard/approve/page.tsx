@@ -29,6 +29,19 @@ interface RequestItem {
   lab_staff_approved_at?: string | null
   hod_approved_at?: string | null
   highest_approval_authority?: 'hod' | 'lab_coordinator'
+  is_multi_lab?: boolean
+  multi_lab_approvals?: Array<{
+    lab_id: number
+    lab_name: string
+    lab_code: string
+    status: string
+    lab_staff_approved_at: string | null
+    lab_staff_approved_by: number | null
+    lab_staff_name: string | null
+    hod_approved_at: string | null
+    hod_approved_by: number | null
+    hod_name: string | null
+  }>
 }
 
 export default function FacultyApprovePage() {
@@ -772,6 +785,21 @@ export default function FacultyApprovePage() {
       if (['pending_lab_staff', 'pending_hod', 'approved'].includes(item.status)) return 'completed'
     }
     if (stepName === 'Lab Staff Review') {
+      // For multi-lab: check if ALL lab staff have approved
+      if (item.is_multi_lab && item.multi_lab_approvals) {
+        const totalLabs = item.multi_lab_approvals.length
+        const approvedLabs = item.multi_lab_approvals.filter(a => a.lab_staff_approved_at).length
+        
+        if (approvedLabs === totalLabs) {
+          return 'completed' // All lab staff approved
+        } else if (approvedLabs > 0) {
+          return 'pending' // Some approved, some pending (show as In Progress)
+        } else {
+          return item.status === 'pending_lab_staff' ? 'pending' : 'waiting'
+        }
+      }
+      
+      // For single-lab bookings
       if (item.status === 'pending_lab_staff') return 'pending'
       if (['pending_hod', 'approved'].includes(item.status)) return 'completed'
       if (item.status === 'pending_faculty') return 'waiting'
@@ -835,6 +863,78 @@ export default function FacultyApprovePage() {
 
     return (
       <div className="space-y-3">
+        {/* Multi-Lab Approval Status */}
+        {item.is_multi_lab && item.multi_lab_approvals && item.multi_lab_approvals.length > 0 && (
+          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <h4 className="text-xs font-medium mb-2 flex items-center gap-1">
+              <Building className="h-3 w-3" />
+              Individual Lab Approval Status
+            </h4>
+            <div className="space-y-2">
+              {item.multi_lab_approvals.map((approval) => {
+                // Determine display status
+                let displayStatus = 'Pending Faculty'
+                let badgeVariant: 'default' | 'secondary' | 'outline' | 'destructive' = 'outline'
+                
+                if (item.status === 'pending_faculty') {
+                  displayStatus = 'Pending Faculty'
+                  badgeVariant = 'outline'
+                } else if (approval.status === 'approved') {
+                  displayStatus = '✓ Fully Approved'
+                  badgeVariant = 'default'
+                } else if (approval.status === 'approved_by_lab_staff') {
+                  displayStatus = 'Pending HOD'
+                  badgeVariant = 'secondary'
+                } else if (approval.status === 'pending' && item.status === 'pending_lab_staff') {
+                  displayStatus = 'Pending Lab Staff'
+                  badgeVariant = 'outline'
+                } else if (approval.status === 'pending' && item.status === 'pending_hod') {
+                  displayStatus = 'Pending Lab Staff'
+                  badgeVariant = 'outline'
+                } else if (approval.status === 'rejected') {
+                  displayStatus = 'Rejected'
+                  badgeVariant = 'destructive'
+                }
+                
+                return (
+                  <div key={approval.lab_id} className="p-2 bg-white rounded border text-xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium">{approval.lab_name}</span>
+                      <Badge variant={badgeVariant} className="text-xs">{displayStatus}</Badge>
+                    </div>
+                    <div className="text-xs space-y-1 text-muted-foreground">
+                      {approval.lab_staff_approved_at && (
+                        <p className="flex items-center gap-1">
+                          <CheckCircle2 className="h-3 w-3 text-green-600" />
+                          Lab Staff: {approval.lab_staff_name} - {formatDate(approval.lab_staff_approved_at)}
+                        </p>
+                      )}
+                      {approval.hod_approved_at && (
+                        <p className="flex items-center gap-1">
+                          <CheckCircle2 className="h-3 w-3 text-green-600" />
+                          HOD: {approval.hod_name} - {formatDate(approval.hod_approved_at)}
+                        </p>
+                      )}
+                      {!approval.lab_staff_approved_at && item.status !== 'pending_faculty' && (
+                        <p className="flex items-center gap-1">
+                          <Clock className="h-3 w-3 text-yellow-600" />
+                          Awaiting Lab Staff approval
+                        </p>
+                      )}
+                      {item.status === 'pending_faculty' && (
+                        <p className="flex items-center gap-1">
+                          <Clock className="h-3 w-3 text-yellow-600" />
+                          Awaiting Faculty recommendation
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+        
         <div className="px-2">
           <div className="flex items-center justify-between relative">
             <div className="absolute top-6 left-6 right-6 h-0.5 bg-gray-200"></div>
@@ -855,6 +955,19 @@ export default function FacultyApprovePage() {
                 </div>
                 <div className="text-center">
                   <p className="text-xs font-medium">{step.name}</p>
+                  {/* Show progress for multi-lab Lab Staff step */}
+                  {item.is_multi_lab && item.multi_lab_approvals && step.name === 'Lab Staff Review' && (
+                    <p className="text-xs text-blue-600 font-medium">
+                      {item.multi_lab_approvals.filter(a => a.lab_staff_approved_at).length}/{item.multi_lab_approvals.length}
+                    </p>
+                  )}
+                  {/* Show progress for multi-lab HOD step */}
+                  {item.is_multi_lab && item.multi_lab_approvals && 
+                   (step.name === 'HOD Review' || step.name === 'Lab Coordinator Review') && (
+                    <p className="text-xs text-blue-600 font-medium">
+                      {item.multi_lab_approvals.filter(a => a.hod_approved_at).length}/{item.multi_lab_approvals.length}
+                    </p>
+                  )}
                   <p className={`text-xs ${
                     step.status === 'completed' ? 'text-green-600' : 
                     step.status === 'pending' ? 'text-blue-600' : 
@@ -917,6 +1030,11 @@ export default function FacultyApprovePage() {
           <div className="flex items-center gap-2">
             <Building className="h-4 w-4 text-blue-600" />
             <span className="font-medium text-sm">{item.lab_name}</span>
+            {item.is_multi_lab && (
+              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300 text-xs">
+                Multi-Lab
+              </Badge>
+            )}
             <span className="text-xs text-gray-500">•</span>
             <span className="text-xs text-gray-600">{item.student_name}</span>
           </div>

@@ -70,6 +70,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Fetch booking logs with proper snapshot extraction
+    // Only fetch final approval logs (approved_by_hod or approved_by_lab_coordinator)
     if (type === "booking" || type === "all") {
       let sql = `
         SELECT 
@@ -103,7 +104,7 @@ export async function GET(req: NextRequest) {
         FROM lab_booking_activity_logs lbal
         LEFT JOIN users requester ON requester.id = JSON_EXTRACT(lbal.booking_snapshot, '$.requested_by')
         LEFT JOIN labs ON labs.id = lbal.lab_id
-        WHERE 1=1
+        WHERE lbal.action IN ('approved_by_hod', 'approved_by_lab_coordinator')
       `
       
       const params: any[] = []
@@ -176,6 +177,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Fetch component logs with proper snapshot extraction
+    // Only fetch final approval logs (approved_by_hod or approved_by_lab_coordinator)
     if (type === "component" || type === "all") {
       let sql = `
         SELECT 
@@ -210,7 +212,7 @@ export async function GET(req: NextRequest) {
         FROM component_activity_logs cal
         LEFT JOIN users requester ON requester.id = JSON_EXTRACT(cal.entity_snapshot, '$.requested_by')
         LEFT JOIN labs ON labs.id = cal.lab_id
-        WHERE 1=1
+        WHERE cal.action IN ('approved_by_hod', 'approved_by_lab_coordinator', 'component_issued', 'component_returned')
       `
       
       const params: any[] = []
