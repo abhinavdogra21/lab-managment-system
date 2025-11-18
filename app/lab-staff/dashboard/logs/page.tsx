@@ -392,7 +392,7 @@ export default function LabStaffLogsPage() {
       const processedData = (data.componentLogs || []).map((log: any) => ({
         ...log,
         components_list: log.items?.map((item: any) => 
-          `${item.component_name} (Qty: ${item.quantity_requested || item.quantity || 1})`
+          `${item.component_name || item.name || 'Unknown'} (Qty: ${item.quantity_requested || item.quantity || 1})`
         ).join(', ') || 'No components listed'
       }))
       
@@ -627,7 +627,7 @@ export default function LabStaffLogsPage() {
     doc.setFontSize(12)
     doc.text('The LNM Institute of Information Technology', 105, 27, { align: 'center' })
     doc.setFontSize(14)
-    doc.text('Component Issue/Return Document', 105, 34, { align: 'center' })
+    doc.text('Component Issue/Return Certificate', 105, 34, { align: 'center' })
     
     doc.setLineWidth(0.5)
     doc.line(15, 38, 195, 38)
@@ -692,7 +692,7 @@ export default function LabStaffLogsPage() {
     if (log.items && log.items.length > 0) {
       log.items.forEach((item: any) => {
         doc.setFont('helvetica', 'normal')
-        doc.text(`• ${item.component_name}`, 20, yPos)
+        doc.text(`• ${item.component_name || item.name || 'Unknown'}`, 20, yPos)
         doc.text(`Qty: ${item.quantity_requested || item.quantity || 1}`, 150, yPos)
         yPos += 7
       })

@@ -50,11 +50,14 @@ interface BookingLog {
   lab_staff_salutation?: string | null
   lab_coordinator_name: string | null
   lab_coordinator_salutation?: string | null
+  hod_name?: string | null
+  hod_salutation?: string | null
   responsible_person_name?: string | null
   created_at: string
   faculty_approved_at: string | null
   lab_staff_approved_at: string | null
   lab_coordinator_approved_at: string | null
+  hod_approved_at?: string | null
 }
 
 interface ComponentLog {
@@ -129,25 +132,11 @@ export default function LabCoordinatorLabsPage() {
   const [loading, setLoading] = useState(false)
   const [labs, setLabs] = useState<Lab[]>([])
   const [components, setComponents] = useState<LabComponent[]>([])
-  const [bookingLogs, setBookingLogs] = useState<BookingLog[]>([])
-  const [componentLogs, setComponentLogs] = useState<ComponentLog[]>([])
-  const [activeTab, setActiveTab] = useState<'components' | 'logs' | 'component-logs'>('components')
   const [selectedLab, setSelectedLab] = useState<string>('all')
-  const [bookingLogsSearch, setBookingLogsSearch] = useState('')
-  const [componentLogsSearch, setComponentLogsSearch] = useState('')
-  const [bookingStartDate, setBookingStartDate] = useState(startDateDefault)
-  const [bookingEndDate, setBookingEndDate] = useState(endDateDefault)
-  const [componentStartDate, setComponentStartDate] = useState(startDateDefault)
-  const [componentEndDate, setComponentEndDate] = useState(endDateDefault)
   
   const uniqueLabs = labs.length > 0 
     ? labs.map(l => l.name).sort()
-    : Array.from(
-        new Set([
-          ...components.map(c => c.lab_name),
-          ...bookingLogs.map(l => l.lab_name)
-        ])
-      ).sort()
+    : Array.from(new Set(components.map(c => c.lab_name))).sort()
 
   const loadComponents = async () => {
     setLoading(true)
@@ -167,65 +156,9 @@ export default function LabCoordinatorLabsPage() {
     }
   }
 
-  const loadBookingLogs = async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams()
-      if (bookingLogsSearch) params.append('search', bookingLogsSearch)
-      if (bookingStartDate) params.append('startDate', bookingStartDate)
-      if (bookingEndDate) params.append('endDate', bookingEndDate)
-      
-      const url = params.toString() 
-        ? `/api/lab-coordinator/labs/booking-logs?${params.toString()}`
-        : '/api/lab-coordinator/labs/booking-logs'
-      const res = await fetch(url, { cache: 'no-store' })
-      if (res.ok) {
-        const data = await res.json()
-        setBookingLogs(data.logs || [])
-      } else {
-        toast({ title: 'Error', description: 'Failed to load booking logs', variant: 'destructive' })
-      }
-    } catch (error: any) {
-      toast({ title: 'Error', description: error.message || 'Failed to load booking logs', variant: 'destructive' })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const loadComponentLogs = async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams()
-      if (componentLogsSearch) params.append('search', componentLogsSearch)
-      if (componentStartDate) params.append('startDate', componentStartDate)
-      if (componentEndDate) params.append('endDate', componentEndDate)
-      
-      const url = params.toString() 
-        ? `/api/lab-coordinator/labs/component-logs?${params.toString()}`
-        : '/api/lab-coordinator/labs/component-logs'
-      const res = await fetch(url, { cache: 'no-store' })
-      if (res.ok) {
-        const data = await res.json()
-        setComponentLogs(data.logs || [])
-      } else {
-        toast({ title: 'Error', description: 'Failed to load component logs', variant: 'destructive' })
-      }
-    } catch (error: any) {
-      toast({ title: 'Error', description: error.message || 'Failed to load component logs', variant: 'destructive' })
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
-    if (activeTab === 'components') {
-      loadComponents()
-    } else if (activeTab === 'logs') {
-      loadBookingLogs()
-    } else {
-      loadComponentLogs()
-    }
-  }, [activeTab])
+    loadComponents()
+  }, [])
 
   const generatePDF = async (log: BookingLog, viewOnly: boolean = false) => {
     const doc = new jsPDF()
@@ -530,7 +463,7 @@ export default function LabCoordinatorLabsPage() {
     doc.setFontSize(12)
     doc.text('The LNM Institute of Information Technology', 105, 27, { align: 'center' })
     doc.setFontSize(14)
-    doc.text('Component Issue/Return Document', 105, 34, { align: 'center' })
+    doc.text('Component Issue/Return Certificate', 105, 34, { align: 'center' })
     
     doc.setLineWidth(0.5)
     doc.line(15, 38, 195, 38)
@@ -768,501 +701,123 @@ export default function LabCoordinatorLabsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Lab Management</h1>
-        <p className="text-muted-foreground mt-1">View components inventory and booking logs for your department labs</p>
+        <h1 className="text-3xl font-bold">Department Labs</h1>
+        <p className="text-muted-foreground mt-1">View components inventory for your department labs</p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <TabsList className="grid w-full grid-cols-3 max-w-2xl">
-            <TabsTrigger value="components" className="flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Components Inventory
-            </TabsTrigger>
-            <TabsTrigger value="logs" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Lab Booking Logs
-            </TabsTrigger>
-            <TabsTrigger value="component-logs" className="flex items-center gap-2">
-              <History className="h-4 w-4" />
-              Component Logs
-            </TabsTrigger>
-          </TabsList>
-
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <Select value={selectedLab} onValueChange={setSelectedLab}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Filter by lab" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Labs</SelectItem>
-                {uniqueLabs.map((lab) => (
-                  <SelectItem key={lab} value={lab}>{lab}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      <div className="flex items-center gap-4 justify-between">
+        <h2 className="text-xl font-semibold flex items-center gap-2">
+          <Package className="h-5 w-5" />
+          Components Inventory
+        </h2>
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <Select value={selectedLab} onValueChange={setSelectedLab}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Filter by lab" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Labs</SelectItem>
+              {uniqueLabs.map((lab) => (
+                <SelectItem key={lab} value={lab}>{lab}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+      </div>
 
-        <TabsContent value="components" className="space-y-4">
-          {loading ? (
-            <Card>
-              <CardContent className="py-8 text-center text-muted-foreground">
-                Loading components...
-              </CardContent>
-            </Card>
-          ) : labs.length === 0 ? (
-            <Card>
-              <CardContent className="py-8 text-center text-muted-foreground">
-                No labs found in your department
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {labs
-                .filter(lab => selectedLab === 'all' || lab.name === selectedLab)
-                .map(lab => {
-                  const labComponents = components.filter(c => c.lab_id === lab.id)
-                  return (
-                    <Card key={lab.id}>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Building className="h-5 w-5" />
-                          {lab.name}
-                          <Badge variant="secondary" className="ml-auto">
-                            {labComponents.length} component{labComponents.length !== 1 ? 's' : ''}
-                          </Badge>
-                          {labComponents.length > 0 && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => generateLabInventoryPDF(lab, labComponents, true)}
-                                className="flex items-center gap-2 ml-2"
-                              >
-                                <FileText className="h-4 w-4" />
-                                View
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => generateLabInventoryPDF(lab, labComponents, false)}
-                                className="flex items-center gap-2 ml-1"
-                              >
-                                <Download className="h-4 w-4" />
-                                Download
-                              </Button>
-                            </>
-                          )}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        {labComponents.length === 0 ? (
-                          <div className="text-center py-8 text-muted-foreground">
-                            No components in this lab yet
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            {labComponents.map((comp) => (
-                              <div key={comp.id} className="flex items-center justify-between p-3 border rounded-lg">
-                                <div className="flex-1">
-                                  <div className="font-medium">{comp.name}</div>
-                                  {comp.model && <div className="text-sm text-muted-foreground">Model: {comp.model}</div>}
-                                  <div className="text-xs text-muted-foreground mt-1">
-                                    <Badge variant="outline" className="text-xs">{comp.category}</Badge>
-                                    {comp.condition_status && comp.condition_status !== 'working' && (
-                                      <Badge variant="secondary" className="text-xs ml-1">{comp.condition_status}</Badge>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="text-lg font-bold">
-                                    {comp.quantity_available}/{comp.quantity_total}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">Available/Total</div>
-                                  {comp.quantity_available === 0 && (
-                                    <Badge variant="destructive" className="text-xs mt-1">Out of Stock</Badge>
-                                  )}
-                                  {comp.quantity_available > 0 && comp.quantity_available < comp.quantity_total * 0.3 && (
-                                    <Badge className="text-xs mt-1 bg-yellow-100 text-yellow-800">Low Stock</Badge>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  )
-                })}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="logs" className="space-y-4">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <Search className="h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by lab, requester, purpose, or email..."
-                value={bookingLogsSearch}
-                onChange={(e) => setBookingLogsSearch(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && loadBookingLogs()}
-                className="max-w-md"
-              />
-              <Button onClick={loadBookingLogs} size="sm">
-                Search
-              </Button>
-              {(bookingLogsSearch || bookingStartDate !== startDateDefault || bookingEndDate !== endDateDefault) && (
-                <Button onClick={() => { 
-                  setBookingLogsSearch('');
-                  setBookingStartDate(startDateDefault);
-                  setBookingEndDate(endDateDefault);
-                  setTimeout(loadBookingLogs, 100);
-                }} size="sm" variant="outline">
-                  Clear
-                </Button>
-              )}
-            </div>
-            
-            <div className="flex items-center gap-3">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Date Range:</span>
-              <Input
-                type="date"
-                value={bookingStartDate}
-                onChange={(e) => setBookingStartDate(e.target.value)}
-                className="w-[170px]"
-                placeholder="From"
-              />
-              <span className="text-muted-foreground">to</span>
-              <Input
-                type="date"
-                value={bookingEndDate}
-                onChange={(e) => setBookingEndDate(e.target.value)}
-                className="w-[170px]"
-                placeholder="To"
-              />
-              <Button onClick={loadBookingLogs} size="sm" variant="secondary">
-                Apply Dates
-              </Button>
-            </div>
-          </div>
-
-          {loading ? (
-            <Card>
-              <CardContent className="py-8 text-center text-muted-foreground">
-                Loading booking logs...
-              </CardContent>
-            </Card>
-          ) : bookingLogs.length === 0 ? (
-            <Card>
-              <CardContent className="py-8 text-center text-muted-foreground">
-                No approved booking logs found
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {bookingLogs
-                .filter(log => selectedLab === 'all' || log.lab_name === selectedLab)
-                .map((log) => (
-                <Card key={log.log_id}>
-                  <CardContent className="p-4">
-                    <div className="space-y-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{log.lab_name}</span>
-                            {getStatusBadge(log.status)}
-                          </div>
-                          <div className="text-sm text-muted-foreground mt-1">
-                            {new Date(log.booking_date).toLocaleDateString('en-IN', {
-                              weekday: 'long',
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric'
-                            })} • {log.start_time} - {log.end_time}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
+      {loading ? (
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            Loading components...
+          </CardContent>
+        </Card>
+      ) : labs.length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            No labs found in your department
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {labs
+            .filter(lab => selectedLab === 'all' || lab.name === selectedLab)
+            .map(lab => {
+              const labComponents = components.filter(c => c.lab_id === lab.id)
+              return (
+                <Card key={lab.id}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Building className="h-5 w-5" />
+                      {lab.name}
+                      <Badge variant="secondary" className="ml-auto">
+                        {labComponents.length} component{labComponents.length !== 1 ? 's' : ''}
+                      </Badge>
+                      {labComponents.length > 0 && (
+                        <>
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => generatePDF(log, true)}
-                            className="flex items-center gap-2"
+                            onClick={() => generateLabInventoryPDF(lab, labComponents, true)}
+                            className="flex items-center gap-2 ml-2"
                           >
                             <FileText className="h-4 w-4" />
-                            View PDF
+                            View
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => generatePDF(log, false)}
-                            className="flex items-center gap-2"
+                            onClick={() => generateLabInventoryPDF(lab, labComponents, false)}
+                            className="flex items-center gap-2 ml-1"
                           >
                             <Download className="h-4 w-4" />
                             Download
                           </Button>
-                        </div>
+                        </>
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {labComponents.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No components in this lab yet
                       </div>
-
-                      <div className="p-3 bg-gray-50 rounded-lg">
-                        <div className="text-sm font-medium mb-2">Requester</div>
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-muted-foreground" />
-                          <div>
-                            <div className="text-sm font-medium">{formatNameWithSalutation(log.requester_name, log.requester_salutation)}</div>
-                            <div className="text-xs text-muted-foreground">{log.requester_email}</div>
-                            <Badge variant="outline" className="text-xs mt-1">{log.requester_role}</Badge>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="text-sm font-medium mb-1">Purpose</div>
-                        <div className="text-sm text-muted-foreground">{log.purpose}</div>
-                      </div>
-
-                      <div className="border-t pt-3">
-                        <div className="text-sm font-medium mb-2">Approval Chain</div>
-                        <div className="space-y-2">
-                          {log.requester_role === 'student' && log.faculty_name && (
-                            <div className="flex items-center gap-2 text-sm">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span className="text-muted-foreground">Recommended by Faculty:</span>
-                              <span className="font-medium">{formatNameWithSalutation(log.faculty_name, log.faculty_salutation)}</span>
+                    ) : (
+                      <div className="space-y-2">
+                        {labComponents.map((comp) => (
+                          <div key={comp.id} className="flex items-center justify-between p-3 border rounded-lg">
+                            <div className="flex-1">
+                              <div className="font-medium">{comp.name}</div>
+                              {comp.model && <div className="text-sm text-muted-foreground">Model: {comp.model}</div>}
+                              <div className="text-xs text-muted-foreground mt-1">
+                                <Badge variant="outline" className="text-xs">{comp.category}</Badge>
+                                {comp.condition_status && comp.condition_status !== 'working' && (
+                                  <Badge variant="secondary" className="text-xs ml-1">{comp.condition_status}</Badge>
+                                )}
+                              </div>
                             </div>
-                          )}
-                          {log.lab_staff_name && (
-                            <div className="flex items-center gap-2 text-sm">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span className="text-muted-foreground">Recommended by Lab Staff:</span>
-                              <span className="font-medium">{formatNameWithSalutation(log.lab_staff_name, log.lab_staff_salutation)}</span>
-                            </div>
-                          )}
-                          {(log.lab_coordinator_name || log.hod_name) && (
-                            <div className="flex items-center gap-2 text-sm">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              {log.lab_coordinator_name ? (
-                                <>
-                                  <span className="text-muted-foreground">Approved by Lab Coordinator:</span>
-                                  <span className="font-medium">{formatNameWithSalutation(log.lab_coordinator_name, log.lab_coordinator_salutation)}</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span className="text-muted-foreground">Approved by HOD:</span>
-                                  <span className="font-medium">{formatNameWithSalutation(log.hod_name, log.hod_salutation)}</span>
-                                </>
+                            <div className="text-right">
+                              <div className="text-lg font-bold">
+                                {comp.quantity_available}/{comp.quantity_total}
+                              </div>
+                              <div className="text-xs text-muted-foreground">Available/Total</div>
+                              {comp.quantity_available === 0 && (
+                                <Badge variant="destructive" className="text-xs mt-1">Out of Stock</Badge>
+                              )}
+                              {comp.quantity_available > 0 && comp.quantity_available < comp.quantity_total * 0.3 && (
+                                <Badge className="text-xs mt-1 bg-yellow-100 text-yellow-800">Low Stock</Badge>
                               )}
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        ))}
                       </div>
-                    </div>
+                    )}
                   </CardContent>
                 </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="component-logs" className="space-y-4">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <Search className="h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by lab, requester, component, purpose, or email..."
-                value={componentLogsSearch}
-                onChange={(e) => setComponentLogsSearch(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && loadComponentLogs()}
-                className="max-w-md"
-              />
-              <Button onClick={loadComponentLogs} size="sm">
-                Search
-              </Button>
-              {(componentLogsSearch || componentStartDate !== startDateDefault || componentEndDate !== endDateDefault) && (
-                <Button onClick={() => { 
-                  setComponentLogsSearch('');
-                  setComponentStartDate(startDateDefault);
-                  setComponentEndDate(endDateDefault);
-                  setTimeout(loadComponentLogs, 100);
-                }} size="sm" variant="outline">
-                  Clear
-                </Button>
-              )}
-            </div>
-            
-            <div className="flex items-center gap-3">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Date Range:</span>
-              <Input
-                type="date"
-                value={componentStartDate}
-                onChange={(e) => setComponentStartDate(e.target.value)}
-                className="w-[170px]"
-                placeholder="From"
-              />
-              <span className="text-muted-foreground">to</span>
-              <Input
-                type="date"
-                value={componentEndDate}
-                onChange={(e) => setComponentEndDate(e.target.value)}
-                className="w-[170px]"
-                placeholder="To"
-              />
-              <Button onClick={loadComponentLogs} size="sm" variant="secondary">
-                Apply Dates
-              </Button>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-          ) : componentLogs.length === 0 ? (
-            <Card>
-              <CardContent className="py-12">
-                <div className="text-center text-muted-foreground">
-                  <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No component issue/return logs found</p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {componentLogs
-                .filter(log => selectedLab === 'all' || log.lab_name === selectedLab)
-                .map((log) => (
-                <Card key={log.log_id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-6 space-y-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Building2 className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-semibold">{log.lab_name}</span>
-                          {log.returned_at ? (
-                            <Badge className="bg-green-100 text-green-800">Returned</Badge>
-                          ) : (
-                            <Badge className="bg-blue-100 text-blue-800">Issued</Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Calendar className="h-4 w-4" />
-                          <span>Issued: {new Date(log.issued_at).toLocaleDateString('en-IN')}</span>
-                          {log.returned_at && (
-                            <>
-                              <span>•</span>
-                              <span>Returned: {new Date(log.returned_at).toLocaleDateString('en-IN')}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => generateComponentLogPDF(log, true)}
-                        >
-                          <FileText className="h-4 w-4 mr-2" />
-                          View PDF
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => generateComponentLogPDF(log, false)}
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Download
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <div className="text-sm font-medium mb-2">Requester</div>
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <div className="text-sm font-medium">{formatNameWithSalutation(log.requester_name, log.requester_salutation)}</div>
-                          <div className="text-xs text-muted-foreground">{log.requester_email}</div>
-                          <Badge variant="outline" className="text-xs mt-1">{log.requester_role}</Badge>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-sm font-medium mb-1">Components</div>
-                      <div className="text-sm text-muted-foreground">{log.components_list}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-sm font-medium mb-1">Purpose</div>
-                      <div className="text-sm text-muted-foreground">{log.purpose}</div>
-                    </div>
-
-                    <div className="border-t pt-3">
-                      <div className="text-sm font-medium mb-2">Timeline</div>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Expected Return:</span>
-                          <span className="ml-2 font-medium">{new Date(log.return_date).toLocaleDateString('en-IN')}</span>
-                        </div>
-                        {log.returned_at && log.actual_return_date && (() => {
-                          const returnDate = new Date(log.return_date)
-                          const actualDate = new Date(log.actual_return_date)
-                          const delayDays = Math.floor((actualDate.getTime() - returnDate.getTime()) / (1000 * 60 * 60 * 24))
-                          return delayDays > 0 ? (
-                            <div>
-                              <span className="text-red-600">Delay:</span>
-                              <span className="ml-2 font-medium text-red-600">{delayDays} day(s)</span>
-                            </div>
-                          ) : null
-                        })()}
-                      </div>
-                    </div>
-
-                    <div className="border-t pt-3">
-                      <div className="text-sm font-medium mb-2">Approval Chain</div>
-                      <div className="space-y-2">
-                        {log.requester_role === 'student' && log.faculty_name && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <span className="text-muted-foreground">Recommended by Faculty:</span>
-                            <span className="font-medium">{formatNameWithSalutation(log.faculty_name, log.faculty_salutation)}</span>
-                          </div>
-                        )}
-                        {log.lab_staff_name && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <span className="text-muted-foreground">Recommended by Lab Staff:</span>
-                            <span className="font-medium">{formatNameWithSalutation(log.lab_staff_name, log.lab_staff_salutation)}</span>
-                          </div>
-                        )}
-                        {log.lab_coordinator_name ? (
-                          <div className="flex items-center gap-2 text-sm">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <span className="text-muted-foreground font-bold">APPROVED BY LAB COORDINATOR:</span>
-                            <span className="font-medium">{formatNameWithSalutation(log.lab_coordinator_name, log.lab_coordinator_salutation)}</span>
-                          </div>
-                        ) : log.hod_name && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <span className="text-muted-foreground font-bold">APPROVED BY HOD:</span>
-                            <span className="font-medium">{formatNameWithSalutation(log.hod_name, log.hod_salutation)}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+              )
+            })}
+        </div>
+      )}
     </div>
   )
 }

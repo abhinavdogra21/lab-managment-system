@@ -10,15 +10,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { name } = await req.json()
+    const { name, salutation } = await req.json()
     
     if (!name || !name.trim()) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 })
     }
 
+    const validSalutations = ['none', 'prof', 'dr', 'mr', 'mrs']
+    const finalSalutation = validSalutations.includes(salutation) ? salutation : 'none'
+
     // Get current user details
     const currentUser = await db.query(
-      `SELECT name, email FROM users WHERE id = ?`,
+      `SELECT name, salutation, email FROM users WHERE id = ?`,
       [user.userId]
     )
 
@@ -27,11 +30,12 @@ export async function POST(req: NextRequest) {
     }
 
     const oldName = currentUser.rows[0].name
+    const oldSalutation = currentUser.rows[0].salutation || 'none'
 
-    // Update name
+    // Update name and salutation
     await db.query(
-      `UPDATE users SET name = ? WHERE id = ?`,
-      [name.trim(), user.userId]
+      `UPDATE users SET name = ?, salutation = ? WHERE id = ?`,
+      [name.trim(), finalSalutation, user.userId]
     )
 
     // Send email notification
@@ -44,6 +48,8 @@ export async function POST(req: NextRequest) {
             
             <div style="background: #dbeafe; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2563eb;">
               <p><strong>Your profile has been updated successfully.</strong></p>
+              ${oldSalutation !== finalSalutation ? `<p><strong>Previous Salutation:</strong> ${oldSalutation === 'none' ? 'None' : oldSalutation.toUpperCase()}</p>
+              <p><strong>New Salutation:</strong> ${finalSalutation === 'none' ? 'None' : finalSalutation.toUpperCase()}</p>` : ''}
               <p><strong>Previous Name:</strong> ${oldName}</p>
               <p><strong>New Name:</strong> ${name.trim()}</p>
               <p><strong>Update Time:</strong> ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
@@ -67,7 +73,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ 
       success: true,
       message: "Profile updated successfully",
-      name: name.trim()
+      name: name.trim(),
+      salutation: finalSalutation
     })
 
   } catch (e) {

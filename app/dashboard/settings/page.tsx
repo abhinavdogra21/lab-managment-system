@@ -16,6 +16,7 @@ export default function SettingsPage() {
   const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
 
   const [newName, setNewName] = useState("")
+  const [salutation, setSalutation] = useState("")
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -26,6 +27,7 @@ export default function SettingsPage() {
       const parsedUser = JSON.parse(userData)
       setUser(parsedUser)
       setNewName(parsedUser.name || "")
+      setSalutation(parsedUser.salutation || "none")
     }
   }, [])
 
@@ -38,7 +40,7 @@ export default function SettingsPage() {
       const res = await fetch("/api/user/update-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName })
+        body: JSON.stringify({ name: newName, salutation: salutation })
       })
 
       const data = await res.json()
@@ -46,7 +48,7 @@ export default function SettingsPage() {
       if (res.ok) {
         setNameMessage({ type: 'success', text: data.message })
         // Update localStorage
-        const updatedUser = { ...user, name: data.name }
+        const updatedUser = { ...user, name: data.name, salutation: data.salutation }
         localStorage.setItem("user", JSON.stringify(updatedUser))
         setUser(updatedUser)
         
@@ -132,6 +134,22 @@ export default function SettingsPage() {
               </div>
 
               <div className="grid gap-2">
+                <Label htmlFor="salutation">Salutation</Label>
+                <select
+                  id="salutation"
+                  value={salutation}
+                  onChange={(e) => setSalutation(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="none">None</option>
+                  <option value="prof">Prof.</option>
+                  <option value="dr">Dr.</option>
+                  <option value="mr">Mr.</option>
+                  <option value="mrs">Mrs.</option>
+                </select>
+              </div>
+
+              <div className="grid gap-2">
                 <Label htmlFor="name">Full Name</Label>
                 <Input
                   id="name"
@@ -153,8 +171,8 @@ export default function SettingsPage() {
                 </Alert>
               )}
 
-              <Button type="submit" disabled={nameLoading || newName === user.name}>
-                {nameLoading ? "Updating..." : "Update Name"}
+              <Button type="submit" disabled={nameLoading || (newName === user.name && salutation === (user.salutation || 'none'))}>
+                {nameLoading ? "Updating..." : "Update Profile"}
               </Button>
             </form>
           </CardContent>

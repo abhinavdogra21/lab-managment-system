@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
         JSON_EXTRACT(cal.entity_snapshot, '$.requester_id') as requester_id,
         JSON_EXTRACT(cal.entity_snapshot, '$.mentor_faculty_id') as mentor_faculty_id
       FROM component_activity_logs cal
-      WHERE cal.action IN ('approved_by_hod', 'approved_by_lab_coordinator', 'component_issued', 'component_returned')
+      WHERE cal.action IN ('issued', 'returned')
     `;
 
     const params: any[] = [];

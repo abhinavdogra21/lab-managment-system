@@ -529,7 +529,7 @@ export default function FacultyLogsPage() {
     doc.setFontSize(12)
     doc.text('The LNM Institute of Information Technology', 105, 27, { align: 'center' })
     doc.setFontSize(14)
-    doc.text('Component Issue/Return Document', 105, 34, { align: 'center' })
+    doc.text('Component Issue/Return Certificate', 105, 34, { align: 'center' })
     
     // Horizontal line
     doc.setLineWidth(0.5)

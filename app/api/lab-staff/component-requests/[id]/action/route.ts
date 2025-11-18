@@ -126,20 +126,8 @@ export async function POST(
       )
       const requestDetails = details.rows[0]
       
-      // Email to requester
-      if (requestDetails && requestDetails.requester_email) {
-        const emailData = emailTemplates.componentRequestApproved({
-          requesterName: requestDetails.requester_name,
-          requesterSalutation: requestDetails.requester_salutation,
-          approverName: requestDetails.lab_staff_name || 'Lab Staff',
-          approverSalutation: requestDetails.lab_staff_salutation,
-          approverRole: 'Lab Staff',
-          labName: requestDetails.lab_name,
-          requestId: requestId,
-          remarks: remarks || undefined
-        })
-        await sendEmail({ to: requestDetails.requester_email, ...emailData }).catch(err => console.error('Email failed:', err))
-      }
+      // Note: Do NOT email the requester at this stage - this is just a recommendation
+      // The requester will be emailed when the component is actually issued
       
       // Email to HOD or Lab Coordinator (forwarding the approved request)
       if (requestDetails && requestDetails.approver_email) {
