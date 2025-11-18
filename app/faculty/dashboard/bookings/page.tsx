@@ -212,6 +212,79 @@ export default function FacultyBookingsPage() {
               </div>
             )}
 
+            {/* Single Lab Approval Status */}
+            {!(request.is_multi_lab === 1 || request.is_multi_lab === true) && (
+              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 className="text-xs font-medium mb-2 flex items-center gap-1">
+                  <Building className="h-3 w-3" />
+                  Individual Lab Approval Status
+                </h4>
+                <div className="space-y-2">
+                  {(() => {
+                    // Determine display status
+                    let displayStatus = 'Pending Lab Staff'
+                    let badgeVariant: 'default' | 'secondary' | 'outline' | 'destructive' = 'outline'
+                    
+                    const labStaffApproved = request.timeline.find(t => t.step_name === 'Lab Staff Recommendation')
+                    const hodApproved = request.timeline.find(t => t.step_name === 'HOD Approval')
+                    const labCoordApproved = request.timeline.find(t => t.step_name === 'Lab Coordinator Approval')
+                    
+                    if (request.status === 'approved') {
+                      displayStatus = '✓ Fully Approved'
+                      badgeVariant = 'default'
+                    } else if (labStaffApproved?.completed_at && request.status === 'pending_hod') {
+                      displayStatus = request.highest_approval_authority === 'lab_coordinator' ? 'Pending Lab Coordinator' : 'Pending HOD'
+                      badgeVariant = 'secondary'
+                    } else if (request.status === 'pending_lab_staff') {
+                      displayStatus = 'Pending Lab Staff'
+                      badgeVariant = 'outline'
+                    } else if (request.status === 'pending_hod' && !labStaffApproved?.completed_at) {
+                      displayStatus = 'Pending Lab Staff'
+                      badgeVariant = 'outline'
+                    } else if (request.status === 'rejected') {
+                      displayStatus = 'Rejected'
+                      badgeVariant = 'destructive'
+                    }
+                    
+                    return (
+                      <div className="p-2 bg-white rounded border text-xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium">{request.lab_name}</span>
+                          <Badge variant={badgeVariant} className="text-xs">{displayStatus}</Badge>
+                        </div>
+                        <div className="text-xs space-y-1 text-muted-foreground">
+                          {labStaffApproved?.completed_at && (
+                            <p className="flex items-center gap-1">
+                              <CheckCircle className="h-3 w-3 text-green-600" />
+                              Lab Staff: {labStaffApproved.user_name} - {new Date(labStaffApproved.completed_at).toLocaleDateString()}
+                            </p>
+                          )}
+                          {hodApproved?.completed_at && (
+                            <p className="flex items-center gap-1">
+                              <CheckCircle className="h-3 w-3 text-green-600" />
+                              HOD: {hodApproved.user_name} - {new Date(hodApproved.completed_at).toLocaleDateString()}
+                            </p>
+                          )}
+                          {labCoordApproved?.completed_at && (
+                            <p className="flex items-center gap-1">
+                              <CheckCircle className="h-3 w-3 text-green-600" />
+                              Lab Coordinator: {labCoordApproved.user_name} - {new Date(labCoordApproved.completed_at).toLocaleDateString()}
+                            </p>
+                          )}
+                          {!labStaffApproved?.completed_at && request.status !== 'pending_faculty' && (
+                            <p className="flex items-center gap-1">
+                              <Clock className="h-3 w-3 text-yellow-600" />
+                              Awaiting Lab Staff approval
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </div>
+              </div>
+            )}
+
             <div className="px-4">
               <div className="flex items-center justify-between relative">
                 <div className="absolute top-6 left-6 right-6 h-0.5 bg-gray-200"></div>

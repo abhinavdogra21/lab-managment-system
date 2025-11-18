@@ -220,17 +220,6 @@ const RequestCard = React.memo(function RequestCardComponent({
                      approval.status === 'pending' ? 'Pending Lab Staff' : 'Rejected'}
                   </Badge>
                 </div>
-                {approval.responsible_person_name && (
-                  <div className="text-blue-700">
-                    <p className="flex items-center gap-2 text-xs">
-                      <User className="h-3 w-3" />
-                      Responsible: {approval.responsible_person_name}
-                    </p>
-                    {approval.responsible_person_email && (
-                      <p className="text-xs ml-5">{approval.responsible_person_email}</p>
-                    )}
-                  </div>
-                )}
                 {approval.lab_staff_approved_at && (
                   <div className="text-xs text-gray-600">
                     Lab Staff: {approval.lab_staff_name} 
@@ -250,7 +239,7 @@ const RequestCard = React.memo(function RequestCardComponent({
         )}
 
         {/* Single Lab Approval Status */}
-        {!item.is_multi_lab && (
+        {!item.is_multi_lab ? (
           <div className="space-y-2 bg-blue-50 p-3 rounded">
             <div className="text-xs font-medium text-blue-900">Selected Labs:</div>
             <div className="bg-white p-2 rounded space-y-1">
@@ -270,17 +259,6 @@ const RequestCard = React.memo(function RequestCardComponent({
                    item.status === 'pending_lab_staff' ? 'Pending Lab Staff' : 'Rejected'}
                 </Badge>
               </div>
-              {item.responsible_person_name && (
-                <div className="text-blue-700">
-                  <p className="flex items-center gap-2 text-xs">
-                    <User className="h-3 w-3" />
-                    Responsible: {item.responsible_person_name}
-                  </p>
-                  {item.responsible_person_email && (
-                    <p className="text-xs ml-5">{item.responsible_person_email}</p>
-                  )}
-                </div>
-              )}
               {item.lab_staff_approved_at && (
                 <div className="text-xs text-gray-600">
                   Lab Staff: {item.lab_staff_name || 'Approved'}
@@ -296,7 +274,7 @@ const RequestCard = React.memo(function RequestCardComponent({
               )}
             </div>
           </div>
-        )}
+        ) : null}
 
         <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
           <div className="flex items-center gap-1">

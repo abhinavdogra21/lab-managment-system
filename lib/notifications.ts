@@ -223,14 +223,14 @@ export const emailTemplates = {
           </p>
           
           <div style="margin-top: 25px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/lab-staff/dashboard/component-requests" 
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/${data.recipientRole === 'Faculty' ? 'faculty' : 'lab-staff'}/dashboard/component-requests" 
                style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
               Review Request
             </a>
           </div>
           
           <div style="margin-top: 15px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/lab-staff/dashboard" 
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/${data.recipientRole === 'Faculty' ? 'faculty' : 'lab-staff'}/dashboard" 
                style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
               Go to Portal Dashboard
             </a>

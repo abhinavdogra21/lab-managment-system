@@ -244,74 +244,76 @@ export default function TNPMyRequestsPage() {
           <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
             <h4 className="text-xs font-medium mb-2 flex items-center gap-1">
               <Building className="h-3 w-3" />
-              Lab Approval Status
+              Selected Labs:
             </h4>
-            {(() => {
-              // EXACT SAME status determination logic as multi-lab
-              let displayStatus = 'Pending Lab Staff'
-              let badgeVariant: 'default' | 'secondary' | 'outline' | 'destructive' = 'outline'
-              
-              const labStaffApproved = request.timeline.find(t => t.step_name === 'Lab Staff Approval')
-              const hodApproved = request.timeline.find(t => t.step_name === 'HOD Approval')
-              const labCoordApproved = request.timeline.find(t => t.step_name === 'Lab Coordinator Approval')
-              
-              if (request.status === 'approved') {
-                displayStatus = '✓ Fully Approved'
-                badgeVariant = 'default'
-              } else if (labStaffApproved?.completed_at && request.status === 'pending_hod') {
-                displayStatus = request.highest_approval_authority === 'lab_coordinator' ? 'Pending Lab Coordinator' : 'Pending HOD'
-                badgeVariant = 'secondary'
-              } else if (request.status === 'pending_lab_staff') {
-                displayStatus = 'Pending Lab Staff'
-                badgeVariant = 'outline'
-              } else if (request.status === 'pending_hod' && !labStaffApproved?.completed_at) {
-                displayStatus = 'Pending Lab Staff'
-                badgeVariant = 'outline'
-              } else if (request.status === 'rejected') {
-                displayStatus = 'Rejected'
-                badgeVariant = 'destructive'
-              }
-              
-              return (
-                <div className="p-2 bg-white rounded border text-xs">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium">{request.lab_name}</span>
-                    <Badge variant={badgeVariant} className="text-xs">{displayStatus}</Badge>
-                  </div>
-                  {request.responsible_person_name && (
-                    <div className="text-xs text-blue-700 mb-1">
-                      <p><span className="font-medium">Contact:</span> {request.responsible_person_name}{request.responsible_person_email && ` (${request.responsible_person_email})`}</p>
+            <div className="space-y-2">
+              {(() => {
+                // EXACT SAME status determination logic as multi-lab
+                let displayStatus = 'Pending Lab Staff'
+                let badgeVariant: 'default' | 'secondary' | 'outline' | 'destructive' = 'outline'
+                
+                const labStaffApproved = request.timeline.find(t => t.step_name === 'Lab Staff Approval')
+                const hodApproved = request.timeline.find(t => t.step_name === 'HOD Approval')
+                const labCoordApproved = request.timeline.find(t => t.step_name === 'Lab Coordinator Approval')
+                
+                if (request.status === 'approved') {
+                  displayStatus = '✓ Fully Approved'
+                  badgeVariant = 'default'
+                } else if (labStaffApproved?.completed_at && request.status === 'pending_hod') {
+                  displayStatus = request.highest_approval_authority === 'lab_coordinator' ? 'Pending Lab Coordinator' : 'Pending HOD'
+                  badgeVariant = 'secondary'
+                } else if (request.status === 'pending_lab_staff') {
+                  displayStatus = 'Pending Lab Staff'
+                  badgeVariant = 'outline'
+                } else if (request.status === 'pending_hod' && !labStaffApproved?.completed_at) {
+                  displayStatus = 'Pending Lab Staff'
+                  badgeVariant = 'outline'
+                } else if (request.status === 'rejected') {
+                  displayStatus = 'Rejected'
+                  badgeVariant = 'destructive'
+                }
+                
+                return (
+                  <div className="p-2 bg-white rounded border text-xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium">{request.lab_name}</span>
+                      <Badge variant={badgeVariant} className="text-xs">{displayStatus}</Badge>
                     </div>
-                  )}
-                  <div className="text-xs space-y-1 text-muted-foreground">
-                    {labStaffApproved?.completed_at && (
-                      <p className="flex items-center gap-1">
-                        <CheckCircle className="h-3 w-3 text-green-600" />
-                        Lab Staff: {labStaffApproved.user_name} - {new Date(labStaffApproved.completed_at).toLocaleDateString()}
-                      </p>
+                    {request.responsible_person_name && (
+                      <div className="text-xs text-blue-700 mb-1">
+                        <p><span className="font-medium">Contact:</span> {request.responsible_person_name}{request.responsible_person_email && ` (${request.responsible_person_email})`}</p>
+                      </div>
                     )}
-                    {hodApproved?.completed_at && (
-                      <p className="flex items-center gap-1">
-                        <CheckCircle className="h-3 w-3 text-green-600" />
-                        HOD: {hodApproved.user_name} - {new Date(hodApproved.completed_at).toLocaleDateString()}
-                      </p>
-                    )}
-                    {labCoordApproved?.completed_at && (
-                      <p className="flex items-center gap-1">
-                        <CheckCircle className="h-3 w-3 text-green-600" />
-                        Lab Coordinator: {labCoordApproved.user_name} - {new Date(labCoordApproved.completed_at).toLocaleDateString()}
-                      </p>
-                    )}
-                    {!labStaffApproved?.completed_at && (
-                      <p className="flex items-center gap-1">
-                        <Clock className="h-3 w-3 text-yellow-600" />
-                        Awaiting Lab Staff approval
-                      </p>
-                    )}
+                    <div className="text-xs space-y-1 text-muted-foreground">
+                      {labStaffApproved?.completed_at && (
+                        <p className="flex items-center gap-1">
+                          <CheckCircle className="h-3 w-3 text-green-600" />
+                          Lab Staff: {labStaffApproved.user_name} - {new Date(labStaffApproved.completed_at).toLocaleDateString()}
+                        </p>
+                      )}
+                      {hodApproved?.completed_at && (
+                        <p className="flex items-center gap-1">
+                          <CheckCircle className="h-3 w-3 text-green-600" />
+                          HOD: {hodApproved.user_name} - {new Date(hodApproved.completed_at).toLocaleDateString()}
+                        </p>
+                      )}
+                      {labCoordApproved?.completed_at && (
+                        <p className="flex items-center gap-1">
+                          <CheckCircle className="h-3 w-3 text-green-600" />
+                          Lab Coordinator: {labCoordApproved.user_name} - {new Date(labCoordApproved.completed_at).toLocaleDateString()}
+                        </p>
+                      )}
+                      {!labStaffApproved?.completed_at && (
+                        <p className="flex items-center gap-1">
+                          <Clock className="h-3 w-3 text-yellow-600" />
+                          Awaiting Lab Staff approval
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )
-            })()}
+                )
+              })()}
+            </div>
           </div>
         )}
 

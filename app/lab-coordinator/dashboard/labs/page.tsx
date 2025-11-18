@@ -362,16 +362,6 @@ export default function LabCoordinatorLabsPage() {
       }
     }
     
-    if (log.responsible_person_name) {
-      doc.setFont('helvetica', 'bold')
-      doc.text('→', 20, yPos)
-      doc.setFont('helvetica', 'normal')
-      doc.text(`Responsible Person:`, 25, yPos)
-      doc.text(log.responsible_person_name, 85, yPos)
-      yPos += 7
-      yPos += 3
-    }
-    
     yPos += 10
     
     doc.setFont('helvetica', 'bold')
@@ -1040,13 +1030,6 @@ export default function LabCoordinatorLabsPage() {
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                               <span className="text-muted-foreground">Approved by Lab Coordinator:</span>
                               <span className="font-medium">{formatNameWithSalutation(log.lab_coordinator_name, log.lab_coordinator_salutation)}</span>
-                            </div>
-                          )}
-                          {log.responsible_person_name && (
-                            <div className="flex items-center gap-2 text-sm">
-                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                              <span className="text-muted-foreground">Responsible Person:</span>
-                              <span className="font-medium">{log.responsible_person_name}</span>
                             </div>
                           )}
                         </div>
