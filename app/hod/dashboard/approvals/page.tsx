@@ -36,6 +36,8 @@ interface RequestItem {
   is_multi_lab?: number | boolean
   lab_ids?: number[]
   multi_lab_approvals?: MultiLabApproval[]
+  responsible_person_name?: string
+  responsible_person_email?: string
 }
 
 interface MultiLabApproval {
@@ -244,6 +246,55 @@ const RequestCard = React.memo(function RequestCardComponent({
                 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Single Lab Approval Status */}
+        {!item.is_multi_lab && (
+          <div className="space-y-2 bg-blue-50 p-3 rounded">
+            <div className="text-xs font-medium text-blue-900">Selected Labs:</div>
+            <div className="bg-white p-2 rounded space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-gray-700">{item.lab_name}</span>
+                <Badge 
+                  variant={
+                    item.status === 'approved' ? 'default' : 
+                    item.status === 'pending_hod' || item.lab_staff_approved_at ? 'default' :
+                    item.status === 'pending_lab_staff' ? 'secondary' : 
+                    'destructive'
+                  }
+                  className="text-xs"
+                >
+                  {item.status === 'approved' ? 'Approved by HOD' : 
+                   item.status === 'pending_hod' || item.lab_staff_approved_at ? 'Pending HOD' :
+                   item.status === 'pending_lab_staff' ? 'Pending Lab Staff' : 'Rejected'}
+                </Badge>
+              </div>
+              {item.responsible_person_name && (
+                <div className="text-blue-700">
+                  <p className="flex items-center gap-2 text-xs">
+                    <User className="h-3 w-3" />
+                    Responsible: {item.responsible_person_name}
+                  </p>
+                  {item.responsible_person_email && (
+                    <p className="text-xs ml-5">{item.responsible_person_email}</p>
+                  )}
+                </div>
+              )}
+              {item.lab_staff_approved_at && (
+                <div className="text-xs text-gray-600">
+                  Lab Staff: {item.lab_staff_name || 'Approved'}
+                  <span className="text-gray-400 ml-1">
+                    ({new Date(item.lab_staff_approved_at).toLocaleDateString()})
+                  </span>
+                </div>
+              )}
+              {item.lab_staff_remarks && (
+                <div className="text-xs text-gray-600 italic">
+                  "{item.lab_staff_remarks}"
+                </div>
+              )}
+            </div>
           </div>
         )}
 

@@ -277,10 +277,10 @@ LNMIIT Lab Management System`,
   <style>
     body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background-color: ${isNewApprover ? '#4F46E5' : '#F59E0B'}; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+    .header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
     .content { background-color: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; }
-    .button { display: inline-block; background-color: ${isNewApprover ? '#4F46E5' : '#F59E0B'}; color: white !important; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
-    .info-box { background-color: ${isNewApprover ? '#EEF2FF' : '#FEF3C7'}; border-left: 4px solid ${isNewApprover ? '#4F46E5' : '#F59E0B'}; padding: 15px; margin: 20px 0; }
+    .button { display: inline-block; background-color: #4F46E5; color: white !important; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
+    .info-box { background-color: #EEF2FF; border-left: 4px solid #4F46E5; padding: 15px; margin: 20px 0; }
     .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #6b7280; }
     ul { margin: 15px 0; padding-left: 20px; }
     li { margin: 8px 0; }
@@ -363,10 +363,10 @@ LNMIIT Lab Management System`,
   <style>
     body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background-color: ${isNewApprover ? '#DC2626' : '#F59E0B'}; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+    .header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
     .content { background-color: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; }
-    .button { display: inline-block; background-color: ${isNewApprover ? '#DC2626' : '#F59E0B'}; color: white !important; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
-    .info-box { background-color: ${isNewApprover ? '#FEE2E2' : '#FEF3C7'}; border-left: 4px solid ${isNewApprover ? '#DC2626' : '#F59E0B'}; padding: 15px; margin: 20px 0; }
+    .button { display: inline-block; background-color: #4F46E5; color: white !important; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
+    .info-box { background-color: #EEF2FF; border-left: 4px solid #4F46E5; padding: 15px; margin: 20px 0; }
     .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #6b7280; }
     ul { margin: 15px 0; padding-left: 20px; }
     li { margin: 8px 0; }

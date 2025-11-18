@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
         br.id,
         br.requested_by,
         stu.name as student_name,
+        stu.salutation as student_salutation,
         stu.email as student_email,
         br.lab_id,
         l.name as lab_name,
@@ -54,6 +55,8 @@ export async function GET(request: NextRequest) {
         br.rejected_at,
         br.is_multi_lab,
         br.lab_ids,
+        br.responsible_person_name,
+        br.responsible_person_email,
         f.name as faculty_approver_name,
         s.name as staff_approver_name,
         h.name as hod_approver_name
@@ -108,12 +111,15 @@ export async function GET(request: NextRequest) {
                 mla.lab_staff_approved_by,
                 mla.hod_approved_at,
                 mla.hod_approved_by,
+                mlrp.name as responsible_person_name,
+                mlrp.email as responsible_person_email,
                 l.name as lab_name,
                 l.code as lab_code,
                 ls.name as lab_staff_name,
                 h.name as hod_name
               FROM multi_lab_approvals mla
               JOIN labs l ON mla.lab_id = l.id
+              LEFT JOIN multi_lab_responsible_persons mlrp ON (mlrp.booking_request_id = mla.booking_request_id AND mlrp.lab_id = mla.lab_id)
               LEFT JOIN users ls ON mla.lab_staff_approved_by = ls.id
               LEFT JOIN users h ON mla.hod_approved_by = h.id
               WHERE mla.booking_request_id = ?
@@ -219,6 +225,8 @@ export async function GET(request: NextRequest) {
         lab_name: labNames,
         is_multi_lab: request.is_multi_lab,
         multi_lab_approvals: multiLabApprovals,
+        lab_staff_name: request.staff_approver_name,
+        hod_name: request.hod_approver_name,
         timeline
       }
     }))

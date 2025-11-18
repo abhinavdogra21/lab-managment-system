@@ -28,6 +28,7 @@ interface RequestItem {
   requested_by: number
   faculty_supervisor_id: number | null
   faculty_name?: string
+  faculty_salutation?: string
   faculty_remarks?: string
   lab_staff_remarks?: string
   hod_remarks?: string
@@ -370,8 +371,31 @@ export default function LabStaffApprovePage() {
 
   // Helper function to determine step status with proper flow logic
   const getStepStatus = (item: RequestItem, stepName: string) => {
-    // If request is rejected, all remaining steps are rejected
-    if (item.status === 'rejected') return 'rejected'
+    // If request is rejected, determine which step caused the rejection
+    if (item.status === 'rejected') {
+      if (stepName === 'Faculty Review') {
+        // Faculty rejected if no lab_staff_approved_at
+        if (!item.lab_staff_approved_at) {
+          return 'rejected'
+        }
+        return 'completed' // Faculty approved, rejection happened later
+      }
+      if (stepName === 'Lab Staff Review') {
+        // Lab staff rejected if lab_staff_approved_at exists (they took action)
+        if (item.lab_staff_approved_at) {
+          return 'rejected'
+        }
+        return 'rejected' // Also rejected due to faculty rejection
+      }
+      if (stepName === 'HOD Review' || stepName === 'Lab Coordinator Review') {
+        // HOD/Coordinator rejected if lab staff had approved
+        if (item.lab_staff_approved_at) {
+          return 'rejected'
+        }
+        return 'rejected' // Also rejected due to earlier rejection
+      }
+      return 'rejected'
+    }
     
     // Status-based checking first (prioritized over timeline data)
     if (stepName === 'Faculty Review') {
@@ -474,7 +498,9 @@ export default function LabStaffApprovePage() {
         {item.faculty_name && item.requester_role === 'student' && (
           <div className="bg-green-50 p-2 rounded text-xs">
             <span className="font-medium text-green-800">Faculty: </span>
-            <span className="text-green-700">{item.faculty_name}</span>
+            <span className="text-green-700">
+              {item.faculty_salutation ? `${item.faculty_salutation.charAt(0).toUpperCase() + item.faculty_salutation.slice(1)}. ` : ''}{item.faculty_name}
+            </span>
             {item.faculty_remarks && (
               <div className="text-green-600 mt-1 italic">"{item.faculty_remarks}"</div>
             )}
@@ -516,7 +542,7 @@ export default function LabStaffApprovePage() {
                 displayStatus = 'Rejected'
                 badgeVariant = "destructive"
               } else if (approval.status === 'approved_by_lab_staff') {
-                displayStatus = 'Pending HOD'
+                displayStatus = item.highest_approval_authority === 'lab_coordinator' ? 'Pending Lab Coordinator' : 'Pending HOD'
                 badgeVariant = "secondary"
               }
               
@@ -559,8 +585,99 @@ export default function LabStaffApprovePage() {
           </div>
         )}
 
-        {/* Remarks from other approvers (for approved items) */}
-        {(item.lab_staff_remarks || item.hod_remarks) && (
+        {/* Single Lab Approval Status */}
+        {!(item.is_multi_lab === 1 || item.is_multi_lab === true) && (
+          <div className="bg-blue-50 p-3 rounded border border-blue-200">
+            <h4 className="text-xs font-medium text-blue-900 mb-2">Lab Approval Status</h4>
+            {(() => {
+              // EXACT SAME status determination logic as multi-lab
+              let displayStatus = 'Pending Lab Staff'
+              let badgeVariant: "secondary" | "destructive" | "default" = "secondary"
+              
+              if (item.status === 'approved') {
+                displayStatus = 'Approved'
+                badgeVariant = "default"
+              } else if (item.status === 'rejected') {
+                displayStatus = 'Rejected'
+                badgeVariant = "destructive"
+              } else if (item.status === 'pending_hod' || item.status === 'pending_lab_coordinator') {
+                displayStatus = item.highest_approval_authority === 'lab_coordinator' ? 'Pending Lab Coordinator' : 'Pending HOD'
+                badgeVariant = "secondary"
+              } else if (item.status === 'pending_lab_staff') {
+                displayStatus = 'Pending Lab Staff'
+                badgeVariant = "secondary"
+              }
+              
+              return (
+                <div className="bg-white p-2 rounded border border-blue-100 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-900">{item.lab_name}</span>
+                    <Badge variant={badgeVariant} className="text-xs">
+                      {displayStatus}
+                    </Badge>
+                  </div>
+                  {/* Responsible Person */}
+                  {item.responsible_person_name && (
+                    <div className="text-xs text-blue-700">
+                      <p className="flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        Responsible: {item.responsible_person_name}
+                      </p>
+                      {item.responsible_person_email && (
+                        <p className="ml-4">{item.responsible_person_email}</p>
+                      )}
+                    </div>
+                  )}
+                  {item.status === 'pending_lab_staff' && (
+                    <p className="text-xs text-gray-600">Awaiting Lab Staff approval</p>
+                  )}
+                  {item.timeline?.find((t: any) => t.step_name === 'Lab Staff Approval')?.completed_at && (
+                    <p className="text-xs text-green-700">
+                      Lab Staff: {item.timeline.find((t: any) => t.step_name === 'Lab Staff Approval')?.user_name} - {formatDate(item.timeline.find((t: any) => t.step_name === 'Lab Staff Approval')?.completed_at)}
+                    </p>
+                  )}
+                  {item.timeline?.find((t: any) => t.step_name === 'HOD Approval')?.completed_at && (
+                    <p className="text-xs text-purple-700">
+                      HOD: {item.timeline.find((t: any) => t.step_name === 'HOD Approval')?.user_name} - {formatDate(item.timeline.find((t: any) => t.step_name === 'HOD Approval')?.completed_at)}
+                    </p>
+                  )}
+                  {item.timeline?.find((t: any) => t.step_name === 'Lab Coordinator Approval')?.completed_at && (
+                    <p className="text-xs text-purple-700">
+                      Lab Coordinator: {item.timeline.find((t: any) => t.step_name === 'Lab Coordinator Approval')?.user_name} - {formatDate(item.timeline.find((t: any) => t.step_name === 'Lab Coordinator Approval')?.completed_at)}
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
+          </div>
+        )}
+
+        {/* Remarks Section - Show for all items */}
+        {(item.faculty_remarks || item.lab_staff_remarks || item.hod_remarks) && (
+          <div className="space-y-1">
+            {item.faculty_remarks && (
+              <div className="bg-green-50 p-2 rounded text-xs">
+                <span className="font-medium text-green-800">Faculty: </span>
+                <span className="text-green-600 italic">"{item.faculty_remarks}"</span>
+              </div>
+            )}
+            {item.lab_staff_remarks && (
+              <div className="bg-blue-50 p-2 rounded text-xs">
+                <span className="font-medium text-blue-800">Lab Staff: </span>
+                <span className="text-blue-600 italic">"{item.lab_staff_remarks}"</span>
+              </div>
+            )}
+            {item.hod_remarks && (
+              <div className="bg-purple-50 p-2 rounded text-xs">
+                <span className="font-medium text-purple-800">HOD: </span>
+                <span className="text-purple-600 italic">"{item.hod_remarks}"</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Old Remarks Section - Keep for backward compatibility but hide if already shown above */}
+        {false && (item.lab_staff_remarks || item.hod_remarks) && (
           <div className="space-y-1">
             {item.lab_staff_remarks && (
               <div className="bg-blue-50 p-2 rounded text-xs">

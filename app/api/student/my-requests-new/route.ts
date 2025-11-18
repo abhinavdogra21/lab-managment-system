@@ -36,6 +36,8 @@ export async function GET(request: NextRequest) {
         br.rejected_at,
         br.is_multi_lab,
         br.lab_ids,
+        br.responsible_person_name,
+        br.responsible_person_email,
         f.name as faculty_approver_name,
         s.name as staff_approver_name,
         h.name as hod_approver_name,
@@ -242,6 +244,8 @@ export async function GET(request: NextRequest) {
         created_at: booking.created_at,
         highest_approval_authority: booking.highest_approval_authority,
         is_multi_lab: booking.is_multi_lab,
+        responsible_person_name: booking.responsible_person_name,
+        responsible_person_email: booking.responsible_person_email,
         multi_lab_approvals: multiLabApprovals,
         timeline
       }

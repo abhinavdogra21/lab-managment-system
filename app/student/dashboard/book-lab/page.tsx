@@ -26,6 +26,7 @@ interface Faculty {
   id: number
   name: string
   email: string
+  salutation?: string
   department_id: number
 }
 
@@ -530,11 +531,23 @@ export default function BookLabPage() {
                       <SelectValue placeholder="Select Faculty" />
                     </SelectTrigger>
                     <SelectContent>
-                      {faculties.map(faculty => (
-                        <SelectItem key={faculty.id} value={faculty.id.toString()}>
-                          {faculty.name} ({faculty.email})
-                        </SelectItem>
-                      ))}
+                      {faculties.map(faculty => {
+                        const salutationMap: { [key: string]: string } = {
+                          'prof': 'Prof.',
+                          'dr': 'Dr.',
+                          'mr': 'Mr.',
+                          'mrs': 'Mrs.',
+                          'ms': 'Ms.'
+                        }
+                        const displayName = faculty.salutation && salutationMap[faculty.salutation.toLowerCase()] 
+                          ? `${salutationMap[faculty.salutation.toLowerCase()]} ${faculty.name}` 
+                          : faculty.name
+                        return (
+                          <SelectItem key={faculty.id} value={faculty.id.toString()}>
+                            {displayName} ({faculty.email})
+                          </SelectItem>
+                        )
+                      })}
                     </SelectContent>
                   </Select>
                 </div>

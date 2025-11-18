@@ -63,9 +63,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert request: faculty requests go directly to lab staff
+    // For single-lab: store responsible person directly in booking_requests table
+    // For multi-lab: leave those fields null and use multi_lab_responsible_persons table
+    const singleLabResponsible = !isMultiLab && responsible_persons.length > 0 ? responsible_persons[0] : null
+    
     const result = await db.query(
-      `INSERT INTO booking_requests (request_type, requested_by, lab_id, faculty_supervisor_id, booking_date, start_time, end_time, purpose, status, is_multi_lab, lab_ids)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO booking_requests (request_type, requested_by, lab_id, faculty_supervisor_id, booking_date, start_time, end_time, purpose, status, is_multi_lab, lab_ids, responsible_person_name, responsible_person_email)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         'lab_booking',
         user.userId,
@@ -77,18 +81,22 @@ export async function POST(request: NextRequest) {
         purpose,
         'pending_lab_staff',
         isMultiLab ? 1 : 0,
-        isMultiLab ? JSON.stringify(labsToBook) : null
+        isMultiLab ? JSON.stringify(labsToBook) : null,
+        singleLabResponsible ? singleLabResponsible.name.trim() : null,
+        singleLabResponsible ? singleLabResponsible.email.trim().toLowerCase() : null
       ]
     )
 
     const bookingId = result.insertId
 
-    // Store responsible persons for each lab in separate table
-    for (const rp of responsible_persons) {
-      await db.query(`
-        INSERT INTO multi_lab_responsible_persons (booking_request_id, lab_id, name, email)
-        VALUES (?, ?, ?, ?)
-      `, [bookingId, rp.lab_id, rp.name.trim(), rp.email.trim().toLowerCase()])
+    // Store responsible persons in multi_lab_responsible_persons table (for multi-lab only)
+    if (isMultiLab) {
+      for (const rp of responsible_persons) {
+        await db.query(`
+          INSERT INTO multi_lab_responsible_persons (booking_request_id, lab_id, name, email)
+          VALUES (?, ?, ?, ?)
+        `, [bookingId, rp.lab_id, rp.name.trim(), rp.email.trim().toLowerCase()])
+      }
     }
 
     // Create multi-lab approval entries

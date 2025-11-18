@@ -139,6 +139,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the booking request
+    // For single-lab: store responsible person directly in booking_requests table
+    // For multi-lab: leave those fields null and use multi_lab_responsible_persons table
+    const singleLabResponsible = !isMultiLab && responsible_persons.length > 0 ? responsible_persons[0] : null
+    
     const result = await db.query(`
       INSERT INTO booking_requests (
         request_type,
@@ -151,8 +155,10 @@ export async function POST(request: NextRequest) {
         purpose,
         status,
         is_multi_lab,
-        lab_ids
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        lab_ids,
+        responsible_person_name,
+        responsible_person_email
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       'lab_booking',
       studentId,
@@ -164,21 +170,25 @@ export async function POST(request: NextRequest) {
       purpose,
       'pending_faculty',
       isMultiLab ? 1 : 0,
-      isMultiLab ? JSON.stringify(labsToBook) : null
+      isMultiLab ? JSON.stringify(labsToBook) : null,
+      singleLabResponsible ? singleLabResponsible.name.trim() : null,
+      singleLabResponsible ? singleLabResponsible.email.trim().toLowerCase() : null
     ])
 
     const bookingId = result.insertId
 
-    // Store responsible persons for each lab in separate table
-    for (const rp of responsible_persons) {
-      await db.query(`
-        INSERT INTO multi_lab_responsible_persons (
-          booking_request_id,
-          lab_id,
-          name,
-          email
-        ) VALUES (?, ?, ?, ?)
-      `, [bookingId, rp.lab_id, rp.name.trim(), rp.email.trim().toLowerCase()])
+    // Store responsible persons in multi_lab_responsible_persons table (for multi-lab only)
+    if (isMultiLab) {
+      for (const rp of responsible_persons) {
+        await db.query(`
+          INSERT INTO multi_lab_responsible_persons (
+            booking_request_id,
+            lab_id,
+            name,
+            email
+          ) VALUES (?, ?, ?, ?)
+        `, [bookingId, rp.lab_id, rp.name.trim(), rp.email.trim().toLowerCase()])
+      }
     }
 
     // For multi-lab bookings, create entries in multi_lab_approvals table

@@ -56,21 +56,26 @@ export async function GET(request: NextRequest) {
         br.hod_remarks,
         br.faculty_approved_at,
         br.lab_staff_approved_at,
+        br.lab_staff_approved_by,
         br.hod_approved_at,
         br.is_multi_lab,
         br.lab_id,
         br.lab_ids,
+        br.responsible_person_name,
+        br.responsible_person_email,
         s.name as student_name,
         s.email as student_email,
         s.salutation as student_salutation,
         COALESCE(f.name, 'N/A') as faculty_name,
         l.name as lab_name,
+        ls.name as lab_staff_name,
         d.highest_approval_authority,
         d.lab_coordinator_id,
         d.id as department_id
       FROM booking_requests br
       JOIN users s ON br.requested_by = s.id
       LEFT JOIN users f ON br.faculty_supervisor_id = f.id
+      LEFT JOIN users ls ON br.lab_staff_approved_by = ls.id
       LEFT JOIN labs l ON br.lab_id = l.id
       LEFT JOIN departments d ON l.department_id = d.id
     `

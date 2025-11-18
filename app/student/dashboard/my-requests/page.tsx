@@ -30,6 +30,8 @@ interface BookingWithTimeline {
   created_at: string
   highest_approval_authority?: 'hod' | 'lab_coordinator'
   is_multi_lab?: boolean | number
+  responsible_person_name?: string
+  responsible_person_email?: string
   multi_lab_approvals?: Array<{
     lab_id: number
     lab_name: string
@@ -240,9 +242,8 @@ export default function MyRequestsPage() {
                         <Badge variant={badgeVariant} className="text-xs">{displayStatus}</Badge>
                       </div>
                       {approval.responsible_person_name && (
-                        <div className="text-xs text-muted-foreground mb-1">
-                          <span className="font-medium">Contact:</span> {approval.responsible_person_name}
-                          {approval.responsible_person_email && ` (${approval.responsible_person_email})`}
+                        <div className="text-xs text-blue-700 mb-1">
+                          <p><span className="font-medium">Contact:</span> {approval.responsible_person_name}{approval.responsible_person_email && ` (${approval.responsible_person_email})`}</p>
                         </div>
                       )}
                       <div className="text-xs space-y-1 text-muted-foreground">
@@ -275,6 +276,84 @@ export default function MyRequestsPage() {
                   )
                 })}
               </div>
+            </div>
+          )}
+          
+          {/* Single Lab Approval Status */}
+          {!(request.is_multi_lab === 1 || request.is_multi_lab === true) && (
+            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <h4 className="text-xs font-medium mb-2 flex items-center gap-1">
+                <Building className="h-3 w-3" />
+                Lab Approval Status
+              </h4>
+              {(() => {
+                // EXACT SAME status determination logic as multi-lab
+                let displayStatus = 'Pending Faculty'
+                let badgeVariant: 'default' | 'secondary' | 'outline' | 'destructive' = 'outline'
+                
+                const labStaffApproved = request.timeline.find(t => t.step_name === 'lab_staff_approved')
+                const hodApproved = request.timeline.find(t => t.step_name === 'hod_approved')
+                
+                if (request.status === 'pending_faculty') {
+                  displayStatus = 'Pending Faculty'
+                  badgeVariant = 'outline'
+                } else if (request.status === 'approved') {
+                  displayStatus = '✓ Fully Approved'
+                  badgeVariant = 'default'
+                } else if (labStaffApproved?.completed_at && request.status === 'pending_hod') {
+                  displayStatus = 'Pending HOD'
+                  badgeVariant = 'secondary'
+                } else if (request.status === 'pending_lab_staff') {
+                  displayStatus = 'Pending Lab Staff'
+                  badgeVariant = 'outline'
+                } else if (request.status === 'pending_hod' && !labStaffApproved?.completed_at) {
+                  displayStatus = 'Pending Lab Staff'
+                  badgeVariant = 'outline'
+                } else if (request.status === 'rejected') {
+                  displayStatus = 'Rejected'
+                  badgeVariant = 'destructive'
+                }
+                
+                return (
+                  <div className="p-2 bg-white rounded border text-xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium">{request.lab_name}</span>
+                      <Badge variant={badgeVariant} className="text-xs">{displayStatus}</Badge>
+                    </div>
+                    {request.responsible_person_name && (
+                      <div className="text-xs text-blue-700 mb-1">
+                        <p><span className="font-medium">Contact:</span> {request.responsible_person_name}{request.responsible_person_email && ` (${request.responsible_person_email})`}</p>
+                      </div>
+                    )}
+                    <div className="text-xs space-y-1 text-muted-foreground">
+                      {labStaffApproved?.completed_at && (
+                        <p className="flex items-center gap-1">
+                          <CheckCircle2 className="h-3 w-3 text-green-600" />
+                          Lab Staff: {labStaffApproved.user_name} - {new Date(labStaffApproved.completed_at).toLocaleDateString()}
+                        </p>
+                      )}
+                      {hodApproved?.completed_at && (
+                        <p className="flex items-center gap-1">
+                          <CheckCircle2 className="h-3 w-3 text-green-600" />
+                          HOD: {hodApproved.user_name} - {new Date(hodApproved.completed_at).toLocaleDateString()}
+                        </p>
+                      )}
+                      {!labStaffApproved?.completed_at && request.status !== 'pending_faculty' && (
+                        <p className="flex items-center gap-1">
+                          <Clock className="h-3 w-3 text-yellow-600" />
+                          Awaiting Lab Staff approval
+                        </p>
+                      )}
+                      {request.status === 'pending_faculty' && (
+                        <p className="flex items-center gap-1">
+                          <Clock className="h-3 w-3 text-yellow-600" />
+                          Awaiting Faculty recommendation
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           )}
           
@@ -532,6 +611,12 @@ export default function MyRequestsPage() {
                     </div>
                     <div className="text-sm text-muted-foreground space-y-1">
                       <p>Faculty: {request.faculty_name}</p>
+                      {request.responsible_person_name && (
+                        <p className="text-blue-700">
+                          <span className="font-medium">Contact:</span> {request.responsible_person_name}
+                          {request.responsible_person_email && ` (${request.responsible_person_email})`}
+                        </p>
+                      )}
                       <p>Date: {new Date(request.date).toLocaleDateString()}</p>
                       <p>Time: {request.start_time} - {request.end_time}</p>
                       <p>Submitted: {new Date(request.created_at).toLocaleDateString()}</p>

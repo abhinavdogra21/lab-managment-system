@@ -32,6 +32,8 @@ export async function GET(request: NextRequest) {
         br.rejected_at,
         br.is_multi_lab,
         br.lab_ids,
+        br.responsible_person_name,
+        br.responsible_person_email,
         d.highest_approval_authority,
         s.name as staff_approver_name,
         h.name as hod_approver_name,
@@ -66,11 +68,14 @@ export async function GET(request: NextRequest) {
             mla.hod_approved_by,
             h.name as hod_name,
             h.salutation as hod_salutation,
-            mla.hod_remarks
+            mla.hod_remarks,
+            mlrp.name as responsible_person_name,
+            mlrp.email as responsible_person_email
           FROM multi_lab_approvals mla
           JOIN labs l ON mla.lab_id = l.id
           LEFT JOIN users ls ON mla.lab_staff_approved_by = ls.id
           LEFT JOIN users h ON mla.hod_approved_by = h.id
+          LEFT JOIN multi_lab_responsible_persons mlrp ON (mlrp.booking_request_id = mla.booking_request_id AND mlrp.lab_id = mla.lab_id)
           WHERE mla.booking_request_id = ?
           ORDER BY l.code
         `, [booking.id])

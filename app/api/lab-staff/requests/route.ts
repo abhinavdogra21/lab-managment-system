@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
         l.department_id,
         d.highest_approval_authority,
         f.name as faculty_name,
+        f.salutation as faculty_salutation,
         s.name as staff_approver_name,
         h.name as hod_approver_name
       FROM booking_requests br
@@ -85,26 +86,43 @@ export async function GET(request: NextRequest) {
 
     if (status === "pending_lab_staff") {
       // For single-lab: check booking_requests.status
-      // For multi-lab: check if THIS specific lab's status in multi_lab_approvals is 'pending'
+      // For multi-lab: check if THIS specific lab's status in multi_lab_approvals is 'pending' AND overall status is NOT rejected
       query += ` AND (
         (br.is_multi_lab = 0 AND br.status = ?)
         OR
-        (br.is_multi_lab = 1 AND mla.status = 'pending')
+        (br.is_multi_lab = 1 AND mla.status = 'pending' AND br.status NOT IN ('rejected', 'cancelled'))
       )`
       params.push("pending_lab_staff")
     } else if (status === "all") {
-      query += " AND br.status IN (?, ?, ?, ?)"
+      // Lab staff should only see requests that reached them (not rejected by faculty before reaching lab staff)
+      // For single-lab: show all statuses BUT only rejected ones where lab staff took action
+      // For multi-lab: filter out overall rejected status
+      query += ` AND (
+        (br.is_multi_lab = 0 AND (
+          br.status IN (?, ?, ?) 
+          OR (br.status = ? AND br.lab_staff_approved_by IS NOT NULL)
+        ))
+        OR
+        (br.is_multi_lab = 1 AND br.status NOT IN ('rejected', 'cancelled'))
+      )`
       params.push("pending_lab_staff", "pending_hod", "approved", "rejected")
     } else if (status === "approved") {
-      // For multi-lab: show only if THIS lab's status is 'approved_by_lab_staff' or 'approved'
+      // For multi-lab: show only if THIS lab's status is 'approved_by_lab_staff' or 'approved' AND overall status is NOT rejected
       query += ` AND (
         (br.is_multi_lab = 0 AND br.status IN (?, ?))
         OR
-        (br.is_multi_lab = 1 AND mla.status IN ('approved_by_lab_staff', 'approved'))
+        (br.is_multi_lab = 1 AND mla.status IN ('approved_by_lab_staff', 'approved') AND br.status NOT IN ('rejected', 'cancelled'))
       )`
       params.push("pending_hod", "approved")
     } else if (status === "rejected") {
-      query += " AND br.status = ?"
+      // Lab staff should only see requests they rejected, not ones rejected by faculty
+      // For single-lab: status='rejected' AND lab_staff_approved_by IS NOT NULL (meaning lab staff took action)
+      // For multi-lab: mla.status='rejected' (this lab's approval was rejected by lab staff)
+      query += ` AND (
+        (br.is_multi_lab = 0 AND br.status = ? AND br.lab_staff_approved_by IS NOT NULL)
+        OR
+        (br.is_multi_lab = 1 AND mla.status = 'rejected')
+      )`
       params.push("rejected")
     }
 

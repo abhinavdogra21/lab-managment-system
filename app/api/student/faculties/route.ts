@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
         // Case-insensitive match on department code or name
         rows = (
           await db.query(
-            `SELECT id, name, email, department as department_name
+            `SELECT id, name, email, salutation, department as department_name
              FROM users 
              WHERE role = 'faculty' 
              AND (LOWER(department) = LOWER(?) OR LOWER(department) = LOWER(?))
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
         if (!rows || rows.length === 0) {
           rows = (
             await db.query(
-              `SELECT id, name, email, department as department_name FROM users WHERE role = 'faculty' ORDER BY name ASC`
+              `SELECT id, name, email, salutation, department as department_name FROM users WHERE role = 'faculty' ORDER BY name ASC`
             )
           ).rows
         }
@@ -41,13 +41,13 @@ export async function GET(req: NextRequest) {
         // If department not found, return all faculties
         rows = (
           await db.query(
-            `SELECT id, name, email, department as department_name FROM users WHERE role = 'faculty' ORDER BY name ASC`
+            `SELECT id, name, email, salutation, department as department_name FROM users WHERE role = 'faculty' ORDER BY name ASC`
           )
         ).rows
       }
     } else {
       rows = (await db.query(
-        `SELECT id, name, email, department as department_name FROM users WHERE role = 'faculty' ORDER BY name ASC`
+        `SELECT id, name, email, salutation, department as department_name FROM users WHERE role = 'faculty' ORDER BY name ASC`
       )).rows
     }
     return NextResponse.json({ users: rows })

@@ -46,18 +46,23 @@ export async function GET(request: NextRequest) {
         br.hod_remarks,
         br.faculty_approved_at,
         br.lab_staff_approved_at,
+        br.lab_staff_approved_by,
         br.hod_approved_at,
         br.is_multi_lab,
         br.lab_ids,
+        br.responsible_person_name,
+        br.responsible_person_email,
         s.name as student_name,
         s.email as student_email,
         s.role as requester_role,
         f.name as faculty_name,
         l.name as lab_name,
+        ls.name as lab_staff_name,
         d.highest_approval_authority
       FROM booking_requests br
       JOIN users s ON br.requested_by = s.id
       LEFT JOIN users f ON br.faculty_supervisor_id = f.id
+      LEFT JOIN users ls ON br.lab_staff_approved_by = ls.id
       JOIN labs l ON br.lab_id = l.id
       JOIN departments d ON l.department_id = d.id
     `
@@ -99,12 +104,14 @@ export async function GET(request: NextRequest) {
     const requestsWithMultiLabData = await Promise.all(
       result.rows.map(async (request: any) => {
         if (request.is_multi_lab) {
-          // Fetch multi-lab approvals
+          // Fetch multi-lab approvals with remarks and timestamps
           const approvalsResult = await db.query(
             `SELECT 
               mla.lab_id,
               mla.status,
               mla.lab_staff_approved_by,
+              mla.lab_staff_approved_at,
+              mla.lab_staff_remarks,
               mla.hod_approved_by,
               l.name as lab_name,
               ls.name as lab_staff_name
@@ -123,10 +130,19 @@ export async function GET(request: NextRequest) {
             [request.id]
           )
           
+          // Merge responsible person data into approvals
+          const approvalsWithResponsiblePerson = approvalsResult.rows.map((approval: any) => {
+            const responsiblePerson = responsiblePersonsResult.rows.find((rp: any) => rp.lab_id === approval.lab_id)
+            return {
+              ...approval,
+              responsible_person_name: responsiblePerson?.name || null,
+              responsible_person_email: responsiblePerson?.email || null
+            }
+          })
+          
           return {
             ...request,
-            multi_lab_approvals: approvalsResult.rows,
-            responsible_persons: responsiblePersonsResult.rows
+            multi_lab_approvals: approvalsWithResponsiblePerson
           }
         }
         return request
