@@ -435,7 +435,7 @@ export default function LabStaffLogsPage() {
     doc.setFontSize(12)
     doc.text('The LNM Institute of Information Technology', 105, 27, { align: 'center' })
     doc.setFontSize(14)
-    doc.text('Lab Booking Approval Document', 105, 34, { align: 'center' })
+    doc.text('Lab Booking Approval Certificate', 105, 34, { align: 'center' })
     
     // Horizontal line
     doc.setLineWidth(0.5)

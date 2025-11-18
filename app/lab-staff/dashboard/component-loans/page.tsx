@@ -14,6 +14,7 @@ export default function ComponentLoansPage() {
   const [active, setActive] = useState<'pending'|'issued'|'return_requested'|'overdue5'>('pending')
   const [loading, setLoading] = useState(false)
   const [loans, setLoans] = useState<any[]>([])
+  const [processingIds, setProcessingIds] = useState<Set<number>>(new Set())
   const [successDialog, setSuccessDialog] = useState<{ open: boolean; message: string }>({ open: false, message: '' })
 
   const load = async () => {
@@ -69,7 +70,14 @@ export default function ComponentLoansPage() {
   }
 
   const sendReminder = async (id: number) => {
+    // Prevent double-click
+    if (processingIds.has(id)) {
+      return
+    }
+    
     try {
+      setProcessingIds(prev => new Set(prev).add(id))
+      
       const res = await fetch(`/api/lab-staff/component-loans/${id}/send-reminder`, { method: 'POST' })
       const text = await res.text()
       if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
@@ -77,6 +85,12 @@ export default function ComponentLoansPage() {
       setSuccessDialog({ open: true, message: `✓ ${data.message || 'Reminder email sent successfully!'}` })
     } catch (e: any) {
       toast({ title: 'Failed to send reminder', description: e?.message || 'Could not send reminder email', variant: 'destructive' })
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(id)
+        return newSet
+      })
     }
   }
 
@@ -167,8 +181,20 @@ export default function ComponentLoansPage() {
                       </>
                     )}
                     {l.extension_status !== 'pending' && (
-                      <Button variant="outline" className="w-full" onClick={() => sendReminder(l.id)}>
-                        <Bell className="h-4 w-4 mr-2"/>Send Return Reminder
+                      <Button variant="outline" className="w-full" onClick={() => sendReminder(l.id)} disabled={processingIds.has(l.id)}>
+                        {processingIds.has(l.id) ? (
+                          <>
+                            <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Sending...
+                          </>
+                        ) : (
+                          <>
+                            <Bell className="h-4 w-4 mr-2"/>Send Return Reminder
+                          </>
+                        )}
                       </Button>
                     )}
                   </div>
@@ -216,8 +242,20 @@ export default function ComponentLoansPage() {
                   </div>
                   <div className="text-sm flex items-center gap-2"><Clock className="h-3 w-3" /> Due: {l.due_date}</div>
                   <div className="flex gap-2 pt-2">
-                    <Button variant="outline" className="w-full" onClick={() => sendReminder(l.id)}>
-                      <Bell className="h-4 w-4 mr-2"/>Send Return Reminder
+                    <Button variant="outline" className="w-full" onClick={() => sendReminder(l.id)} disabled={processingIds.has(l.id)}>
+                      {processingIds.has(l.id) ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Bell className="h-4 w-4 mr-2"/>Send Return Reminder
+                        </>
+                      )}
                     </Button>
                   </div>
                 </CardContent></Card>

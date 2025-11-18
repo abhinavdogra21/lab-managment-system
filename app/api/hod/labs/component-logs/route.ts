@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     const dateCondition = dateConditions.length > 0 ? `AND ${dateConditions.join(' AND ')}` : ''
 
     // Get component logs from activity logs (deletion-proof)
-    // Show logs where action = 'approved_by_hod', 'approved_by_lab_coordinator', 'component_issued', 'component_returned'
+    // Show ALL issued/returned logs regardless of who gave final approval
     let logsRes
     if (user.role === 'admin') {
       const params = [...(search ? [searchValue, searchValue, searchValue, searchValue] : []), ...dateParams]
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
           l.department_id
         FROM component_activity_logs cal
         LEFT JOIN labs l ON cal.lab_id = l.id
-        WHERE cal.action IN ('approved_by_hod', 'approved_by_lab_coordinator', 'component_issued', 'component_returned') 
+        WHERE cal.action IN ('issued', 'returned') 
           AND cal.entity_type = 'component_request' ${searchCondition} ${dateCondition}
         ORDER BY cal.created_at DESC
         LIMIT 100
@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
           l.department_id
         FROM component_activity_logs cal
         LEFT JOIN labs l ON cal.lab_id = l.id
-        WHERE cal.action IN ('approved_by_hod', 'approved_by_lab_coordinator', 'component_issued', 'component_returned') 
+        WHERE cal.action IN ('issued', 'returned') 
           AND cal.entity_type = 'component_request' 
           AND l.department_id IN (${placeholders}) ${searchCondition} ${dateCondition}
         ORDER BY cal.created_at DESC

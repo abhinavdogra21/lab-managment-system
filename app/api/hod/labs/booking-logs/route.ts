@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     const dateCondition = dateConditions.length > 0 ? `AND ${dateConditions.join(' AND ')}` : ''
 
     // Get approved booking logs from activity logs (deletion-proof)
-    // Only show logs where action = 'approved_by_hod' (final approval by HOD)
+    // Show ALL logs with final approval (both HOD and Lab Coordinator approvals)
     let logsRes
     if (user.role === 'admin') {
       const params = [...(search ? [searchValue, searchValue, searchValue, searchValue] : []), ...dateParams]
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
          LEFT JOIN labs l ON lbal.lab_id = l.id
          LEFT JOIN departments d ON l.department_id = d.id
          LEFT JOIN users hod_user ON d.hod_id = hod_user.id
-         WHERE lbal.action = 'approved_by_hod' ${searchCondition} ${dateCondition}
+         WHERE lbal.action IN ('approved_by_hod', 'approved_by_lab_coordinator') ${searchCondition} ${dateCondition}
          ORDER BY lbal.created_at DESC
          LIMIT 100`,
         params
@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
          LEFT JOIN labs l ON lbal.lab_id = l.id
          LEFT JOIN departments d ON l.department_id = d.id
          LEFT JOIN users hod_user ON d.hod_id = hod_user.id
-         WHERE lbal.action = 'approved_by_hod' AND l.department_id IN (${placeholders}) ${searchCondition} ${dateCondition}
+         WHERE lbal.action IN ('approved_by_hod', 'approved_by_lab_coordinator') AND l.department_id IN (${placeholders}) ${searchCondition} ${dateCondition}
          ORDER BY lbal.created_at DESC
          LIMIT 100`,
         params

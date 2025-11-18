@@ -253,8 +253,13 @@ export default function HODLabsPage() {
     }
 
     // Header
-
-
+    doc.setFontSize(16)
+    doc.setFont('helvetica', 'bold')
+    doc.text('LNMIIT', 105, 20, { align: 'center' })
+    doc.setFontSize(12)
+    doc.text('The LNM Institute of Information Technology', 105, 27, { align: 'center' })
+    doc.setFontSize(14)
+    doc.text('Lab Booking Approval Certificate', 105, 34, { align: 'center' })
     
     // Horizontal line
     doc.setLineWidth(0.5)
@@ -351,8 +356,25 @@ export default function HODLabsPage() {
       yPos += 3
     }
     
-    // HOD Final Approval (only HOD gets "Approved by")
-    if (log.hod_name) {
+    // Final Approval - show either Lab Coordinator or HOD based on who actually approved
+    if (log.lab_coordinator_name) {
+      doc.setFont('helvetica', 'bold')
+      doc.text('✓', 20, yPos)
+      doc.setFont('helvetica', 'normal')
+      doc.setFont('helvetica', 'bold')
+      doc.text(`APPROVED BY LAB COORDINATOR:`, 25, yPos)
+      doc.setFont('helvetica', 'normal')
+      doc.text(formatNameWithSalutation(log.lab_coordinator_name, log.lab_coordinator_salutation), 110, yPos)
+      yPos += 7
+      if (log.lab_coordinator_approved_at) {
+        doc.setFontSize(9)
+        doc.setTextColor(100, 100, 100)
+        doc.text(`Final approval on: ${new Date(log.lab_coordinator_approved_at).toLocaleString('en-IN')}`, 110, yPos)
+        doc.setTextColor(0, 0, 0)
+        doc.setFontSize(11)
+        yPos += 7
+      }
+    } else if (log.hod_name) {
       doc.setFont('helvetica', 'bold')
       doc.text('✓', 20, yPos)
       doc.setFont('helvetica', 'normal')
@@ -1049,11 +1071,20 @@ export default function HODLabsPage() {
                               <span className="font-medium">{formatNameWithSalutation(log.lab_staff_name, log.lab_staff_salutation)}</span>
                             </div>
                           )}
-                          {log.hod_name && (
+                          {(log.lab_coordinator_name || log.hod_name) && (
                             <div className="flex items-center gap-2 text-sm">
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span className="text-muted-foreground">Approved by HOD:</span>
-                              <span className="font-medium">{formatNameWithSalutation(log.hod_name, log.hod_salutation)}</span>
+                              {log.lab_coordinator_name ? (
+                                <>
+                                  <span className="text-muted-foreground">Approved by Lab Coordinator:</span>
+                                  <span className="font-medium">{formatNameWithSalutation(log.lab_coordinator_name, log.lab_coordinator_salutation)}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="text-muted-foreground">Approved by HOD:</span>
+                                  <span className="font-medium">{formatNameWithSalutation(log.hod_name, log.hod_salutation)}</span>
+                                </>
+                              )}
                             </div>
                           )}
                         </div>

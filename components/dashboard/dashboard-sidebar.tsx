@@ -1,7 +1,7 @@
 "use client"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { usePathname, useRouter } from "next/navigation"
 import {
   Home,
@@ -59,7 +59,7 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
           { name: "Book Lab", href: withPrefix("/dashboard/book-lab"), icon: Calendar },
           { name: "Request Components", href: withPrefix("/dashboard/request-components"), icon: Package },
           { name: "My Component Requests", href: withPrefix("/dashboard/my-component-requests"), icon: ClipboardList },
-          { name: "My Requests", href: withPrefix("/dashboard/my-requests"), icon: Package },
+          { name: "My Lab Booking Requests", href: withPrefix("/dashboard/my-requests"), icon: Package },
         ]
 
       case "faculty":
@@ -69,7 +69,7 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
           { name: "Request Components", href: withPrefix("/dashboard/request-components"), icon: Package },
           { name: "My Component Requests", href: withPrefix("/dashboard/my-component-requests"), icon: ClipboardList },
           { name: "Approve Requests", href: withPrefix("/dashboard/approve"), icon: UserCheck },
-          { name: "My Bookings", href: withPrefix("/dashboard/bookings"), icon: BookOpen },
+          { name: "My Lab Booking Requests", href: withPrefix("/dashboard/bookings"), icon: BookOpen },
           { name: "View Logs", href: withPrefix("/dashboard/logs"), icon: History },
         ]
 
@@ -112,7 +112,7 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
         return [
           ...baseItems,
           { name: "Book Labs", href: withPrefix("/dashboard/book-labs"), icon: Calendar },
-          { name: "My Requests", href: withPrefix("/dashboard/my-requests"), icon: ClipboardList },
+          { name: "My Lab Booking Requests", href: withPrefix("/dashboard/my-requests"), icon: ClipboardList },
         ]
 
       default:
@@ -169,8 +169,9 @@ export function DashboardSidebar({ user, isOpen, onClose }: DashboardSidebarProp
       </div>
 
       {/* Mobile Sidebar */}
-  <Sheet open={isOpen} onOpenChange={onClose}>
+      <Sheet open={isOpen} onOpenChange={onClose}>
         <SheetContent side="left" className="w-64 p-0">
+          <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
           <SidebarContent />
         </SheetContent>
       </Sheet>

@@ -523,15 +523,13 @@ export default function FacultyLogsPage() {
     }
 
     // Header
-    doc.setFontSize(14)
+    doc.setFontSize(16)
     doc.setFont('helvetica', 'bold')
-    doc.text('The LNM Institute of Information Technology, Jaipur', 105, 22, { align: 'center' })
-    
-    doc.setFontSize(13)
-    const docTitle = log.returned_at 
-      ? 'Component Return Certificate' 
-      : 'Component Issue Certificate'
-    doc.text(docTitle, 105, 32, { align: 'center' })
+    doc.text('LNMIIT', 105, 20, { align: 'center' })
+    doc.setFontSize(12)
+    doc.text('The LNM Institute of Information Technology', 105, 27, { align: 'center' })
+    doc.setFontSize(14)
+    doc.text('Component Issue/Return Document', 105, 34, { align: 'center' })
     
     // Horizontal line
     doc.setLineWidth(0.5)
@@ -807,12 +805,13 @@ export default function FacultyLogsPage() {
     }
 
     // Header
-    doc.setFontSize(14)
+    doc.setFontSize(16)
     doc.setFont('helvetica', 'bold')
-    doc.text('The LNM Institute of Information Technology, Jaipur', 105, 22, { align: 'center' })
-    
+    doc.text('LNMIIT', 105, 20, { align: 'center' })
+    doc.setFontSize(12)
+    doc.text('The LNM Institute of Information Technology', 105, 27, { align: 'center' })
     doc.setFontSize(14)
-    doc.text('Lab Booking Certificate', 105, 32, { align: 'center' })
+    doc.text('Lab Booking Approval Certificate', 105, 34, { align: 'center' })
     
     // Horizontal line
     doc.setLineWidth(0.5)

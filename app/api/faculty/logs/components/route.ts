@@ -76,13 +76,20 @@ export async function GET(req: NextRequest) {
         ? JSON.parse(log.entity_snapshot) 
         : log.entity_snapshot;
 
+      // Format items array into a readable string
+      const items = snapshot?.items || [];
+      const components_list = items.length > 0
+        ? items.map((item: any) => `${item.component_name || item.name || 'Unknown'} (Qty: ${item.quantity_requested || item.quantity || 0})`).join(', ')
+        : 'No components listed';
+
       return {
         ...log,
         requester_name: log.requester_name || 'Unknown',
         requester_email: log.requester_email || 'N/A',
         requester_role: log.requester_role || 'student',
         requester_salutation: snapshot?.requester_salutation || 'none',
-        items: snapshot?.items || [],
+        items: items,
+        components_list: components_list,
         lab_name: snapshot?.lab_name || 'Unknown Lab',
         purpose: snapshot?.purpose || '',
         issued_at: snapshot?.issued_at || log.created_at,
