@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     
     try {
       const bookingsResult = await db.query(`
-        SELECT br.start_time, br.end_time, br.purpose, u.name as booker_name
+        SELECT br.start_time, br.end_time, br.purpose, u.name as booker_name, u.salutation as booker_salutation
         FROM booking_requests br
         JOIN users u ON br.requested_by = u.id
         WHERE br.lab_id = ? 
@@ -36,13 +36,14 @@ export async function GET(request: NextRequest) {
         end_time: booking.end_time,
         purpose: booking.purpose || 'Lab Booking',
         booker_name: booking.booker_name,
+        booker_salutation: booking.booker_salutation,
         type: 'booking'
       }))]
     } catch (bookingError: any) {
       console.log('Booking query failed, trying alternative table')
       try {
         const altBookingsResult = await db.query(`
-          SELECT lb.start_time, lb.end_time, lb.purpose, u.name as booker_name
+          SELECT lb.start_time, lb.end_time, lb.purpose, u.name as booker_name, u.salutation as booker_salutation
           FROM lab_bookings lb
           JOIN users u ON lb.booked_by = u.id
           WHERE lb.lab_id = ? 
@@ -55,6 +56,7 @@ export async function GET(request: NextRequest) {
           end_time: booking.end_time,
           purpose: booking.purpose || 'Lab Booking',
           booker_name: booking.booker_name,
+          booker_salutation: booking.booker_salutation,
           type: 'booking'
         }))]
       } catch (altError: any) {
@@ -93,12 +95,25 @@ export async function GET(request: NextRequest) {
       const startTime = slot.start_time.substring(0, 5) // HH:MM
       const endTime = slot.end_time.substring(0, 5) // HH:MM
       
+      // Format booker name with salutation
+      let formattedBookerName = slot.booker_name || null
+      if (slot.booker_name && slot.booker_salutation && slot.booker_salutation !== 'none') {
+        const salutationMap: Record<string, string> = {
+          'prof': 'Prof.',
+          'dr': 'Dr.',
+          'mr': 'Mr.',
+          'mrs': 'Mrs.'
+        }
+        const salutation = salutationMap[slot.booker_salutation] || ''
+        formattedBookerName = salutation ? `${salutation} ${slot.booker_name}` : slot.booker_name
+      }
+      
       return {
         start_time: startTime,
         end_time: endTime,
         time_range: `${startTime} - ${endTime}`,
         purpose: slot.purpose,
-        booker_name: slot.booker_name || null,
+        booker_name: formattedBookerName,
         type: slot.type
       }
     })

@@ -75,6 +75,7 @@ export async function GET(request: NextRequest) {
            br.purpose,
            'booking' as type,
            u.name as booker_name,
+           u.salutation as booker_salutation,
            br.status,
            br.is_multi_lab
          FROM booking_requests br
@@ -95,6 +96,7 @@ export async function GET(request: NextRequest) {
            br.purpose,
            'booking' as type,
            u.name as booker_name,
+           u.salutation as booker_salutation,
            br.status,
            br.is_multi_lab
          FROM booking_requests br
@@ -121,6 +123,19 @@ export async function GET(request: NextRequest) {
       const startTime = entry.start_time ? entry.start_time.substring(0, 5) : '00:00' // HH:MM
       const endTime = entry.end_time ? entry.end_time.substring(0, 5) : '00:00' // HH:MM
       
+      // Format booker name with salutation
+      let formattedBookerName = entry.booker_name
+      if (entry.booker_name && entry.booker_salutation && entry.booker_salutation !== 'none') {
+        const salutationMap: Record<string, string> = {
+          'prof': 'Prof.',
+          'dr': 'Dr.',
+          'mr': 'Mr.',
+          'mrs': 'Mrs.'
+        }
+        const salutation = salutationMap[entry.booker_salutation] || ''
+        formattedBookerName = salutation ? `${salutation} ${entry.booker_name}` : entry.booker_name
+      }
+      
       return {
         id: entry.id,
         lab_id: entry.lab_id,
@@ -131,7 +146,7 @@ export async function GET(request: NextRequest) {
         time_range: `${startTime} - ${endTime}`,
         purpose: entry.purpose || (entry.type === 'class' ? 'Scheduled Class' : 'Lab Booking'),
         type: entry.type,
-        booker_name: entry.booker_name,
+        booker_name: formattedBookerName,
         status: entry.status
       }
     })

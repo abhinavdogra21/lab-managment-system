@@ -241,6 +241,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           const emailData = emailTemplates.labBookingRejected({
             requesterName: booking.student_name,
             requesterSalutation: booking.student_salutation,
+            requesterRole: 'student',
             labName: labNamesText,
             bookingDate: booking.booking_date,
             startTime: booking.start_time,

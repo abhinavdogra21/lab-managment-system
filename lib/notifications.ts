@@ -1138,12 +1138,15 @@ export const emailTemplates = {
     requestId: number
     recipientName?: string
     recipientSalutation?: string
+    requesterSalutation?: string
+    highestApprovalAuthority?: 'hod' | 'lab_coordinator' | null
+    recipientRole?: 'lab_staff' | 'faculty' | 'hod' | 'lab_coordinator'
   }) => {
     const formattedDate = formatDate(data.bookingDate)
     const formattedStartTime = formatTimeTo12Hour(data.startTime)
     const formattedEndTime = formatTimeTo12Hour(data.endTime)
     
-    // Format salutation and greeting
+    // Format salutation and greeting for recipient
     let greeting = "Dear Faculty/Lab Staff"
     if (data.recipientName) {
       if (data.recipientSalutation && data.recipientSalutation !== 'none') {
@@ -1159,6 +1162,18 @@ export const emailTemplates = {
       }
     }
     
+    // Format requester name with salutation
+    let requesterDisplay = data.requesterName
+    if (data.requesterSalutation && data.requesterSalutation !== 'none') {
+      const salutationMap: Record<string, string> = {
+        'prof': 'Prof.',
+        'dr': 'Dr.',
+        'mr': 'Mr.',
+        'mrs': 'Mrs.'
+      }
+      requesterDisplay = `${salutationMap[data.requesterSalutation] || ''} ${data.requesterName}`
+    }
+    
     return {
     subject: `New Lab Booking Request - ${data.labName} - LNMIIT Lab Management`,
     html: createEmailTemplate(`
@@ -1172,7 +1187,7 @@ export const emailTemplates = {
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.requesterName} (${data.requesterRole})</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${requesterDisplay} (${data.requesterRole})</td>
             </tr>
             <tr style="background: #dbeafe;">
               <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
@@ -1197,14 +1212,24 @@ export const emailTemplates = {
           </p>
           
           <div style="margin-top: 25px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/faculty/dashboard/approve" 
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${
+              data.recipientRole === 'faculty' ? '/faculty/dashboard/approve' :
+              data.recipientRole === 'lab_coordinator' ? '/lab-coordinator/dashboard/requests' :
+              data.recipientRole === 'hod' ? '/hod/dashboard/requests' :
+              '/lab-staff/dashboard/requests'
+            }" 
                style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
               Review Lab Booking Request
             </a>
           </div>
           
           <div style="margin-top: 15px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/faculty/dashboard" 
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${
+              data.recipientRole === 'faculty' ? '/faculty/dashboard' :
+              data.recipientRole === 'lab_coordinator' ? '/lab-coordinator/dashboard' :
+              data.recipientRole === 'hod' ? '/hod/dashboard' :
+              '/lab-staff/dashboard'
+            }" 
                style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
               Go to Portal Dashboard
             </a>
@@ -1218,6 +1243,7 @@ export const emailTemplates = {
   labBookingApproved: (data: {
     requesterName: string
     requesterSalutation?: string
+    requesterRole?: 'student' | 'faculty' | 'others'
     labName: string
     bookingDate: string
     startTime: string
@@ -1272,14 +1298,14 @@ export const emailTemplates = {
           </p>
           
           <div style="margin-top: 25px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-requests" 
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${data.requesterRole === 'faculty' ? '/faculty' : data.requesterRole === 'others' ? '/others' : '/student'}/dashboard/my-requests" 
                style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
               View My Lab Bookings
             </a>
           </div>
           
           <div style="margin-top: 15px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${data.requesterRole === 'faculty' ? '/faculty' : data.requesterRole === 'others' ? '/others' : '/student'}/dashboard" 
                style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
               Go to Portal Dashboard
             </a>
@@ -1293,6 +1319,7 @@ export const emailTemplates = {
   labBookingRejected: (data: {
     requesterName: string
     requesterSalutation?: string
+    requesterRole?: 'student' | 'faculty' | 'others'
     labName: string
     bookingDate: string
     startTime: string
@@ -1355,14 +1382,14 @@ export const emailTemplates = {
           </p>
           
           <div style="margin-top: 25px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-requests" 
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${data.requesterRole === 'faculty' ? '/faculty' : data.requesterRole === 'others' ? '/others' : '/student'}/dashboard/my-requests" 
                style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
               View My Lab Bookings
             </a>
           </div>
           
           <div style="margin-top: 15px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${data.requesterRole === 'faculty' ? '/faculty' : data.requesterRole === 'others' ? '/others' : '/student'}/dashboard" 
                style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
               Go to Portal Dashboard
             </a>

@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     // Get existing bookings for this lab and date
     const bookings = await db.query(
-      `SELECT br.start_time, br.end_time, u.name as booker_name, br.purpose
+      `SELECT br.start_time, br.end_time, u.name as booker_name, u.salutation as booker_salutation, br.purpose
        FROM booking_requests br
        LEFT JOIN users u ON br.requested_by = u.id
        WHERE br.lab_id = ? 
@@ -43,14 +43,29 @@ export async function GET(request: NextRequest) {
     )
 
     const booked_slots = [
-      ...bookings.rows.map(b => ({
-        start_time: b.start_time,
-        end_time: b.end_time,
-        time_range: `${b.start_time} - ${b.end_time}`,
-        purpose: b.purpose || 'No purpose specified',
-        booker_name: b.booker_name,
-        type: 'booking' as const
-      })),
+      ...bookings.rows.map(b => {
+        // Format booker name with salutation
+        let formattedBookerName = b.booker_name
+        if (b.booker_name && b.booker_salutation && b.booker_salutation !== 'none') {
+          const salutationMap: Record<string, string> = {
+            'prof': 'Prof.',
+            'dr': 'Dr.',
+            'mr': 'Mr.',
+            'mrs': 'Mrs.'
+          }
+          const salutation = salutationMap[b.booker_salutation] || ''
+          formattedBookerName = salutation ? `${salutation} ${b.booker_name}` : b.booker_name
+        }
+        
+        return {
+          start_time: b.start_time,
+          end_time: b.end_time,
+          time_range: `${b.start_time} - ${b.end_time}`,
+          purpose: b.purpose || 'No purpose specified',
+          booker_name: formattedBookerName,
+          type: 'booking' as const
+        }
+      }),
       ...timetableEntries.rows.map(t => ({
         start_time: t.start_time,
         end_time: t.end_time,

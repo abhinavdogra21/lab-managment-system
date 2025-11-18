@@ -30,6 +30,8 @@ export async function GET(request: NextRequest) {
         br.hod_approved_at,
         br.rejection_reason,
         br.rejected_at,
+        br.is_multi_lab,
+        br.lab_ids,
         d.highest_approval_authority,
         s.name as staff_approver_name,
         h.name as hod_approver_name,
@@ -45,7 +47,36 @@ export async function GET(request: NextRequest) {
     `, [user.userId])
 
     // Transform data to include timeline information
-    const bookingsWithTimeline = result.rows.map((booking: any) => {
+    const bookingsWithTimeline = await Promise.all(result.rows.map(async (booking: any) => {
+      // Fetch multi-lab approval data if applicable
+      let multiLabApprovals = null
+      if (booking.is_multi_lab === 1 || booking.is_multi_lab === true) {
+        const approvalData = await db.query(`
+          SELECT 
+            mla.lab_id,
+            l.name as lab_name,
+            l.code as lab_code,
+            mla.status,
+            mla.lab_staff_approved_at,
+            mla.lab_staff_approved_by,
+            ls.name as lab_staff_name,
+            ls.salutation as lab_staff_salutation,
+            mla.lab_staff_remarks,
+            mla.hod_approved_at,
+            mla.hod_approved_by,
+            h.name as hod_name,
+            h.salutation as hod_salutation,
+            mla.hod_remarks
+          FROM multi_lab_approvals mla
+          JOIN labs l ON mla.lab_id = l.id
+          LEFT JOIN users ls ON mla.lab_staff_approved_by = ls.id
+          LEFT JOIN users h ON mla.hod_approved_by = h.id
+          WHERE mla.booking_request_id = ?
+          ORDER BY l.code
+        `, [booking.id])
+        multiLabApprovals = approvalData.rows
+      }
+      
       const timeline = []
       
       // Determine who rejected (if rejected)
@@ -116,10 +147,12 @@ export async function GET(request: NextRequest) {
         created_at: booking.created_at,
         requested_by: booking.requested_by,
         faculty_supervisor_id: booking.faculty_supervisor_id,
+        is_multi_lab: booking.is_multi_lab,
+        multi_lab_approvals: multiLabApprovals,
         highest_approval_authority: booking.highest_approval_authority,
         timeline
       }
-    })
+    }))
 
     return NextResponse.json({ 
       success: true,

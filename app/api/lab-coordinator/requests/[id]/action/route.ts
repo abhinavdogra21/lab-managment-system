@@ -197,6 +197,7 @@ export async function POST(
           const emailData = emailTemplates.labBookingApproved({
             requesterName: student.student_name,
             requesterSalutation: student.student_salutation,
+            requesterRole: student.requester_role === 'student' ? 'student' : student.requester_role === 'faculty' ? 'faculty' : 'others',
             labName: student.lab_name,
             bookingDate: student.booking_date,
             startTime: student.start_time,
@@ -214,6 +215,7 @@ export async function POST(
           const emailData = emailTemplates.labBookingRejected({
             requesterName: student.student_name,
             requesterSalutation: student.student_salutation,
+            requesterRole: student.requester_role === 'student' ? 'student' : student.requester_role === 'faculty' ? 'faculty' : 'others',
             labName: student.lab_name,
             bookingDate: student.booking_date,
             startTime: student.start_time,

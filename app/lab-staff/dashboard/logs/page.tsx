@@ -504,8 +504,8 @@ export default function LabStaffLogsPage() {
     doc.setFont('helvetica', 'normal')
     yPos += 10
     
-    // Faculty Recommendation
-    if (log.faculty_supervisor_name) {
+    // Faculty Recommendation (only for student bookings)
+    if (log.requester_role === 'student' && log.faculty_supervisor_name) {
       doc.setFont('helvetica', 'bold')
       doc.text('✓', 20, yPos)
       doc.setFont('helvetica', 'normal')

@@ -228,9 +228,10 @@ export async function POST(request: NextRequest) {
           startTime: start_time,
           endTime: end_time,
           purpose: purpose,
-          requestId: bookingId || 0,
+          requestId: result.insertId!,
           recipientName: req.faculty_name,
-          recipientSalutation: req.faculty_salutation
+          recipientSalutation: req.faculty_salutation,
+          recipientRole: 'faculty'
         })
 
         await sendEmail({

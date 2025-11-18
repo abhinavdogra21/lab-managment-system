@@ -23,6 +23,8 @@ export async function GET(request: NextRequest) {
         br.purpose,
         br.status,
         br.created_at,
+        br.is_multi_lab,
+        br.lab_ids,
         br.faculty_remarks,
         br.faculty_approved_at,
         br.lab_staff_remarks,
@@ -46,7 +48,68 @@ export async function GET(request: NextRequest) {
       ORDER BY br.created_at DESC
     `, [user.userId])
 
-    const bookingsWithTimeline = result.rows.map((booking: any) => {
+    const bookingsWithTimeline = await Promise.all(result.rows.map(async (booking: any) => {
+      // Handle multi-lab bookings - get all lab names and approvals
+      let labNames = booking.lab_name
+      let multiLabApprovals: any[] = []
+      
+      if ((booking.is_multi_lab === 1 || booking.is_multi_lab === true) && booking.lab_ids) {
+        try {
+          // Handle different formats of lab_ids
+          let labIds: number[]
+          if (Array.isArray(booking.lab_ids)) {
+            labIds = booking.lab_ids
+          } else if (Buffer.isBuffer(booking.lab_ids)) {
+            labIds = JSON.parse(booking.lab_ids.toString('utf-8'))
+          } else if (typeof booking.lab_ids === 'string') {
+            labIds = JSON.parse(booking.lab_ids)
+          } else {
+            labIds = []
+          }
+          
+          if (labIds && labIds.length > 0) {
+            // Get all lab names
+            const labNamesResult = await db.query(`
+              SELECT id, name, code
+              FROM labs
+              WHERE id IN (${labIds.map(() => '?').join(',')})
+              ORDER BY code
+            `, labIds)
+            
+            labNames = labNamesResult.rows.map((l: any) => l.name).join(', ')
+            
+            // Get individual approval status for each lab
+            const approvalsResult = await db.query(`
+              SELECT 
+                mla.lab_id,
+                mla.status,
+                mla.lab_staff_approved_at,
+                mla.lab_staff_approved_by,
+                mla.lab_staff_remarks,
+                mla.hod_approved_at,
+                mla.hod_approved_by,
+                mla.hod_remarks,
+                l.name as lab_name,
+                l.code as lab_code,
+                ls.name as lab_staff_name,
+                ls.salutation as lab_staff_salutation,
+                h.name as hod_name,
+                h.salutation as hod_salutation
+              FROM multi_lab_approvals mla
+              JOIN labs l ON mla.lab_id = l.id
+              LEFT JOIN users ls ON mla.lab_staff_approved_by = ls.id
+              LEFT JOIN users h ON mla.hod_approved_by = h.id
+              WHERE mla.booking_request_id = ?
+              ORDER BY l.code
+            `, [booking.id])
+            
+            multiLabApprovals = approvalsResult.rows
+          }
+        } catch (e) {
+          console.error('Error parsing multi-lab data for faculty requests:', e)
+        }
+      }
+      
       const timeline: any[] = []
       
       // Check which stage rejected the request
@@ -133,7 +196,7 @@ export async function GET(request: NextRequest) {
 
       return {
         id: booking.id,
-        lab_name: booking.lab_name,
+        lab_name: labNames,
         faculty_name: booking.faculty_name,
         date: booking.date,
         start_time: booking.start_time,
@@ -142,9 +205,11 @@ export async function GET(request: NextRequest) {
         status: booking.status,
         created_at: booking.created_at,
         highest_approval_authority: booking.highest_approval_authority,
+        is_multi_lab: booking.is_multi_lab,
+        multi_lab_approvals: multiLabApprovals,
         timeline
       }
-    })
+    }))
 
     return NextResponse.json({ success: true, requests: bookingsWithTimeline })
   } catch (error) {

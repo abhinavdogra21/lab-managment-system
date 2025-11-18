@@ -49,8 +49,7 @@ export async function GET(request: NextRequest) {
     const dateCondition = dateConditions.length > 0 ? `AND ${dateConditions.join(' AND ')}` : ''
 
     // Get component logs from activity logs (deletion-proof)
-    // Show logs where action = 'issued' OR action = 'returned'
-    // (Approval logs are tracked separately, only show final actions here)
+    // Show logs where action = 'approved_by_hod', 'approved_by_lab_coordinator', 'component_issued', 'component_returned'
     let logsRes
     if (user.role === 'admin') {
       const params = [...(search ? [searchValue, searchValue, searchValue, searchValue] : []), ...dateParams]
@@ -72,7 +71,8 @@ export async function GET(request: NextRequest) {
           l.department_id
         FROM component_activity_logs cal
         LEFT JOIN labs l ON cal.lab_id = l.id
-        WHERE cal.action IN ('issued', 'returned') AND cal.entity_type = 'component_request' ${searchCondition} ${dateCondition}
+        WHERE cal.action IN ('approved_by_hod', 'approved_by_lab_coordinator', 'component_issued', 'component_returned') 
+          AND cal.entity_type = 'component_request' ${searchCondition} ${dateCondition}
         ORDER BY cal.created_at DESC
         LIMIT 100
       `, params)
@@ -101,7 +101,8 @@ export async function GET(request: NextRequest) {
           l.department_id
         FROM component_activity_logs cal
         LEFT JOIN labs l ON cal.lab_id = l.id
-        WHERE cal.action IN ('issued', 'returned') AND cal.entity_type = 'component_request' 
+        WHERE cal.action IN ('approved_by_hod', 'approved_by_lab_coordinator', 'component_issued', 'component_returned') 
+          AND cal.entity_type = 'component_request' 
           AND l.department_id IN (${placeholders}) ${searchCondition} ${dateCondition}
         ORDER BY cal.created_at DESC
         LIMIT 100
@@ -115,10 +116,16 @@ export async function GET(request: NextRequest) {
         : row.entity_snapshot
       
       // Extract component items from snapshot
-      const items = snapshot?.items || []
-      const components_list = items.map((item: any) => 
-        `${item.component_name || 'Unknown'} (Qty: ${item.quantity_requested || 0})`
-      ).join(', ')
+      // Try multiple possible field names for components data
+      const items = snapshot?.items || snapshot?.components || snapshot?.component_items || []
+      const components_list = items.length > 0 
+        ? items.map((item: any) => {
+            // Try different field name variations
+            const name = item.component_name || item.name || item.componentName || 'Unknown Component'
+            const qty = item.quantity_requested || item.quantity || item.qty || 0
+            return `${name} (Qty: ${qty})`
+          }).join(', ')
+        : (snapshot?.components_list || snapshot?.component_names || 'No components listed')
 
       return {
         id: row.id,
@@ -134,12 +141,18 @@ export async function GET(request: NextRequest) {
         actual_return_date: snapshot?.actual_return_date || null,
         created_at: snapshot?.created_at || row.created_at,
         requester_name: snapshot?.requester_name || 'Unknown',
+        requester_salutation: snapshot?.requester_salutation || null,
         requester_email: snapshot?.requester_email || '',
         requester_role: snapshot?.requester_role || snapshot?.initiator_role || 'student',
         faculty_name: snapshot?.faculty_name || null,
+        faculty_salutation: snapshot?.faculty_salutation || null,
         lab_staff_name: snapshot?.lab_staff_name || null,
+        lab_staff_salutation: snapshot?.lab_staff_salutation || null,
         hod_name: snapshot?.hod_name || null,
+        hod_salutation: snapshot?.hod_salutation || null,
         hod_email: snapshot?.hod_email || null,
+        lab_coordinator_name: snapshot?.lab_coordinator_name || null,
+        lab_coordinator_salutation: snapshot?.lab_coordinator_salutation || null,
         action_description: row.action_description,
         components_list,
       }

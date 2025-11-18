@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     let bookedSlots: any[] = []
     try {
       const bookings = await db.query(
-        `SELECT br.start_time, br.end_time, br.purpose, u.name as booker_name
+        `SELECT br.start_time, br.end_time, br.purpose, u.name as booker_name, u.salutation as booker_salutation
          FROM booking_requests br
          JOIN users u ON br.requested_by = u.id
          WHERE br.lab_id = ? AND br.booking_date = ?
@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
           end_time: b.end_time,
           purpose: b.purpose || 'Lab Booking',
           booker_name: b.booker_name,
+          booker_salutation: b.booker_salutation,
           type: 'booking'
         }))
       ]
@@ -63,7 +64,21 @@ export async function GET(request: NextRequest) {
     const formatted = bookedSlots.map(slot => {
       const s = slot.start_time.substring(0,5)
       const e = slot.end_time.substring(0,5)
-      return { start_time: s, end_time: e, time_range: `${s} - ${e}`, purpose: slot.purpose, booker_name: slot.booker_name || null, type: slot.type }
+      
+      // Format booker name with salutation
+      let formattedBookerName = slot.booker_name || null
+      if (slot.booker_name && slot.booker_salutation && slot.booker_salutation !== 'none') {
+        const salutationMap: Record<string, string> = {
+          'prof': 'Prof.',
+          'dr': 'Dr.',
+          'mr': 'Mr.',
+          'mrs': 'Mrs.'
+        }
+        const salutation = salutationMap[slot.booker_salutation] || ''
+        formattedBookerName = salutation ? `${salutation} ${slot.booker_name}` : slot.booker_name
+      }
+      
+      return { start_time: s, end_time: e, time_range: `${s} - ${e}`, purpose: slot.purpose, booker_name: formattedBookerName, type: slot.type }
     })
 
     return NextResponse.json({ success: true, date, lab_id: labId, booked_slots: formatted, total_bookings: formatted.length })

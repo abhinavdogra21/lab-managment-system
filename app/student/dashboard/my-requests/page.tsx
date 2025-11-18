@@ -38,9 +38,11 @@ interface BookingWithTimeline {
     lab_staff_approved_at: string | null
     lab_staff_approved_by: number | null
     lab_staff_name: string | null
+    lab_staff_remarks: string | null
     hod_approved_at: string | null
     hod_approved_by: number | null
     hod_name: string | null
+    hod_remarks: string | null
     responsible_person_name?: string
     responsible_person_email?: string
   }>
@@ -358,16 +360,49 @@ export default function MyRequestsPage() {
           </div>
           
           {/* Remarks section */}
-          {request.timeline.some(t => t.remarks) && (
-            <div className="mt-6 space-y-2">
-              <h4 className="text-sm font-medium">Remarks:</h4>
-              {request.timeline.filter(t => t.remarks).map((step, index) => (
-                <div key={index} className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
-                  <span className="font-medium">{getStepTitle(step.step_name)}:</span> {step.remarks}
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="mt-6 space-y-2">
+            {/* Show overall timeline remarks (for single lab or overall comments) */}
+            {request.timeline.some(t => t.remarks) && (
+              <>
+                <h4 className="text-sm font-medium">Remarks:</h4>
+                {request.timeline.filter(t => t.remarks).map((step, index) => (
+                  <div key={index} className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
+                    <span className="font-medium">{getStepTitle(step.step_name)}:</span> {step.remarks}
+                  </div>
+                ))}
+              </>
+            )}
+            
+            {/* Show multi-lab remarks */}
+            {(request.is_multi_lab === 1 || request.is_multi_lab === true) && request.multi_lab_approvals && 
+             request.multi_lab_approvals.some(a => a.lab_staff_remarks || a.hod_remarks) && (
+              <>
+                <h4 className="text-sm font-medium">Lab-Specific Remarks:</h4>
+                {request.multi_lab_approvals.map((approval) => (
+                  <div key={approval.lab_id}>
+                    {(approval.lab_staff_remarks || approval.hod_remarks) && (
+                      <div className="mb-2">
+                        <p className="text-xs font-semibold text-orange-700 mb-1 flex items-center gap-1">
+                          <Building className="h-3 w-3" />
+                          {approval.lab_name}
+                        </p>
+                        {approval.lab_staff_remarks && (
+                          <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300 mb-1">
+                            <span className="font-medium">Lab Staff:</span> {approval.lab_staff_remarks}
+                          </div>
+                        )}
+                        {approval.hod_remarks && (
+                          <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
+                            <span className="font-medium">HOD:</span> {approval.hod_remarks}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
         </div>
         </div>
         )}

@@ -119,6 +119,14 @@ export default function DepartmentAndLabManagementPage() {
     labCoordinatorId?: number | null
   ) => {
     setLoading(true)
+    
+    // Show processing toast
+    toast({ 
+      title: "⏳ Processing...",
+      description: "Updating approval authority and sending email notifications...",
+      duration: 3000,
+    })
+    
     try {
       const payload: any = { departmentId }
       if (highestApprovalAuthority !== undefined) payload.highestApprovalAuthority = highestApprovalAuthority
@@ -142,7 +150,14 @@ export default function DepartmentAndLabManagementPage() {
             } 
           : d
       )))
-      toast({ title: "Approval authority updated" })
+      
+      // Show success message with notification info
+      toast({ 
+        title: "✅ Successfully changed!",
+        description: "Both HOD and Lab Coordinator have been notified via email.",
+        duration: 5000,
+        className: "bg-green-50 border-green-200",
+      })
     } catch (e: any) {
       toast({ title: "Update failed", description: e?.message || "", variant: "destructive" })
     } finally {
@@ -396,8 +411,8 @@ export default function DepartmentAndLabManagementPage() {
                     <TableHead className="min-w-64">Name</TableHead>
                     <TableHead>Code</TableHead>
                     <TableHead>HOD</TableHead>
-                    <TableHead>Highest Approval Authority</TableHead>
                     <TableHead>Lab Coordinator</TableHead>
+                    <TableHead>Highest Approval Authority</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -483,22 +498,6 @@ export default function DepartmentAndLabManagementPage() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="min-w-48">
-                        <Select
-                          value={d.highest_approval_authority || "hod"}
-                          onValueChange={(v: 'hod' | 'lab_coordinator') => {
-                            updateApprovalAuthority(d.id, v, d.lab_coordinator_id)
-                          }}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select authority" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="hod">HOD</SelectItem>
-                            <SelectItem value="lab_coordinator">Lab Coordinator</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
                       <TableCell className="min-w-56">
                         <Popover 
                           open={coordinatorPopoverOpen[d.id] || false} 
@@ -510,7 +509,6 @@ export default function DepartmentAndLabManagementPage() {
                               role="combobox"
                               aria-expanded={coordinatorPopoverOpen[d.id] || false}
                               className="w-full justify-between"
-                              disabled={d.highest_approval_authority !== 'lab_coordinator'}
                             >
                               {d.lab_coordinator_id ? (
                                 (() => {
@@ -570,6 +568,28 @@ export default function DepartmentAndLabManagementPage() {
                             </Command>
                           </PopoverContent>
                         </Popover>
+                      </TableCell>
+                      <TableCell className="min-w-48">
+                        <Select
+                          value={d.highest_approval_authority || "hod"}
+                          onValueChange={(v: 'hod' | 'lab_coordinator') => {
+                            updateApprovalAuthority(d.id, v, d.lab_coordinator_id)
+                          }}
+                          disabled={!d.hod_id || !d.lab_coordinator_id}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select authority" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="hod">HOD</SelectItem>
+                            <SelectItem value="lab_coordinator">Lab Coordinator</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {(!d.hod_id || !d.lab_coordinator_id) && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Assign both HOD and Lab Coordinator first
+                          </p>
+                        )}
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         <div className="flex gap-2">

@@ -12,13 +12,13 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, ArrowRight, Clock, User, Building2, ChevronLeft, CheckCircle2, ChevronDown, MapPin } from "lucide-react"
+import { CalendarIcon, ArrowRight, Clock, User, Building, Building2, ChevronLeft, CheckCircle2, ChevronDown, MapPin } from "lucide-react"
 import { format } from "date-fns"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 interface Lab { id: number; name: string; code: string; department_id: number; capacity: number; location: string }
-interface TimeSlot { start_time: string; end_time: string; is_available: boolean; display?: string }
-interface BookedSlotItem { start_time: string; end_time: string; time_range: string; purpose: string; booker_name?: string; type: 'booking'|'class' }
+interface TimeSlot { start_time: string; end_time: string; is_available: boolean; display?: string; duration_minutes?: number }
+interface BookedSlotItem { start_time: string; end_time: string; time_range: string; purpose: string; booker_name?: string; type: 'booking'|'class'; lab_name?: string }
 
 export default function FacultyBookLabsPage() {
 	const { toast } = useToast()
@@ -102,12 +102,44 @@ export default function FacultyBookLabsPage() {
 			if (res.ok) {
 				const data = await res.json()
 				setAvailableSlots(data.commonSlots || [])
-				setBookedSlots([])
+				
+				// Load booked slots for all selected labs to show conflicts
+				loadMultiLabBookedSlots(labIds, date)
 			} else {
 				setAvailableSlots([])
 				toast({ title: "Error", description: "Failed to load common free slots", variant: "destructive" })
 			}
 		} catch { setAvailableSlots([]) }
+	}
+
+	const loadMultiLabBookedSlots = async (labIds: string[], date: Date) => {
+		if (!labIds.length || !date) return
+		try {
+			const dateStr = format(date, 'yyyy-MM-dd')
+			const allBookedSlots: any[] = []
+			
+			// Fetch booked slots for each lab
+			for (const labId of labIds) {
+				const lab = labs.find(l => l.id.toString() === labId)
+				const res = await fetch(`/api/faculty/labs/${labId}/booked-schedule?date=${dateStr}`)
+				if (res.ok) {
+					const data = await res.json()
+					// Add lab name to each booking
+					const slotsWithLab = data.bookedSlots.map((slot: any) => ({
+						...slot,
+						lab_name: lab?.name || `Lab ${labId}`
+					}))
+					allBookedSlots.push(...slotsWithLab)
+				}
+			}
+			
+			// Sort by start time
+			allBookedSlots.sort((a, b) => a.start_time.localeCompare(b.start_time))
+			setBookedSlots(allBookedSlots)
+		} catch (error) {
+			console.error("Failed to load multi-lab booked slots:", error)
+			setBookedSlots([])
+		}
 	}
 
 	useEffect(() => {
@@ -123,7 +155,26 @@ export default function FacultyBookLabsPage() {
 		if (!startTime || !endTime) return false
 		const s = `${startTime}:00`
 		const e = `${endTime}:00`
-		return bookedSlots.some(b => (s < `${b.end_time}:00` && e > `${b.start_time}:00`))
+		
+		// Check against booked slots
+		const hasBookedConflict = bookedSlots.some(b => (s < `${b.end_time}:00` && e > `${b.start_time}:00`))
+		if (hasBookedConflict) return true
+		
+		// For multi-lab bookings, also check if time falls within common free slots
+		if (selectedLabs.length > 1 && availableSlots.length > 0) {
+			// Check if the selected time is fully contained within any of the free slots
+			const isWithinFreeSlots = availableSlots.some(slot => {
+				const slotStart = slot.start_time.substring(0, 5) // HH:MM format
+				const slotEnd = slot.end_time.substring(0, 5)
+				// The selected time must be fully within a free slot
+				return startTime >= slotStart && endTime <= slotEnd
+			})
+			
+			// If not within any free slot, there's a conflict
+			if (!isWithinFreeSlots) return true
+		}
+		
+		return false
 	}
 	const isInvalidTimeRange = () => !!startTime && !!endTime && startTime >= endTime
 	// Removed business hours restriction - users can book labs at any time
@@ -334,6 +385,55 @@ export default function FacultyBookLabsPage() {
 
 							{selectedDate && (
 								<div className="space-y-4">
+									{/* Show Available Slots for Multi-Lab */}
+									{selectedLabs.length > 1 && availableSlots.length > 0 && (
+										<div>
+											<Label>Common Available Time Slots</Label>
+											<div className="space-y-2 mt-2">
+												{availableSlots.map((slot, i) => {
+													const durationMinutes = slot.duration_minutes || 0
+													const hours = Math.floor(durationMinutes / 60)
+													const minutes = durationMinutes % 60
+													const durationText = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
+													
+													return (
+														<div key={i} className="p-3 rounded border bg-green-50 border-green-200 text-sm">
+															<div className="flex justify-between items-center">
+																<div className="flex items-center gap-2">
+																	<Clock className="h-4 w-4 text-green-600" />
+																	<span className="font-medium">
+																		{slot.display || `${slot.start_time.substring(0, 5)} - ${slot.end_time.substring(0, 5)}`}
+																	</span>
+																</div>
+																<Badge variant="outline" className="bg-white text-green-700">
+																	{durationText} free
+																</Badge>
+															</div>
+															<p className="text-muted-foreground text-xs mt-1">
+																Available across all {selectedLabs.length} selected labs
+															</p>
+														</div>
+													)
+												})}
+											</div>
+										</div>
+									)}
+
+								{/* Show message if no common slots for multi-lab */}
+								{selectedLabs.length > 1 && availableSlots.length === 0 && bookedSlots.length === 0 && (
+									<div className="p-4 border rounded-md bg-green-50 border-green-200">
+										<div className="flex items-center gap-2 text-green-700 mb-2">
+											<Clock className="h-5 w-5" />
+											<span className="font-medium">Fully Available</span>
+										</div>
+										<p className="text-sm text-green-600">
+											All selected labs are completely free on this date. You can book any time from 00:00 to 23:59.
+										</p>
+									</div>
+								)}
+								
+								{/* Only show booked slots for single lab selection */}
+								{selectedLabs.length === 1 && (
 									<div>
 										<Label>Booked/Scheduled Slots</Label>
 										{bookedSlots.length === 0 ? (
@@ -362,8 +462,7 @@ export default function FacultyBookLabsPage() {
 											</div>
 										)}
 									</div>
-
-									<div className="grid grid-cols-2 gap-4">
+								)}									<div className="grid grid-cols-2 gap-4">
 										<div>
 											<Label>Start Time (HH:MM)</Label>
 											<Input type="time" value={startTime} onChange={(e) => { setStartTime(e.target.value); setSelectedTimeSlot("") }} />

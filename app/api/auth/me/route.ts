@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
         email, 
         role,
         salutation,
-        department_id
+        department
        FROM users 
        WHERE id = ?`,
       [user.userId]
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         email: userInfo.email,
         role: userInfo.role,
         salutation: userInfo.salutation,
-        department_id: userInfo.department_id
+        department: userInfo.department
       }
     })
   } catch (error) {

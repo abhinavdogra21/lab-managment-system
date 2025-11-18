@@ -4,10 +4,9 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
-import { Clock, CheckCircle, XCircle, Users, Building, Eye, Calendar, Loader2 } from "lucide-react"
+import { Clock, CheckCircle, XCircle, Users, Building, Calendar, Loader2, ChevronDown, ChevronUp } from "lucide-react"
 
 interface TimelineStep {
   step_name: string
@@ -29,6 +28,23 @@ interface BookingWithTimeline {
   requested_by: number
   faculty_supervisor_id: number | null
   created_at: string
+  is_multi_lab?: number | boolean
+  multi_lab_approvals?: Array<{
+    lab_id: number
+    lab_name: string
+    lab_code: string
+    status: string
+    lab_staff_approved_at: string | null
+    lab_staff_approved_by: number | null
+    lab_staff_name: string | null
+    lab_staff_salutation: string | null
+    lab_staff_remarks: string | null
+    hod_approved_at: string | null
+    hod_approved_by: number | null
+    hod_name: string | null
+    hod_salutation: string | null
+    hod_remarks: string | null
+  }>
   highest_approval_authority?: 'hod' | 'lab_coordinator'
   timeline: TimelineStep[]
 }
@@ -37,7 +53,7 @@ export default function TNPMyRequestsPage() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [requests, setRequests] = useState<BookingWithTimeline[]>([])
-  const [selectedRequest, setSelectedRequest] = useState<BookingWithTimeline | null>(null)
+  const [showTimeline, setShowTimeline] = useState<Record<number, boolean>>({})
 
   useEffect(() => {
     loadMyRequests()
@@ -98,28 +114,32 @@ export default function TNPMyRequestsPage() {
   }
 
   const TimelineView = ({ request }: { request: BookingWithTimeline }) => {
-    // Only student bookings have 5 steps (where requested_by != faculty_supervisor_id)
-    // Faculty and TnP bookings have 4 steps (they book for themselves)
-    const isStudentBooking = request.faculty_supervisor_id && request.requested_by !== request.faculty_supervisor_id
-    
-    // Dynamic approval authority label
+    // Others-initiated bookings don't have Faculty Approval step
+    // Use "Recommendation" for Lab Staff, "Approval" only for HOD/Lab Coordinator
     const finalApprovalLabel = request.highest_approval_authority === 'lab_coordinator' 
       ? 'Lab Coordinator Approval' 
       : 'HOD Approval'
     
-    // For TnP bookings, show "Recommended" instead of "Approval" for Faculty and Lab Staff
-    const allSteps = isStudentBooking ? [
-      { name: 'Submitted', key: 'submitted', icon: CheckCircle, color: 'green' },
-      { name: 'Faculty Recommendation', key: 'faculty', icon: Users, color: 'blue' },
-      { name: 'Lab Staff Recommendation', key: 'lab_staff', icon: Users, color: 'blue' },
-      { name: finalApprovalLabel, key: 'hod', icon: Building, color: 'purple' },
-      { name: 'Approved', key: 'approved', icon: CheckCircle, color: 'green' }
-    ] : [
-      { name: 'Submitted', key: 'submitted', icon: CheckCircle, color: 'green' },
-      { name: 'Lab Staff Recommendation', key: 'lab_staff', icon: Users, color: 'blue' },
-      { name: finalApprovalLabel, key: 'hod', icon: Building, color: 'purple' },
-      { name: 'Approved', key: 'approved', icon: CheckCircle, color: 'green' }
+    const steps = [
+      { key: 'Lab Staff Recommendation', apiKey: 'Lab Staff Approval', icon: Users },
+      { key: finalApprovalLabel, apiKey: request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator Approval' : 'HOD Approval', icon: Building },
     ]
+    
+    const findStep = (key: string) => request.timeline.find(t => t.step_name.includes(key))
+    const iconForStatus = (s?: string) => s === 'completed' ? 'completed' : s === 'pending' ? 'pending' : s === 'rejected' ? 'rejected' : 'waiting'
+    
+    // Format name with salutation helper
+    const formatName = (name: string | null, salutation: string | null) => {
+      if (!name) return null
+      if (!salutation || salutation === 'none') return name
+      const salutationMap: Record<string, string> = {
+        'prof': 'Prof.',
+        'dr': 'Dr.',
+        'mr': 'Mr.',
+        'mrs': 'Mrs.'
+      }
+      return `${salutationMap[salutation] || ''} ${name}`
+    }
 
     return (
       <div className="space-y-6">
@@ -147,6 +167,69 @@ export default function TNPMyRequestsPage() {
           <p className="text-sm text-muted-foreground">{request.purpose}</p>
         </div>
 
+        {/* Multi-Lab Approval Status */}
+        {(request.is_multi_lab === 1 || request.is_multi_lab === true) && request.multi_lab_approvals && request.multi_lab_approvals.length > 0 && (
+          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <h4 className="text-xs font-medium mb-2 flex items-center gap-1">
+              <Building className="h-3 w-3" />
+              Individual Lab Approval Status
+            </h4>
+            <div className="space-y-2">
+              {request.multi_lab_approvals.map((approval) => {
+                // Determine display status
+                let displayStatus = 'Pending Lab Staff'
+                let badgeVariant: 'default' | 'secondary' | 'outline' | 'destructive' = 'outline'
+                
+                if (approval.status === 'approved') {
+                  displayStatus = '✓ Fully Approved'
+                  badgeVariant = 'default'
+                } else if (approval.status === 'approved_by_lab_staff') {
+                  displayStatus = 'Pending HOD'
+                  badgeVariant = 'secondary'
+                } else if (approval.status === 'pending' && request.status === 'pending_lab_staff') {
+                  displayStatus = 'Pending Lab Staff'
+                  badgeVariant = 'outline'
+                } else if (approval.status === 'pending' && request.status === 'pending_hod') {
+                  displayStatus = 'Pending Lab Staff'
+                  badgeVariant = 'outline'
+                } else if (approval.status === 'rejected') {
+                  displayStatus = 'Rejected'
+                  badgeVariant = 'destructive'
+                }
+                
+                return (
+                  <div key={approval.lab_id} className="p-2 bg-white rounded border text-xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium">{approval.lab_name}</span>
+                      <Badge variant={badgeVariant} className="text-xs">{displayStatus}</Badge>
+                    </div>
+                    <div className="text-xs space-y-1 text-muted-foreground">
+                      {approval.lab_staff_approved_at && (
+                        <p className="flex items-center gap-1">
+                          <CheckCircle className="h-3 w-3 text-green-600" />
+                          Lab Staff: {formatName(approval.lab_staff_name, approval.lab_staff_salutation)} - {new Date(approval.lab_staff_approved_at).toLocaleDateString()}
+                        </p>
+                      )}
+                      {approval.hod_approved_at && (
+                        <p className="flex items-center gap-1">
+                          <CheckCircle className="h-3 w-3 text-green-600" />
+                          HOD: {formatName(approval.hod_name, approval.hod_salutation)} - {new Date(approval.hod_approved_at).toLocaleDateString()}
+                        </p>
+                      )}
+                      {!approval.lab_staff_approved_at && (
+                        <p className="flex items-center gap-1">
+                          <Clock className="h-3 w-3 text-yellow-600" />
+                          Awaiting Lab Staff approval
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Horizontal Timeline */}
         <div className="space-y-2">
           <h4 className="font-semibold">Approval Progress</h4>
@@ -155,104 +238,145 @@ export default function TNPMyRequestsPage() {
             <div className="absolute top-6 left-0 right-0 h-0.5 bg-gray-200" />
             
             {/* Timeline steps */}
-            {allSteps.map((step, index) => {
-              let timelineStep = null
-              if (step.key === 'submitted') {
-                timelineStep = { completed_at: request.created_at, step_status: 'completed' }
-              } else if (step.key === 'faculty') {
-                timelineStep = request.timeline.find(t => t.step_name === 'Faculty Approval')
-              } else if (step.key === 'lab_staff') {
-                timelineStep = request.timeline.find(t => t.step_name === 'Lab Staff Approval')
-              } else if (step.key === 'hod') {
-                // Look for either HOD Approval or Lab Coordinator Approval
-                timelineStep = request.timeline.find(t => 
-                  t.step_name === 'HOD Approval' || t.step_name === 'Lab Coordinator Approval'
-                )
-              }
-
-              const isCompleted = timelineStep?.step_status === 'completed'
-              const isPending = timelineStep?.step_status === 'pending'
-              const isRejected = timelineStep?.step_status === 'rejected'
-              
-              // If a step is rejected, all subsequent steps should be skipped (not shown as rejected)
-              const isAfterRejection = request.timeline.some((t, i) => {
-                const stepIndex = request.timeline.findIndex(ts => ts.step_name === timelineStep?.step_name)
-                const rejectedIndex = request.timeline.findIndex(ts => ts.step_status === 'rejected')
-                return rejectedIndex !== -1 && stepIndex > rejectedIndex
-              })
-
-              return (
-                <div key={step.key} className="relative flex flex-col items-center" style={{ 
-                  width: `${100 / allSteps.length}%`,
-                  float: 'left'
-                }}>
-                  {/* Step circle */}
-                  <div className={`
-                    relative z-10 flex items-center justify-center w-12 h-12 rounded-full border-2 bg-white
-                    ${isCompleted ? 'border-green-500 text-green-500' : ''}
-                    ${isPending ? 'border-orange-500 text-orange-500 animate-pulse' : ''}
-                    ${isRejected ? 'border-red-500 text-red-500' : ''}
-                    ${!isCompleted && !isPending && !isRejected ? 'border-gray-300 text-gray-300' : ''}
-                  `}>
-                    {isCompleted && <CheckCircle className="h-6 w-6" />}
-                    {isPending && <Clock className="h-6 w-6" />}
-                    {isRejected && <XCircle className="h-6 w-6" />}
-                    {!isCompleted && !isPending && !isRejected && getStepIcon(step.name)}
-                  </div>
-                  
-                  {/* Step label */}
-                  <div className="mt-2 text-center">
-                    <div className={`text-xs font-medium ${
-                      isCompleted || isPending ? 'text-foreground' : 
-                      isRejected ? 'text-red-500' : 
-                      'text-muted-foreground'
+            <div className="flex items-center justify-between relative">
+              <div className="absolute top-6 left-6 right-6 h-0.5 bg-gray-200"></div>
+              {steps.map((s, idx) => {
+                const st = findStep(s.apiKey)
+                const state = iconForStatus(st?.step_status)
+                const Icon = s.icon
+                return (
+                  <div key={idx} className="flex flex-col items-center space-y-2 relative z-10" style={{ 
+                    width: `${100 / steps.length}%`
+                  }}>
+                    <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center ${
+                      state === 'completed' ? 'bg-green-100 border-green-300' :
+                      state === 'pending' ? 'bg-blue-100 border-blue-300' :
+                      state === 'rejected' ? 'bg-red-100 border-red-300' :
+                      'bg-white border-gray-300'
                     }`}>
-                      {isRejected ? `Rejected at ${step.name}` : step.name}
+                      {state === 'completed' && <CheckCircle className="h-6 w-6 text-green-600" />}
+                      {state === 'pending' && <Clock className="h-6 w-6 text-blue-600" />}
+                      {state === 'rejected' && <XCircle className="h-6 w-6 text-red-600" />}
+                      {!['completed', 'pending', 'rejected'].includes(state) && <Icon className="h-5 w-5 text-gray-400" />}
                     </div>
-                    {timelineStep?.completed_at && (
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {new Date(timelineStep.completed_at).toLocaleDateString()}
+                    
+                    {/* Step label */}
+                    <div className="text-center">
+                      <p className="text-xs font-medium">{s.key}</p>
+                      {/* Show progress for multi-lab Lab Staff step */}
+                      {(request.is_multi_lab === 1 || request.is_multi_lab === true) && request.multi_lab_approvals && s.key === 'Lab Staff Recommendation' && (
+                        <p className="text-xs text-blue-600 font-medium">
+                          {request.multi_lab_approvals.filter(a => a.lab_staff_approved_at).length}/{request.multi_lab_approvals.length}
+                        </p>
+                      )}
+                      {/* Show progress for multi-lab HOD step */}
+                      {(request.is_multi_lab === 1 || request.is_multi_lab === true) && request.multi_lab_approvals && 
+                       (s.key === 'HOD Approval' || s.key === 'Lab Coordinator Approval') && (
+                        <p className="text-xs text-blue-600 font-medium">
+                          {request.multi_lab_approvals.filter(a => a.hod_approved_at).length}/{request.multi_lab_approvals.length}
+                        </p>
+                      )}
+                      <p className={`text-xs ${
+                        state === 'completed' ? 'text-green-600' :
+                        state === 'pending' ? 'text-blue-600' :
+                        state === 'rejected' ? 'text-red-600' :
+                        'text-gray-500'
+                      }`}>
+                        {state === 'completed' ? 'Done' : state === 'pending' ? 'In Progress' : state === 'rejected' ? 'Rejected' : 'Waiting'}
+                      </p>
+                    </div>
+                    {st?.completed_at && (
+                      <div className="text-xs text-gray-500 text-center mt-1">
+                        {new Date(st.completed_at).toLocaleDateString()}
                       </div>
                     )}
                   </div>
-                </div>
-              )
-            })}
-            <div className="clear-both" />
+                )
+              })}
+            </div>
           </div>
         </div>
 
         {/* Remarks section */}
-        {request.timeline.some(t => t.remarks) && (
-          <div className="space-y-3">
-            <h4 className="font-semibold">Remarks</h4>
-            {request.timeline.filter(t => t.remarks).map((step, index) => (
-              <Card key={index} className="bg-muted/50">
-                <CardContent className="pt-4">
-                  <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0 mt-1">
-                      {getStepIcon(step.step_name)}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-sm">{getStepDisplayName(step.step_name)}</span>
-                        {step.user_name && (
-                          <span className="text-xs text-muted-foreground">by {step.user_name}</span>
+        <div className="space-y-3">
+          {/* Show overall timeline remarks (for single lab or overall comments) */}
+          {request.timeline.some(t => t.remarks) && (
+            <>
+              <h4 className="font-semibold">Remarks</h4>
+              {request.timeline.filter(t => t.remarks).map((step, index) => (
+                <Card key={index} className="bg-muted/50">
+                  <CardContent className="pt-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 mt-1">
+                        {getStepIcon(step.step_name)}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-sm">{getStepDisplayName(step.step_name)}</span>
+                          {step.user_name && (
+                            <span className="text-xs text-muted-foreground">by {step.user_name}</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">{step.remarks}</p>
+                        {step.completed_at && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {new Date(step.completed_at).toLocaleString()}
+                          </p>
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground">{step.remarks}</p>
-                      {step.completed_at && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {new Date(step.completed_at).toLocaleString()}
-                        </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </>
+          )}
+          
+          {/* Show multi-lab remarks */}
+          {(request.is_multi_lab === 1 || request.is_multi_lab === true) && request.multi_lab_approvals && 
+           request.multi_lab_approvals.some(a => a.lab_staff_remarks || a.hod_remarks) && (
+            <>
+              <h4 className="font-semibold">Lab-Specific Remarks</h4>
+              {request.multi_lab_approvals.map((approval) => (
+                <div key={approval.lab_id}>
+                  {(approval.lab_staff_remarks || approval.hod_remarks) && (
+                    <div className="mb-2">
+                      <p className="text-xs font-semibold text-orange-700 mb-1 flex items-center gap-1">
+                        <Building className="h-3 w-3" />
+                        {approval.lab_name}
+                      </p>
+                      {approval.lab_staff_remarks && (
+                        <Card className="bg-muted/50 mb-1">
+                          <CardContent className="pt-3 pb-3">
+                            <div className="flex items-start gap-2">
+                              <Users className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                              <div className="flex-1">
+                                <span className="font-medium text-sm">Lab Staff:</span>
+                                <p className="text-sm text-muted-foreground">{approval.lab_staff_remarks}</p>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+                      {approval.hod_remarks && (
+                        <Card className="bg-muted/50">
+                          <CardContent className="pt-3 pb-3">
+                            <div className="flex items-start gap-2">
+                              <Building className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                              <div className="flex-1">
+                                <span className="font-medium text-sm">HOD:</span>
+                                <p className="text-sm text-muted-foreground">{approval.hod_remarks}</p>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
                       )}
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+                  )}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
       </div>
     )
   }
@@ -348,6 +472,8 @@ export default function TNPMyRequestsPage() {
   )
 
   function RequestCard({ request }: { request: BookingWithTimeline }) {
+    const isTimelineVisible = showTimeline[request.id] || false
+
     return (
       <Card>
         <CardHeader>
@@ -364,29 +490,34 @@ export default function TNPMyRequestsPage() {
             </div>
             <div className="flex items-center gap-2">
               {getStatusBadge(request.status)}
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setSelectedRequest(request)}
-                  >
-                    <Eye className="h-4 w-4 mr-2" />
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setShowTimeline(prev => ({ ...prev, [request.id]: !prev[request.id] }))}
+              >
+                {isTimelineVisible ? (
+                  <>
+                    <ChevronUp className="h-4 w-4 mr-2" />
+                    Hide Timeline
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4 mr-2" />
                     View Timeline
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Booking Request Timeline</DialogTitle>
-                  </DialogHeader>
-                  {selectedRequest && <TimelineView request={selectedRequest} />}
-                </DialogContent>
-              </Dialog>
+                  </>
+                )}
+              </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground line-clamp-2">{request.purpose}</p>
+          
+          {isTimelineVisible && (
+            <div className="mt-6 pt-6 border-t">
+              <TimelineView request={request} />
+            </div>
+          )}
         </CardContent>
       </Card>
     )

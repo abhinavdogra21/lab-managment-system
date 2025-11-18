@@ -404,7 +404,8 @@ export async function POST(
               purpose: updatedRequest.purpose || 'Not specified',
               requestId: Number(id),
               recipientName: approver.rows[0].name,
-              recipientSalutation: approver.rows[0].salutation
+              recipientSalutation: approver.rows[0].salutation,
+              recipientRole: approver.rows[0].highest_approval_authority === 'lab_coordinator' ? 'lab_coordinator' : 'hod'
             })
 
             await sendEmail({
@@ -438,6 +439,7 @@ export async function POST(
         const emailData = emailTemplates.labBookingRejected({
           requesterName: updatedRequest.student_name,
           requesterSalutation: updatedRequest.student_salutation,
+          requesterRole: updatedRequest.requester_role === 'student' ? 'student' : updatedRequest.requester_role === 'faculty' ? 'faculty' : 'others',
           labName: isMultiLab ? `Multiple Labs (${labDetails})` : updatedRequest.lab_name,
           bookingDate: updatedRequest.booking_date,
           startTime: updatedRequest.start_time,

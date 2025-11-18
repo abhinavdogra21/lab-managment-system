@@ -99,7 +99,9 @@ export async function PATCH(request: NextRequest) {
 				userAgent: request.headers.get("user-agent") || "unknown",
 			})
 			
-			// Send email notification ONLY if a new lab coordinator was actually assigned (coordinator changed)
+			// Send email notifications for approval authority changes
+			
+			// 1. If lab coordinator was assigned/changed, notify them
 			if (updated.coordinatorInfo && updated.coordinatorChanged) {
 				const { name, email, salutation, departmentName, departmentCode } = updated.coordinatorInfo
 				const loginUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}`
@@ -123,8 +125,10 @@ export async function PATCH(request: NextRequest) {
 
 You have been assigned as the Lab Coordinator for the ${departmentName} (${departmentCode}) department.
 
-As Lab Coordinator, you now have the authority to:
-- Approve lab booking requests
+As Lab Coordinator, all lab booking approval requests for your department will now be routed to you for final approval.
+
+Your responsibilities include:
+- Approve or reject lab booking requests
 - Manage lab resources and equipment
 - Oversee lab operations for your department
 
@@ -166,9 +170,14 @@ LNMIIT Lab Management System`,
       <p>Congratulations! You have been assigned as the <strong>Lab Coordinator</strong> for the <strong>${departmentName} (${departmentCode})</strong> department.</p>
       
       <div class="info-box">
+        <h3 style="margin-top: 0;">Important Notice:</h3>
+        <p><strong>All lab booking approval requests</strong> for your department will now be <strong>routed to you for final approval</strong> after lab staff recommendations.</p>
+      </div>
+      
+      <div class="info-box">
         <h3 style="margin-top: 0;">Your New Responsibilities:</h3>
         <ul>
-          <li>Approve lab booking requests for your department</li>
+          <li>Review and approve/reject lab booking requests for your department</li>
           <li>Manage lab resources and equipment</li>
           <li>Oversee lab operations and maintenance</li>
           <li>Coordinate with lab staff and faculty</li>
@@ -203,6 +212,210 @@ LNMIIT Lab Management System`,
 				} catch (emailError) {
 					console.error('Failed to send lab coordinator assignment email:', emailError)
 					// Don't fail the request if email fails
+				}
+			}
+			
+			// 2. If approval authority was changed, notify BOTH HOD and Lab Coordinator
+			if (body.highestApprovalAuthority !== undefined) {
+				// Fetch department details with both HOD and Lab Coordinator info
+				const { Database } = await import("@/lib/database")
+				const db = Database.getInstance()
+				const deptResult = await db.query(
+					`SELECT d.name as department_name, d.code as department_code, d.hod_email,
+					        d.highest_approval_authority,
+					        u_hod.name as hod_name, u_hod.salutation as hod_salutation,
+					        u_coord.name as coord_name, u_coord.email as coord_email, u_coord.salutation as coord_salutation
+					 FROM departments d
+					 LEFT JOIN users u_hod ON d.hod_id = u_hod.id
+					 LEFT JOIN users u_coord ON d.lab_coordinator_id = u_coord.id
+					 WHERE d.id = ?`,
+					[departmentId]
+				)
+				
+				if (deptResult.rows.length > 0) {
+					const deptInfo = deptResult.rows[0]
+					const loginUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}`
+					
+					// Format salutation properly
+					const salutationMap: { [key: string]: string } = {
+						'prof': 'Prof.',
+						'dr': 'Dr.',
+						'mr': 'Mr.',
+						'mrs': 'Mrs.',
+						'ms': 'Ms.'
+					}
+					
+					// Send email to Lab Coordinator if assigned
+					if (deptInfo.coord_email) {
+						const formattedSalutation = deptInfo.coord_salutation ? salutationMap[deptInfo.coord_salutation.toLowerCase()] || deptInfo.coord_salutation : ''
+						const fullName = formattedSalutation && deptInfo.coord_name ? `${formattedSalutation} ${deptInfo.coord_name}` : (deptInfo.coord_name || 'Lab Coordinator')
+						
+						const isNewApprover = body.highestApprovalAuthority === 'lab_coordinator'
+						
+						try {
+							await sendEmail({
+								to: deptInfo.coord_email,
+								subject: `Approval Authority ${isNewApprover ? 'Update' : 'Change'} - ${deptInfo.department_name}`,
+								text: `Dear ${fullName},
+
+This is to inform you that the approval authority for the ${deptInfo.department_name} (${deptInfo.department_code}) department has been ${isNewApprover ? 'updated' : 'changed'}.
+
+${isNewApprover 
+	? 'From now onwards, all lab booking approval requests for your department will be routed to you for final approval after lab staff recommendations.\n\nYou will receive email notifications for pending approval requests that require your attention.' 
+	: 'The approval authority has been transferred to the HOD. Lab booking requests will now be routed to the HOD for final approval.'}
+
+Login to your Lab Coordinator dashboard: ${loginUrl}/lab-coordinator/dashboard
+
+If you have any questions or need assistance, please contact the system administrator.
+
+Best regards,
+LNMIIT Lab Management System`,
+								html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background-color: ${isNewApprover ? '#4F46E5' : '#F59E0B'}; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+    .content { background-color: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; }
+    .button { display: inline-block; background-color: ${isNewApprover ? '#4F46E5' : '#F59E0B'}; color: white !important; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
+    .info-box { background-color: ${isNewApprover ? '#EEF2FF' : '#FEF3C7'}; border-left: 4px solid ${isNewApprover ? '#4F46E5' : '#F59E0B'}; padding: 15px; margin: 20px 0; }
+    .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #6b7280; }
+    ul { margin: 15px 0; padding-left: 20px; }
+    li { margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Lab Management System</h1>
+      <h2 style="margin: 10px 0 0 0; font-weight: normal;">Approval Authority ${isNewApprover ? 'Update' : 'Change'}</h2>
+    </div>
+    <div class="content">
+      <p>Dear <strong>${fullName}</strong>,</p>
+      
+      <p>This is to inform you that the <strong>approval authority</strong> for the <strong>${deptInfo.department_name} (${deptInfo.department_code})</strong> department has been ${isNewApprover ? 'updated' : 'changed'}.</p>
+      
+      <div class="info-box">
+        <h3 style="margin-top: 0;">${isNewApprover ? 'Important Update:' : 'Important Change:'}</h3>
+        <p>${isNewApprover 
+						? '<strong>All lab booking approval requests</strong> for your department will now be <strong>routed to you for final approval</strong> after lab staff recommendations.' 
+						: 'The approval authority has been <strong>transferred to the HOD</strong>. Lab booking requests will now be routed to the HOD for final approval.'}</p>
+      </div>
+      
+      ${isNewApprover ? `<p>You will receive email notifications for:</p>
+      <ul>
+        <li>New lab booking requests pending your approval</li>
+        <li>Requests that have been recommended by lab staff</li>
+      </ul>` : ''}
+      
+      <div style="text-align: center;">
+        <a href="${loginUrl}/lab-coordinator/dashboard" class="button">Go to Lab Coordinator Dashboard</a>
+      </div>
+      
+      <p style="margin-top: 30px;">If you have any questions or need assistance, please contact the system administrator.</p>
+      
+      <p>Best regards,<br><strong>LNMIIT Lab Management System</strong></p>
+    </div>
+    <div class="footer">
+      <p>This is an automated notification. Please do not reply to this email.</p>
+    </div>
+  </div>
+</body>
+</html>
+`
+							})
+						} catch (emailError) {
+							console.error('Failed to send Lab Coordinator approval authority email:', emailError)
+						}
+					}
+					
+					// Send email to HOD using department's hod_email
+					if (deptInfo.hod_email) {
+						const formattedSalutation = deptInfo.hod_salutation ? salutationMap[deptInfo.hod_salutation.toLowerCase()] || deptInfo.hod_salutation : ''
+						const fullName = formattedSalutation && deptInfo.hod_name ? `${formattedSalutation} ${deptInfo.hod_name}` : (deptInfo.hod_name || 'HOD')
+						
+						const isNewApprover = body.highestApprovalAuthority === 'hod'
+						
+						try {
+							await sendEmail({
+								to: deptInfo.hod_email,
+								subject: `Approval Authority ${isNewApprover ? 'Update' : 'Change'} - ${deptInfo.department_name}`,
+								text: `Dear ${fullName},
+
+This is to inform you that the approval authority for the ${deptInfo.department_name} (${deptInfo.department_code}) department has been ${isNewApprover ? 'updated' : 'changed'}.
+
+${isNewApprover 
+	? 'From now onwards, all lab booking approval requests for your department will be routed through you for final approval after lab staff recommendations.\n\nYou will receive email notifications for pending approval requests that require your attention.' 
+	: 'The approval authority has been transferred to the Lab Coordinator. Lab booking requests will now be routed to the Lab Coordinator for final approval.'}
+
+Login to your HOD dashboard: ${loginUrl}/hod/dashboard
+
+If you have any questions or need assistance, please contact the system administrator.
+
+Best regards,
+LNMIIT Lab Management System`,
+								html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background-color: ${isNewApprover ? '#DC2626' : '#F59E0B'}; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+    .content { background-color: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; }
+    .button { display: inline-block; background-color: ${isNewApprover ? '#DC2626' : '#F59E0B'}; color: white !important; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
+    .info-box { background-color: ${isNewApprover ? '#FEE2E2' : '#FEF3C7'}; border-left: 4px solid ${isNewApprover ? '#DC2626' : '#F59E0B'}; padding: 15px; margin: 20px 0; }
+    .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #6b7280; }
+    ul { margin: 15px 0; padding-left: 20px; }
+    li { margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Lab Management System</h1>
+      <h2 style="margin: 10px 0 0 0; font-weight: normal;">Approval Authority ${isNewApprover ? 'Update' : 'Change'}</h2>
+    </div>
+    <div class="content">
+      <p>Dear <strong>${fullName}</strong>,</p>
+      
+      <p>This is to inform you that the <strong>approval authority</strong> for the <strong>${deptInfo.department_name} (${deptInfo.department_code})</strong> department has been ${isNewApprover ? 'updated' : 'changed'}.</p>
+      
+      <div class="info-box">
+        <h3 style="margin-top: 0;">${isNewApprover ? 'Important Update:' : 'Important Change:'}</h3>
+        <p>${isNewApprover 
+						? '<strong>All lab booking approval requests</strong> for your department will now be <strong>routed through you for final approval</strong> after lab staff recommendations.' 
+						: 'The approval authority has been <strong>transferred to the Lab Coordinator</strong>. Lab booking requests will now be routed to the Lab Coordinator for final approval.'}</p>
+      </div>
+      
+      ${isNewApprover ? `<p>You will receive email notifications for:</p>
+      <ul>
+        <li>New lab booking requests pending your approval</li>
+        <li>Requests that have been recommended by lab staff</li>
+      </ul>` : ''}
+      
+      <div style="text-align: center;">
+        <a href="${loginUrl}/hod/dashboard" class="button">Go to HOD Dashboard</a>
+      </div>
+      
+      <p style="margin-top: 30px;">If you have any questions or need assistance, please contact the system administrator.</p>
+      
+      <p>Best regards,<br><strong>LNMIIT Lab Management System</strong></p>
+    </div>
+    <div class="footer">
+      <p>This is an automated notification. Please do not reply to this email.</p>
+    </div>
+  </div>
+</body>
+</html>
+`
+							})
+						} catch (emailError) {
+							console.error('Failed to send HOD approval authority email:', emailError)
+						}
+					}
 				}
 			}
 			

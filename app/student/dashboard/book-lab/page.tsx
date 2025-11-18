@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, ArrowRight, Clock, MapPin, User, Building2, ChevronLeft, CheckCircle2, ChevronDown } from "lucide-react"
+import { CalendarIcon, ArrowRight, Clock, MapPin, User, Building, Building2, ChevronLeft, CheckCircle2, ChevronDown } from "lucide-react"
 import { format } from "date-fns"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
@@ -53,6 +53,7 @@ interface BookedSlotItem {
   purpose: string
   booker_name?: string
   type: 'booking' | 'class'
+  lab_name?: string
 }
 
 export default function BookLabPage() {
@@ -234,7 +235,9 @@ export default function BookLabPage() {
         const data = await res.json()
         console.log("Common free slots data:", data)
         setAvailableSlots(data.commonSlots || [])
-        setBookedSlots([]) // Clear booked slots display for multi-lab
+        
+        // Load booked slots for all selected labs to show conflicts
+        loadMultiLabBookedSlots(labIds, date)
       } else {
         console.error("Failed to fetch common free slots:", res.status)
         setAvailableSlots([])
@@ -243,6 +246,36 @@ export default function BookLabPage() {
     } catch (error) {
       console.error("Failed to load common free slots:", error)
       setAvailableSlots([])
+    }
+  }
+
+  const loadMultiLabBookedSlots = async (labIds: string[], date: Date) => {
+    if (!labIds.length || !date) return
+    try {
+      const dateStr = format(date, 'yyyy-MM-dd')
+      const allBookedSlots: any[] = []
+      
+      // Fetch booked slots for each lab
+      for (const labId of labIds) {
+        const lab = labs.find(l => l.id.toString() === labId)
+        const res = await fetch(`/api/student/labs/${labId}/booked-schedule?date=${dateStr}`)
+        if (res.ok) {
+          const data = await res.json()
+          // Add lab name to each booking
+          const slotsWithLab = data.bookedSlots.map((slot: any) => ({
+            ...slot,
+            lab_name: lab?.name || `Lab ${labId}`
+          }))
+          allBookedSlots.push(...slotsWithLab)
+        }
+      }
+      
+      // Sort by start time
+      allBookedSlots.sort((a, b) => a.start_time.localeCompare(b.start_time))
+      setBookedSlots(allBookedSlots)
+    } catch (error) {
+      console.error("Failed to load multi-lab booked slots:", error)
+      setBookedSlots([])
     }
   }
 
@@ -353,6 +386,7 @@ export default function BookLabPage() {
     }
   }
 
+
   const loadBookedSchedule = async (labId: string, date: Date) => {
     try {
       const dateStr = format(date, 'yyyy-MM-dd')
@@ -372,7 +406,26 @@ export default function BookLabPage() {
     if (!startTime || !endTime) return false
     const s = `${startTime}:00`
     const e = `${endTime}:00`
-    return bookedSlots.some(b => (s < `${b.end_time}:00` && e > `${b.start_time}:00`))
+    
+    // Check against booked slots
+    const hasBookedConflict = bookedSlots.some(b => (s < `${b.end_time}:00` && e > `${b.start_time}:00`))
+    if (hasBookedConflict) return true
+    
+    // For multi-lab bookings, also check if time falls within common free slots
+    if (selectedLabs.length > 1 && availableSlots.length > 0) {
+      // Check if the selected time is fully contained within any of the free slots
+      const isWithinFreeSlots = availableSlots.some(slot => {
+        const slotStart = slot.start_time.substring(0, 5) // HH:MM format
+        const slotEnd = slot.end_time.substring(0, 5)
+        // The selected time must be fully within a free slot
+        return startTime >= slotStart && endTime <= slotEnd
+      })
+      
+      // If not within any free slot, there's a conflict
+      if (!isWithinFreeSlots) return true
+    }
+    
+    return false
   }
 
   const isInvalidTimeRange = () => !!startTime && !!endTime && startTime >= endTime
@@ -670,34 +723,37 @@ export default function BookLabPage() {
                     </div>
                   )}
                   
-                  <div>
-                    <Label>Booked/Scheduled Slots</Label>
-                    {bookedSlots.length === 0 ? (
-                      <div className="p-3 border rounded-md text-sm text-muted-foreground">No bookings or classes for this date.</div>
-                    ) : (
-                      <div className="space-y-2 mt-2">
-                        {bookedSlots.map((s, i) => (
-                          <div key={i} className={`p-3 rounded border text-sm ${s.type === 'booking' ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'}`}>
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <div className="flex justify-between items-center mb-1">
-                                  <span className="font-medium">{s.time_range}</span>
-                                  <Badge variant="outline">{s.type === 'booking' ? 'Booking' : 'Class'}</Badge>
-                                </div>
-                                <div className="text-muted-foreground mb-1">{s.purpose}</div>
-                                {s.booker_name && s.type === 'booking' && (
-                                  <div className="flex items-center gap-1 text-xs text-blue-600">
-                                    <User className="h-3 w-3" />
-                                    <span>Booked by: {s.booker_name}</span>
+                  {/* Only show booked slots for single lab selection */}
+                  {selectedLabs.length === 1 && (
+                    <div>
+                      <Label>Booked/Scheduled Slots</Label>
+                      {bookedSlots.length === 0 ? (
+                        <div className="p-3 border rounded-md text-sm text-muted-foreground">No bookings or classes for this date.</div>
+                      ) : (
+                        <div className="space-y-2 mt-2">
+                          {bookedSlots.map((s, i) => (
+                            <div key={i} className={`p-3 rounded border text-sm ${s.type === 'booking' ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'}`}>
+                              <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                  <div className="flex justify-between items-center mb-1">
+                                    <span className="font-medium">{s.time_range}</span>
+                                    <Badge variant="outline">{s.type === 'booking' ? 'Booking' : 'Class'}</Badge>
                                   </div>
-                                )}
+                                  <div className="text-muted-foreground mb-1">{s.purpose}</div>
+                                  {s.booker_name && s.type === 'booking' && (
+                                    <div className="flex items-center gap-1 text-xs text-blue-600">
+                                      <User className="h-3 w-3" />
+                                      <span>Booked by: {s.booker_name}</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>

@@ -123,33 +123,37 @@ export async function POST(request: NextRequest) {
       if (details.rows.length > 0) {
         const req = details.rows[0]
         
-        // Format requester name with salutation
-        let formattedRequesterName = req.requester_name
-        if (req.requester_salutation && req.requester_salutation !== 'none') {
-          const salutationMap: Record<string, string> = {
-            'prof': 'Prof.',
-            'dr': 'Dr.',
-            'mr': 'Mr.',
-            'mrs': 'Mrs.'
-          }
-          const salutation = salutationMap[req.requester_salutation.toLowerCase()] || ''
-          formattedRequesterName = salutation ? `${salutation} ${req.requester_name}` : req.requester_name
-        }
-        
         // Get lab staff email, name, and salutation for ALL selected labs (only head staff per lab)
+        // Also get the highest_approval_authority from departments
         const labStaff = await db.query(
-          `SELECT u.email, u.name, u.salutation, l.name as lab_name, l.id as lab_id
+          `SELECT u.email, u.name, u.salutation, l.name as lab_name, l.id as lab_id, d.highest_approval_authority
            FROM labs l
            JOIN users u ON l.staff_id = u.id
+           JOIN departments d ON l.department_id = d.id
            WHERE u.role = 'lab_staff' AND l.id IN (${labIdsForEmail.map(() => '?').join(',')})`,
           labIdsForEmail
         )
         
         if (labStaff.rows.length > 0) {
+          // For multi-lab bookings, use the highest authority across all labs
+          // Priority: hod > lab_coordinator > null
+          let highestAuthority: 'hod' | 'lab_coordinator' | null = null
+          for (const staff of labStaff.rows) {
+            const authority = staff.highest_approval_authority as 'hod' | 'lab_coordinator' | null
+            if (authority === 'hod') {
+              highestAuthority = 'hod'
+              break // HOD is the highest, no need to check further
+            }
+            if (authority === 'lab_coordinator' && !highestAuthority) {
+              highestAuthority = 'lab_coordinator'
+            }
+          }
+          
           // Send to each lab's head staff member
           for (const staff of labStaff.rows) {
             const emailData = emailTemplates.labBookingCreated({
-              requesterName: formattedRequesterName,
+              requesterName: req.requester_name,
+              requesterSalutation: req.requester_salutation,
               requesterRole: 'Others',
               labName: labNamesText, // Show all labs in multi-lab booking
               bookingDate: booking_date,
@@ -158,7 +162,9 @@ export async function POST(request: NextRequest) {
               purpose: purpose,
               requestId: result.insertId!,
               recipientName: staff.name,
-              recipientSalutation: staff.salutation
+              recipientSalutation: staff.salutation,
+              highestApprovalAuthority: highestAuthority,
+              recipientRole: 'lab_staff'
             })
 
             await sendEmail({
