@@ -1087,66 +1087,6 @@ export const emailTemplates = {
     `)
   }),
 
-    requesterName: string,
-    requesterSalutation?: string,
-    labName: string,
-    requestId: number,
-    newReturnDate: string,
-  }) => {
-    // Format salutation and greeting for requester (faculty)
-    let greeting = `Dear <b>${data.requesterName}</b>`;
-    if (data.requesterSalutation && data.requesterSalutation !== 'none') {
-      const salutationMap: Record<string, string> = {
-        'prof': 'Prof.',
-        'dr': 'Dr.',
-        'mr': 'Mr.',
-        'mrs': 'Mrs.'
-      };
-      greeting = `Dear <b>${salutationMap[data.requesterSalutation] || ''} ${data.requesterName}</b>`;
-    }
-    const formattedDate = formatDate(data.newReturnDate);
-    return {
-      subject: `Extension Approved - LNMIIT Lab Management`,
-      html: createEmailTemplate(`
-        <tr>
-          <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
-            <p>${greeting},</p>
-            <p>Your deadline extension request has been <b>approved</b>.</p>
-            
-            <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
-              <tr style="background: #f0fdf4;"></tr>
-              <tr>
-                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
-                <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
-              </tr>
-              <tr style="background: #f0fdf4;">
-                <td style="padding: 10px; border: 1px solid #ddd;"><strong>New Return Deadline:</strong></td>
-                <td style="padding: 10px; border: 1px solid #ddd;">${formattedDate}</td>
-              </tr>
-            </table>
-            <p style="padding: 12px; background: #d1fae5; border-left: 4px solid #10b981;">
-              <strong>✅ Status:</strong> Your return deadline has been extended.
-            </p>
-            <p>Please ensure you return all components by <b>${formattedDate}</b> in good working condition.</p>
-            <div style="margin-top: 25px; text-align: center;">
-              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" 
-                 style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
-                View My Component Requests
-              </a>
-            </div>
-            <div style="margin-top: 15px; text-align: center;">
-              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
-                 style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
-                Go to Portal Dashboard
-              </a>
-            </div>
-          </td>
-        </tr>
-      `)
-    }
-  },
-  }),
-
   // Lab Booking Notifications
   labBookingCreated: (data: {
     requesterName: string
