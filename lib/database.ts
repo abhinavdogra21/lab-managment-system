@@ -1,3 +1,7 @@
+/**
+ * Created by Abhinav Dogra (23ucs507) and Abhinav Thulal (23ucs508)
+ */
+
 // Database connection and utility functions
 // MySQL implementation using mysql2/promise
 

@@ -1,3 +1,7 @@
+/**
+ * Created by Abhinav Dogra (23ucs507) and Abhinav Thulal (23ucs508)
+ */
+
 import nodemailer from 'nodemailer'
 
 const isTestingMode = process.env.TESTING_MODE === 'true'
@@ -813,45 +817,51 @@ export const emailTemplates = {
       greeting = `Dear <b>${salutationMap[data.requesterSalutation] || ''} ${data.requesterName}</b>`
     }
     
+    // Determine dashboard and requests URLs based on requesterRole
+    let dashboardPath = 'student/dashboard';
+    let requestsPath = 'student/dashboard/my-component-requests';
+    if (data.requesterRole === 'faculty') {
+      dashboardPath = 'faculty/dashboard';
+      requestsPath = 'faculty/dashboard/my-component-requests';
+    } else if (data.requesterRole === 'lab-staff') {
+      dashboardPath = 'lab-staff/dashboard';
+      requestsPath = 'lab-staff/dashboard/my-component-requests';
+    }
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     return {
-    subject: `Return Approved - LNMIIT Lab Management`,
-    html: createEmailTemplate(`
-      <tr>
-        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
-          <p>${greeting},</p>
-          <p>Your component return has been <b>verified and approved</b>.</p>
-          
-          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
-            <tr style="background: #f0fdf4;">
-            </tr>
-            <tr>
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
-            </tr>
-          </table>
-
-          <p style="padding: 12px; background: #d1fae5; border-left: 4px solid #10b981;">
-            <strong>✅ Status:</strong> Components have been successfully returned and checked.
-          </p>
-          
-          <p>Thank you for returning the components in good condition and on time.</p>
-          
-          <div style="margin-top: 25px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" 
-               style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
-              View My Component Requests
-            </a>
-          </div>
-          
-          <div style="margin-top: 15px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
-               style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
-              Go to Portal Dashboard
-            </a>
-          </div>
-        </td>
-      </tr>
-    `)
+      subject: `Return Approved - LNMIIT Lab Management`,
+      html: createEmailTemplate(`
+        <tr>
+          <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+            <p>${greeting},</p>
+            <p>Your component return has been <b>verified and approved</b>.</p>
+            
+            <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+              <tr style="background: #f0fdf4;"></tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+              </tr>
+            </table>
+            <p style="padding: 12px; background: #d1fae5; border-left: 4px solid #10b981;">
+              <strong>✅ Status:</strong> Components have been successfully returned and checked.
+            </p>
+            <p>Thank you for returning the components in good condition and on time.</p>
+            <div style="margin-top: 25px; text-align: center;">
+              <a href="${baseUrl}/${requestsPath}" 
+                 style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                View My Component Requests
+              </a>
+            </div>
+            <div style="margin-top: 15px; text-align: center;">
+              <a href="${baseUrl}/${dashboardPath}" 
+                 style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
+                Go to Portal Dashboard
+              </a>
+            </div>
+          </td>
+        </tr>
+      `)
     }
   },
 
@@ -1077,53 +1087,64 @@ export const emailTemplates = {
     `)
   }),
 
-  requestWithdrawn: (data: {
-    requesterName: string
-    requesterRole: string
-    labName: string
-    requestId: number
-    notifyEmail: string
-    notifyRole: string
-  }) => ({
-    subject: `Component Request Withdrawn - LNMIIT Lab Management`,
-    html: createEmailTemplate(`
-      <tr>
-        <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
-          <p>Dear <b>${data.notifyRole}</b>,</p>
-          <p>A component request has been withdrawn by the requester. No further action is required from your end.</p>
-          
-          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
-            <tr style="background: #fef3c7;">
-            </tr>
-            <tr>
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Requester:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.requesterName} (${data.requesterRole})</td>
-            </tr>
-            <tr style="background: #fef3c7;">
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
-            </tr>
-            <tr>
-              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Status:</strong></td>
-              <td style="padding: 10px; border: 1px solid #ddd;"><b>Withdrawn by requester</b></td>
-            </tr>
-          </table>
-
-          <p style="padding: 12px; background: #fef3c7; border-left: 4px solid #f59e0b;">
-            <strong>⚠️ Notice:</strong> This request has been withdrawn. No further action is required.
-          </p>
-          
-          <p>If you have any questions, please contact the requester or lab administration.</p>
-          
-          <div style="margin-top: 25px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/faculty/dashboard" 
-               style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
-              Go to Portal Dashboard
-            </a>
-          </div>
-        </td>
-      </tr>
-    `)
+    requesterName: string,
+    requesterSalutation?: string,
+    labName: string,
+    requestId: number,
+    newReturnDate: string,
+  }) => {
+    // Format salutation and greeting for requester (faculty)
+    let greeting = `Dear <b>${data.requesterName}</b>`;
+    if (data.requesterSalutation && data.requesterSalutation !== 'none') {
+      const salutationMap: Record<string, string> = {
+        'prof': 'Prof.',
+        'dr': 'Dr.',
+        'mr': 'Mr.',
+        'mrs': 'Mrs.'
+      };
+      greeting = `Dear <b>${salutationMap[data.requesterSalutation] || ''} ${data.requesterName}</b>`;
+    }
+    const formattedDate = formatDate(data.newReturnDate);
+    return {
+      subject: `Extension Approved - LNMIIT Lab Management`,
+      html: createEmailTemplate(`
+        <tr>
+          <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+            <p>${greeting},</p>
+            <p>Your deadline extension request has been <b>approved</b>.</p>
+            
+            <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+              <tr style="background: #f0fdf4;"></tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+              </tr>
+              <tr style="background: #f0fdf4;">
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>New Return Deadline:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${formattedDate}</td>
+              </tr>
+            </table>
+            <p style="padding: 12px; background: #d1fae5; border-left: 4px solid #10b981;">
+              <strong>✅ Status:</strong> Your return deadline has been extended.
+            </p>
+            <p>Please ensure you return all components by <b>${formattedDate}</b> in good working condition.</p>
+            <div style="margin-top: 25px; text-align: center;">
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" 
+                 style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                View My Component Requests
+              </a>
+            </div>
+            <div style="margin-top: 15px; text-align: center;">
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
+                 style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
+                Go to Portal Dashboard
+              </a>
+            </div>
+          </td>
+        </tr>
+      `)
+    }
+  },
   }),
 
   // Lab Booking Notifications

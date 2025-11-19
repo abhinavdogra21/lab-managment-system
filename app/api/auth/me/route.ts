@@ -1,3 +1,7 @@
+/**
+ * Created by Abhinav Dogra (23ucs507) and Abhinav Thulal (23ucs508)
+ */
+
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyToken } from "@/lib/auth"
 import { Database } from "@/lib/database"

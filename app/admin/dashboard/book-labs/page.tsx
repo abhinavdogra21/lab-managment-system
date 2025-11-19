@@ -1,3 +1,7 @@
+/**
+ * Created by Abhinav Dogra (23ucs507) and Abhinav Thulal (23ucs508)
+ */
+
 export default function BookLabsPage() {
   return (
     <div className="p-6">

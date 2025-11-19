@@ -1,4 +1,8 @@
 /**
+ * Created by Abhinav Dogra (23ucs507) and Abhinav Thulal (23ucs508)
+ */
+
+/**
  * Activity Logger - Separate logging system that preserves history
  * even when users or bookings are deleted
  */

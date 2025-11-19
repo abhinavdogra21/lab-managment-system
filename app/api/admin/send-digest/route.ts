@@ -1,3 +1,7 @@
+/**
+ * Created by Abhinav Dogra (23ucs507) and Abhinav Thulal (23ucs508)
+ */
+
 import { NextResponse } from "next/server"
 // Digest emails temporarily disabled site-wide; keep import commented for future enablement
 // import { sendDigestEmail } from "@/lib/email"

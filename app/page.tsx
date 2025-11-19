@@ -1,3 +1,7 @@
+/**
+ * Created by Abhinav Dogra (23ucs507) and Abhinav Thulal (23ucs508)
+ */
+
 import { LoginForm } from "@/components/auth/login-form"
 
 export default function HomePage() {

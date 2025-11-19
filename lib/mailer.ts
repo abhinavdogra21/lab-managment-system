@@ -1,3 +1,7 @@
+/**
+ * Created by Abhinav Dogra (23ucs507) and Abhinav Thulal (23ucs508)
+ */
+
 // Minimal mailer abstraction; replace with real provider (SMTP, Resend, SES)
 export type MailOptions = {
   to: string
