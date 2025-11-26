@@ -878,9 +878,6 @@ SMTP_FROM=LNMIIT Lab Management <your_email@gmail.com>
 | `SETUP.md` | Detailed setup guide with step-by-step instructions |
 | `design.md` | Architecture & design documentation |
 | `working.md` | Detailed workflow documentation for all processes |
-| `ACTIVITY_LOGS_*.md` | Activity logging system documentation |
-| `FACULTY_LOGS_SUMMARY.md` | Faculty-specific logging features |
-| `SECURITY.md` | Security policies & implementation |
 
 ---
 
