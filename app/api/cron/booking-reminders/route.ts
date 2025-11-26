@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
 
       // Get responsible persons for each lab
       const responsiblePersons = await db.query(`
-        SELECT rp.name, rp.email, l.name as lab_name
+        SELECT rp.name, rp.email, rp.lab_id, l.name as lab_name
         FROM multi_lab_responsible_persons rp
         JOIN labs l ON rp.lab_id = l.id
         WHERE rp.booking_request_id = ?
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
 
       // Get head lab staff for each lab
       const labStaff = await db.query(`
-        SELECT u.name, u.email, l.name as lab_name
+        SELECT u.name, u.email, l.id as lab_id, l.name as lab_name
         FROM labs l
         JOIN users u ON l.staff_id = u.id
         WHERE l.id IN (${labIds.map(() => '?').join(',')})
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
             <p><strong>Responsible Persons:</strong></p>
             <ul>
               ${responsiblePersons.rows
-                .filter(rp => labIds.length === 1 || rp.lab_name === staff.lab_name)
+                .filter(rp => rp.lab_id === staff.lab_id)
                 .map(rp => `<li>${rp.name} (${rp.email})</li>`)
                 .join('')}
             </ul>`
