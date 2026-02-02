@@ -227,14 +227,14 @@ export const emailTemplates = {
           </p>
           
           <div style="margin-top: 25px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/${data.recipientRole === 'Faculty' ? 'faculty' : 'lab-staff'}/dashboard/component-requests" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/${data.recipientRole === 'Faculty' ? 'faculty' : 'lab-staff'}/dashboard/component-requests" 
                style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
               Review Request
             </a>
           </div>
           
           <div style="margin-top: 15px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/${data.recipientRole === 'Faculty' ? 'faculty' : 'lab-staff'}/dashboard" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/${data.recipientRole === 'Faculty' ? 'faculty' : 'lab-staff'}/dashboard" 
                style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
               Go to Portal Dashboard
             </a>
@@ -355,14 +355,14 @@ export const emailTemplates = {
             </p>
             
             <div style="margin-top: 25px; text-align: center;">
-              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}" 
+              <a href="${process.env.APP_URL || 'http://localhost:3000'}" 
                  style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
                 Review & Approve Request
               </a>
             </div>
             
             <div style="margin-top: 15px; text-align: center;">
-              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}" 
+              <a href="${process.env.APP_URL || 'http://localhost:3000'}" 
                  style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
                 Go to Portal Dashboard
               </a>
@@ -440,14 +440,14 @@ export const emailTemplates = {
           <p>You will be notified once the components are ready for collection.</p>
           
           <div style="margin-top: 25px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" 
                style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
               View My Requests
             </a>
           </div>
           
           <div style="margin-top: 15px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/student/dashboard" 
                style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
               Go to Portal Dashboard
             </a>
@@ -499,13 +499,13 @@ export const emailTemplates = {
           <p>If you have any questions or need clarification, please contact the lab staff or the person who rejected the request.</p>
           
           <div style="text-align: center; margin-top: 20px;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: 500;">
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: 500;">
               View My Requests
             </a>
           </div>
           
           <div style="margin-top: 15px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/student/dashboard" 
                style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
               Go to Portal Dashboard
             </a>
@@ -613,13 +613,13 @@ export const emailTemplates = {
           </p>
           
           <div style="text-align: center; margin-top: 20px;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/lab-staff/dashboard/component-requests" style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: 500;">
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/lab-staff/dashboard/component-requests" style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: 500;">
               Issue Components
             </a>
           </div>
           
           <div style="margin-top: 15px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/lab-staff/dashboard" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/lab-staff/dashboard" 
                style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
               Go to Portal Dashboard
             </a>
@@ -700,14 +700,14 @@ export const emailTemplates = {
           <p>If you need to extend the return date, please submit an extension request through the system.</p>
           
           <div style="margin-top: 25px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" 
                style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
               View My Component Requests
             </a>
           </div>
           
           <div style="margin-top: 15px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/student/dashboard" 
                style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
               Go to Portal Dashboard
             </a>
@@ -781,13 +781,13 @@ export const emailTemplates = {
           </p>
           
           <div style="text-align: center; margin-top: 20px;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/lab-staff/dashboard/component-requests" style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: 500;">
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/lab-staff/dashboard/component-requests" style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: 500;">
               Approve Return
             </a>
           </div>
           
           <div style="margin-top: 15px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/lab-staff/dashboard" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/lab-staff/dashboard" 
                style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
               Go to Portal Dashboard
             </a>
@@ -827,7 +827,7 @@ export const emailTemplates = {
       dashboardPath = 'lab-staff/dashboard';
       requestsPath = 'lab-staff/dashboard/my-component-requests';
     }
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const baseUrl = process.env.APP_URL || 'http://localhost:3000';
     return {
       subject: `Return Approved - LNMIIT Lab Management`,
       html: createEmailTemplate(`
@@ -979,14 +979,14 @@ export const emailTemplates = {
           <p>Please ensure you return all components by <b>${data.newReturnDate}</b> in good working condition.</p>
           
           <div style="margin-top: 25px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" 
                style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
               View My Component Requests
             </a>
           </div>
           
           <div style="margin-top: 15px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/student/dashboard" 
                style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
               Go to Portal Dashboard
             </a>
@@ -1029,14 +1029,14 @@ export const emailTemplates = {
           <p>Please ensure you return all components by the <b>original deadline</b>. If you have any concerns, please contact the lab staff.</p>
           
           <div style="margin-top: 25px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/student/dashboard/my-component-requests" 
                style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
               View My Component Requests
             </a>
           </div>
           
           <div style="margin-top: 15px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/student/dashboard" 
                style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
               Go to Portal Dashboard
             </a>
@@ -1077,7 +1077,7 @@ export const emailTemplates = {
           </div>
           
           <div style="margin-top: 25px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}" 
                style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
               Go to Portal Dashboard
             </a>
@@ -1173,7 +1173,7 @@ export const emailTemplates = {
           </p>
           
           <div style="margin-top: 25px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}${
               data.recipientRole === 'faculty' ? '/faculty/dashboard/approve' :
               data.recipientRole === 'lab_coordinator' ? '/lab-coordinator/dashboard/requests' :
               data.recipientRole === 'hod' ? '/hod/dashboard/requests' :
@@ -1185,7 +1185,7 @@ export const emailTemplates = {
           </div>
           
           <div style="margin-top: 15px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}${
               data.recipientRole === 'faculty' ? '/faculty/dashboard' :
               data.recipientRole === 'lab_coordinator' ? '/lab-coordinator/dashboard' :
               data.recipientRole === 'hod' ? '/hod/dashboard' :
@@ -1259,14 +1259,14 @@ export const emailTemplates = {
           </p>
           
           <div style="margin-top: 25px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${data.requesterRole === 'faculty' ? '/faculty' : data.requesterRole === 'others' ? '/others' : '/student'}/dashboard/my-requests" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}${data.requesterRole === 'faculty' ? '/faculty' : data.requesterRole === 'others' ? '/others' : '/student'}/dashboard/my-requests" 
                style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
               View My Lab Bookings
             </a>
           </div>
           
           <div style="margin-top: 15px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${data.requesterRole === 'faculty' ? '/faculty' : data.requesterRole === 'others' ? '/others' : '/student'}/dashboard" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}${data.requesterRole === 'faculty' ? '/faculty' : data.requesterRole === 'others' ? '/others' : '/student'}/dashboard" 
                style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
               Go to Portal Dashboard
             </a>
@@ -1343,14 +1343,14 @@ export const emailTemplates = {
           </p>
           
           <div style="margin-top: 25px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${data.requesterRole === 'faculty' ? '/faculty' : data.requesterRole === 'others' ? '/others' : '/student'}/dashboard/my-requests" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}${data.requesterRole === 'faculty' ? '/faculty' : data.requesterRole === 'others' ? '/others' : '/student'}/dashboard/my-requests" 
                style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
               View My Lab Bookings
             </a>
           </div>
           
           <div style="margin-top: 15px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${data.requesterRole === 'faculty' ? '/faculty' : data.requesterRole === 'others' ? '/others' : '/student'}/dashboard" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}${data.requesterRole === 'faculty' ? '/faculty' : data.requesterRole === 'others' ? '/others' : '/student'}/dashboard" 
                style="display: inline-block; padding: 10px 24px; background-color: #f3f4f6; color: #034da2; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db;">
               Go to Portal Dashboard
             </a>
@@ -1408,7 +1408,7 @@ export const emailTemplates = {
           </p>
           
           <div style="margin-top: 25px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/faculty/dashboard" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/faculty/dashboard" 
                style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
               Go to Portal Dashboard
             </a>

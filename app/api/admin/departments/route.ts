@@ -108,7 +108,7 @@ export async function PATCH(request: NextRequest) {
 			// 1. If lab coordinator was assigned/changed, notify them
 			if (updated.coordinatorInfo && updated.coordinatorChanged) {
 				const { name, email, salutation, departmentName, departmentCode } = updated.coordinatorInfo
-				const loginUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}`
+				const loginUrl = `${process.env.APP_URL || 'http://localhost:3000'}`
 				
 				// Format salutation properly
 				const salutationMap: { [key: string]: string } = {
@@ -238,7 +238,7 @@ LNMIIT Lab Management System`,
 				
 				if (deptResult.rows.length > 0) {
 					const deptInfo = deptResult.rows[0]
-					const loginUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}`
+					const loginUrl = `${process.env.APP_URL || 'http://localhost:3000'}`
 					
 					// Format salutation properly
 					const salutationMap: { [key: string]: string } = {

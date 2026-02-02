@@ -154,7 +154,7 @@ export async function POST(
           </p>
 
           <div style="text-align: center; margin-top: 30px;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/dashboard/component-requests" 
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/student/dashboard/component-requests" 
                style="display: inline-block; background-color: #034da2; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
               View My Requests
             </a>
