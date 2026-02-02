@@ -50,6 +50,9 @@ export default function UsersPage() {
   const [importing, setImporting] = useState(false)
   const [importSummary, setImportSummary] = useState<{ created: number; reactivated: number; skipped: number } | null>(null)
   const [importFileName, setImportFileName] = useState<string>("")
+  const [importUsersOpen, setImportUsersOpen] = useState(false)
+  const [importingUsers, setImportingUsers] = useState(false)
+  const [importUsersResult, setImportUsersResult] = useState<any>(null)
   const [departments, setDepartments] = useState<Department[]>([])
   const [purgeDays, setPurgeDays] = useState(30)
 
@@ -223,6 +226,74 @@ export default function UsersPage() {
     }
   }
 
+  const downloadUsersSample = () => {
+    const csvContent = "firstName,middleName,lastName,email,role,salutation,department\nJohn,,Doe,john.doe@lnmiit.ac.in,faculty,dr,CSE\nJane,Marie,Smith,jane.smith@lnmiit.ac.in,lab_staff,mrs,ECE\nRam,Kumar,Sharma,23ucs123@lnmiit.ac.in,student,none,CSE\nOther,,Staff,other@lnmiit.ac.in,others,mr,CCE"
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = 'users-import-sample.csv'
+    link.click()
+    URL.revokeObjectURL(link.href)
+  }
+
+  const importUsers = async (file: File) => {
+    setImportingUsers(true)
+    setImportUsersResult(null)
+    try {
+      const text = await file.text()
+      const lines = text.split('\n').map(line => line.trim()).filter(line => line)
+      
+      if (lines.length < 2) {
+        throw new Error('CSV file must contain at least a header row and one data row')
+      }
+      
+      const header = lines[0].split(',').map(h => h.trim().toLowerCase())
+      
+      const rows = lines.slice(1).map(line => {
+        const values = line.split(',').map(v => v.trim())
+        const row: any = {}
+        header.forEach((h, i) => {
+          row[h] = values[i] || ''
+        })
+        // Combine firstName, middleName, lastName into name
+        const firstName = row.firstname || row.firstName || ''
+        const middleName = row.middlename || row.middleName || ''
+        const lastName = row.lastname || row.lastName || ''
+        row.name = [firstName, middleName, lastName].filter(Boolean).join(' ')
+        return row
+      })
+      
+      const res = await fetch("/api/admin/users/import", { 
+        method: "POST", 
+        headers: { "Content-Type": "application/json" }, 
+        body: JSON.stringify({ rows }) 
+      })
+      const data = await res.json()
+      
+      if (!res.ok) throw new Error(data?.error || "Import failed")
+      
+      setImportUsersResult(data)
+      
+      // Refresh users list
+      const qs = new URLSearchParams()
+      if (role) qs.set("role", role)
+      if (department) qs.set("department", department)
+      if (sort) qs.set("sort", sort)
+      const refreshed = await fetch(`/api/admin/users?${qs.toString()}`, { cache: "no-store" })
+      const refreshedData = await refreshed.json()
+      setUsers(refreshedData.users || [])
+      
+      toast({ 
+        title: "Import completed", 
+        description: `Created: ${data.summary.created}, Updated: ${data.summary.updated}, Errors: ${data.summary.errors}` 
+      })
+    } catch (e: any) {
+      toast({ title: "Import failed", description: e?.message || "", variant: "destructive" })
+    } finally {
+      setImportingUsers(false)
+    }
+  }
+
   if (!authChecked) return null
 
   return (
@@ -245,6 +316,7 @@ export default function UsersPage() {
             </Select>
           </div>
   <Button onClick={() => { setAddUser({ first: "", middle: "", last: "", email: "", role: "student", salutation: 'none', department: undefined }); setAddOpen(true) }}>Add User</Button>
+  <Button variant="outline" onClick={() => setImportUsersOpen(true)}>Import Users</Button>
   <Button variant="secondary" onClick={() => setImportOpen(true)}>Import Students</Button>
         </div>
       </div>
@@ -645,6 +717,148 @@ export default function UsersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Import Users Dialog */}
+      <Dialog open={importUsersOpen} onOpenChange={setImportUsersOpen}>
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Import Users</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="text-sm text-muted-foreground">
+              <p className="mb-2">Upload a CSV file with the following columns:</p>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li><strong>firstName</strong> - First name (required)</li>
+                <li><strong>middleName</strong> - Middle name (optional)</li>
+                <li><strong>lastName</strong> - Last name (optional)</li>
+                <li><strong>email</strong> - Email ending with @lnmiit.ac.in (required)</li>
+                <li><strong>role</strong> - student, faculty, lab_staff, hod, or others (required)</li>
+                <li><strong>salutation</strong> - prof, dr, mr, mrs, or none (optional, defaults to none)</li>
+                <li><strong>department</strong> - Department code like CSE, ECE, CCE, MME (optional)</li>
+              </ul>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={downloadUsersSample}>
+                Download Sample CSV
+              </Button>
+            </div>
+
+            <div>
+              <Label htmlFor="import-users-file">Select CSV File</Label>
+              <Input
+                id="import-users-file"
+                type="file"
+                accept=".csv"
+                disabled={importingUsers}
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) {
+                    importUsers(file)
+                  }
+                }}
+              />
+            </div>
+
+            {importingUsers && (
+              <div className="text-sm text-muted-foreground">Importing users...</div>
+            )}
+
+            {importUsersResult && (
+              <div className="space-y-4">
+                <Card className="bg-muted/50">
+                  <CardHeader>
+                    <CardTitle className="text-base">Import Summary</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>Total Processed:</div>
+                      <div className="font-semibold">{importUsersResult.summary.total}</div>
+                      
+                      <div className="text-green-600">Successfully Created:</div>
+                      <div className="font-semibold text-green-600">{importUsersResult.summary.created}</div>
+                      
+                      <div className="text-blue-600">Updated Existing:</div>
+                      <div className="font-semibold text-blue-600">{importUsersResult.summary.updated}</div>
+                      
+                      <div className="text-yellow-600">Skipped:</div>
+                      <div className="font-semibold text-yellow-600">{importUsersResult.summary.skipped}</div>
+                      
+                      <div className="text-red-600">Errors:</div>
+                      <div className="font-semibold text-red-600">{importUsersResult.summary.errors}</div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {importUsersResult.details.created.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm text-green-600">Created Users ({importUsersResult.details.created.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-1 text-xs max-h-40 overflow-y-auto">
+                        {importUsersResult.details.created.map((u: any, i: number) => (
+                          <div key={i} className="flex justify-between border-b pb-1">
+                            <span>{u.name}</span>
+                            <span className="text-muted-foreground">{u.email}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {importUsersResult.details.updated.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm text-blue-600">Updated Users ({importUsersResult.details.updated.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-1 text-xs max-h-40 overflow-y-auto">
+                        {importUsersResult.details.updated.map((u: any, i: number) => (
+                          <div key={i} className="flex justify-between border-b pb-1">
+                            <span>{u.name}</span>
+                            <span className="text-muted-foreground">{u.email}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {importUsersResult.details.errors.length > 0 && (
+                  <Card className="border-red-200">
+                    <CardHeader>
+                      <CardTitle className="text-sm text-red-600">Errors ({importUsersResult.details.errors.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2 text-xs max-h-60 overflow-y-auto">
+                        {importUsersResult.details.errors.map((err: any, i: number) => (
+                          <div key={i} className="border-b pb-2">
+                            <div className="font-semibold text-red-600">{err.reason}</div>
+                            <div className="text-muted-foreground mt-1">
+                              {err.row.name && <span>Name: {err.row.name}, </span>}
+                              {err.row.email && <span>Email: {err.row.email}</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => {
+              setImportUsersOpen(false)
+              setImportUsersResult(null)
+            }}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
