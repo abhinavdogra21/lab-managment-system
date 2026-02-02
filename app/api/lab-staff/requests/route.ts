@@ -33,9 +33,7 @@ export async function GET(request: NextRequest) {
     // Get lab staff user ID from token (reuse logic from action route)
     const cookieStore = await import('next/headers').then(m => m.cookies())
     const token = cookieStore.get('auth-token')?.value
-    console.log('Lab Staff API Debug: raw token', token)
     if (!token) {
-      console.error('Lab Staff API Debug: No auth-token cookie found')
       return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 })
     }
     let decoded, userId
@@ -43,14 +41,13 @@ export async function GET(request: NextRequest) {
       decoded = JSON.parse(decodeURIComponent(token))
       userId = decoded.userId
     } catch (err) {
-      console.error('Lab Staff API Debug: Error decoding token', err, token)
+      console.error('Lab Staff API: Invalid token format')
       return NextResponse.json({ success: false, error: "Invalid token" }, { status: 401 })
     }
 
   // Get labs where this user is the HEAD lab staff (not just assigned)
   const assignedLabsRes = await db.query("SELECT id FROM labs WHERE staff_id = ?", [userId])
   const assignedLabIds = assignedLabsRes.rows.map((row: any) => row.id)
-  console.log('Lab Staff API Debug:', { userId, assignedLabIds })
   if (assignedLabIds.length === 0) {
     return NextResponse.json({ success: true, requests: [] })
   }

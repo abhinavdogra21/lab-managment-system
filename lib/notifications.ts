@@ -5,7 +5,7 @@
 import nodemailer from 'nodemailer'
 
 const isTestingMode = process.env.TESTING_MODE === 'true'
-const adminEmail = process.env.ADMIN_EMAIL || 'abhinavdogra1974@gmail.com'
+const adminEmail = process.env.ADMIN_EMAIL
 
 // Helper function to format time to 12-hour format with AM/PM
 function formatTimeTo12Hour(time24: string): string {
@@ -33,8 +33,8 @@ function formatDate(dateString: string): string {
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.GMAIL_USER || 'abhinavdogra1974@gmail.com',
-    pass: process.env.GMAIL_APP_PASSWORD || 'lxookupcqyuwwqis'
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD
   }
 })
 
@@ -100,7 +100,7 @@ export async function sendEmail(options: EmailOptions) {
         : [options.to]
 
     const mailOptions = {
-      from: `Lab Management System <${process.env.GMAIL_USER || 'abhinavdogra1974@gmail.com'}>`,
+      from: `Lab Management System <${process.env.GMAIL_USER}>`,
       to: recipients.join(', '),
       subject: isTestingMode 
         ? `[TEST] ${options.subject}` 

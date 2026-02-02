@@ -15,11 +15,24 @@ function hashPassword(password: string) {
 }
 
 function verifyPassword(password: string, storedHash: string) {
-  const [salt, hash] = storedHash.split(":")
-  const hashBuffer = Buffer.from(hash, "hex")
-  const saltBuffer = Buffer.from(salt, "hex")
-  const newHash = crypto.scryptSync(password, saltBuffer, 64)
-  return crypto.timingSafeEqual(hashBuffer, newHash)
+  // Handle both scrypt format (salt:hash) and legacy SHA256 format
+  if (storedHash.includes(":")) {
+    // Scrypt format
+    const [salt, hash] = storedHash.split(":")
+    if (!salt || !hash) return false
+    try {
+      const hashBuffer = Buffer.from(hash, "hex")
+      const saltBuffer = Buffer.from(salt, "hex")
+      const newHash = crypto.scryptSync(password, saltBuffer, 64)
+      return crypto.timingSafeEqual(hashBuffer, newHash)
+    } catch {
+      return false
+    }
+  } else {
+    // Legacy SHA256 format
+    const legacy = crypto.createHash("sha256").update(password).digest("hex")
+    return legacy === storedHash
+  }
 }
 
 export async function POST(req: NextRequest) {

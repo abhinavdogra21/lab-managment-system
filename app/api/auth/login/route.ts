@@ -92,14 +92,11 @@ export async function POST(request: NextRequest) {
             "SELECT u.name, u.salutation FROM departments d JOIN users u ON d.hod_id = u.id WHERE d.code = ?",
             [dbUser.department]
           )
-          console.log("HoD name lookup result:", result.rows)
           if (result.rows.length > 0 && result.rows[0].name) {
             displayName = result.rows[0].name
             userSalutation = result.rows[0].salutation || 'none'
-            console.log("Updated HoD info - name:", displayName, "salutation:", userSalutation)
           }
         } catch (error) {
-          console.log("Could not fetch HoD name, using default:", error)
           // Fall back to default name if query fails
         }
       }
