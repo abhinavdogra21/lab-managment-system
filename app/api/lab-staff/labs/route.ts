@@ -17,24 +17,23 @@ export async function GET(req: NextRequest) {
     
     const uid = Number(user.userId)
     
-    // Get labs where user is assigned as staff (includes both staff_id in labs table and lab_staff_assignments)
+    // Get labs where user is assigned as staff, prioritizing head staff status if user has both roles
     const rows = await db.query(
-      `(
-         SELECT l.id, l.name, l.code, d.name as department, l.capacity, l.location
-         FROM labs l
-         LEFT JOIN departments d ON l.department_id = d.id
-         WHERE l.staff_id = ?
-       )
-       UNION
-       (
-         SELECT l.id, l.name, l.code, d.name as department, l.capacity, l.location
-         FROM lab_staff_assignments la
-         JOIN labs l ON l.id = la.lab_id
-         LEFT JOIN departments d ON l.department_id = d.id
-         WHERE la.staff_id = ?
-       )
-       ORDER BY name`,
-      [uid, uid]
+      `SELECT DISTINCT
+         l.id, 
+         l.name, 
+         l.code, 
+         d.name as department, 
+         l.capacity, 
+         l.location,
+         MAX(CASE WHEN l.staff_id = ? THEN 1 ELSE 0 END) as is_head_staff
+       FROM labs l
+       LEFT JOIN departments d ON l.department_id = d.id
+       LEFT JOIN lab_staff_assignments la ON l.id = la.lab_id AND la.staff_id = ?
+       WHERE l.staff_id = ? OR la.staff_id = ?
+       GROUP BY l.id, l.name, l.code, d.name, l.capacity, l.location
+       ORDER BY l.name`,
+      [uid, uid, uid, uid]
     )
     
     return NextResponse.json({ labs: rows.rows })

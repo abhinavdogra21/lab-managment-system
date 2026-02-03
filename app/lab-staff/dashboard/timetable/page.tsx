@@ -14,8 +14,10 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
-import { CalendarDays, Clock, Search, Filter, Eye } from "lucide-react"
+import { CalendarDays, Clock, Search, Filter, Eye, Plus, Edit, Trash2 } from "lucide-react"
 import Link from "next/link"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 
 // Types
 interface Lab {
@@ -25,6 +27,7 @@ interface Lab {
   department: string
   capacity: number
   location: string
+  is_head_staff?: number // 1 if user is head staff, 0 if just assigned
 }
 
 interface TimetableEntry {
@@ -66,6 +69,24 @@ export default function LabStaffTimetablePage() {
   const [selectedLab, setSelectedLab] = useState<string>("")
   const [selectedDay, setSelectedDay] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
+  
+  // Dialog states
+  const [entryDialogOpen, setEntryDialogOpen] = useState(false)
+  const [entryDialogMode, setEntryDialogMode] = useState<"create" | "edit">("create")
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [entryToDelete, setEntryToDelete] = useState<number | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
+  
+  // Form state
+  const [entryForm, setEntryForm] = useState<TimetableEntry>({
+    id: 0,
+    lab_id: null as any,
+    day_of_week: 1,
+    time_slot_start: "09:00",
+    time_slot_end: "10:00",
+    notes: "",
+    is_active: true
+  })
 
   // Get user ID from localStorage on mount
   useEffect(() => {
@@ -140,6 +161,115 @@ export default function LabStaffTimetablePage() {
   const getLabName = (labId: number) => {
     const lab = labs.find(l => l.id === labId)
     return lab ? (lab.code === lab.name ? lab.name : `${lab.code} - ${lab.name}`) : 'Unknown Lab'
+  }
+
+  const resetEntryForm = () => setEntryForm({
+    id: 0,
+    lab_id: null as any,
+    day_of_week: 1,
+    time_slot_start: "09:00",
+    time_slot_end: "10:00",
+    notes: "",
+    is_active: true
+  })
+
+  const openCreateEntry = () => {
+    setEntryDialogMode("create")
+    setFormError(null)
+    resetEntryForm()
+    setEntryDialogOpen(true)
+  }
+
+  const openEditEntry = (entry: TimetableEntry) => {
+    setEntryDialogMode("edit")
+    setFormError(null)
+    const editForm = {
+      ...entry,
+      time_slot_start: entry.time_slot_start.substring(0, 5),
+      time_slot_end: entry.time_slot_end.substring(0, 5)
+    }
+    setEntryForm(editForm)
+    setEntryDialogOpen(true)
+  }
+
+  const saveEntry = async () => {
+    setFormError(null)
+    
+    if (!entryForm.lab_id || !entryForm.time_slot_start || !entryForm.time_slot_end) {
+      const msg = "Please select lab, start time and end time"
+      setFormError(msg)
+      toast({ title: "Cannot Save", description: msg, variant: "destructive" })
+      return
+    }
+
+    if (entryForm.time_slot_start >= entryForm.time_slot_end) {
+      const msg = "End time must be after start time"
+      setFormError(msg)
+      toast({ title: "Invalid Time", description: msg, variant: "destructive" })
+      return
+    }
+
+    try {
+      setLoading(true)
+      const url = "/api/lab-staff/timetable/entries"
+      const method = entryDialogMode === "create" ? "POST" : "PUT"
+      
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entryForm)
+      })
+
+      const data = await res.json()
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to save entry")
+      }
+
+      toast({ title: entryDialogMode === "create" ? "Entry created" : "Entry updated" })
+      setEntryDialogOpen(false)
+      loadTimetableEntries()
+    } catch (error: any) {
+      setFormError(error.message)
+      toast({ title: "Error", description: error.message, variant: "destructive" })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const confirmDelete = (id: number) => {
+    setEntryToDelete(id)
+    setDeleteDialogOpen(true)
+  }
+
+  const deleteEntry = async () => {
+    if (!entryToDelete) return
+
+    try {
+      setLoading(true)
+      const res = await fetch(`/api/lab-staff/timetable/entries?id=${entryToDelete}`, {
+        method: "DELETE"
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || "Failed to delete entry")
+      }
+
+      toast({ title: "Entry deleted" })
+      setDeleteDialogOpen(false)
+      setEntryToDelete(null)
+      loadTimetableEntries()
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getDayName = (dayOfWeek: number) => {
+    const day = DAYS_OF_WEEK.find(d => d.value === dayOfWeek)
+    return day ? day.label : "Unknown Day"
   }
 
   // Filter entries to only show assigned labs and other filters
@@ -238,11 +368,6 @@ export default function LabStaffTimetablePage() {
     return weekView
   }
 
-  const getDayName = (dayOfWeek: number) => {
-    const day = DAYS_OF_WEEK.find(d => d.value === dayOfWeek)
-    return day ? day.label : "Unknown Day"
-  }
-
   const weekView = getWeeklyView()
 
   if (loading && labs.length === 0) {
@@ -282,8 +407,8 @@ export default function LabStaffTimetablePage() {
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-full overflow-hidden">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold">Lab Timetable</h1>
-          <p className="text-muted-foreground text-sm sm:text-base">View lab schedules and daily bookings</p>
+          <h1 className="text-xl sm:text-2xl font-bold">Timetable Management</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">Simple lab scheduling - Day, Time, Lab details</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" asChild>
@@ -303,7 +428,7 @@ export default function LabStaffTimetablePage() {
           </TabsTrigger>
           <TabsTrigger value="manage">
             <Clock className="h-4 w-4 mr-2" />
-            All Entries
+            Manage Entries
           </TabsTrigger>
         </TabsList>
 
@@ -507,7 +632,15 @@ export default function LabStaffTimetablePage() {
         <TabsContent value="manage" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>All Timetable Entries</CardTitle>
+              <CardTitle className="flex items-center justify-between">
+                Timetable Entries
+                {selectedLab && labs.find(l => l.id.toString() === selectedLab)?.is_head_staff === 1 && (
+                  <Button onClick={openCreateEntry} size="sm">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Entry
+                  </Button>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {filteredEntries.length === 0 ? (
@@ -524,6 +657,7 @@ export default function LabStaffTimetablePage() {
                         <TableHead>Day</TableHead>
                         <TableHead>Time</TableHead>
                         <TableHead>Details</TableHead>
+                        <TableHead className="w-24">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -550,6 +684,32 @@ export default function LabStaffTimetablePage() {
                                 {entry.notes || 'Lab Session'}
                               </div>
                             </TableCell>
+                            <TableCell>
+                              {labs.find(l => l.id === entry.lab_id)?.is_head_staff === 1 ? (
+                                <div className="flex gap-1">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => openEditEntry(entry)}
+                                    className="h-7 w-7 p-0"
+                                  >
+                                    <Edit className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => confirmDelete(entry.id!)}
+                                    className="h-7 w-7 p-0"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="text-xs text-muted-foreground">
+                                  View only
+                                </div>
+                              )}
+                            </TableCell>
                           </TableRow>
                         ))}
                     </TableBody>
@@ -560,6 +720,117 @@ export default function LabStaffTimetablePage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Entry Create/Edit Dialog */}
+      <Dialog open={entryDialogOpen} onOpenChange={(open) => {
+        setEntryDialogOpen(open)
+        if (!open) {
+          setFormError(null)
+        }
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {entryDialogMode === "create" ? "Add Timetable Entry" : "Edit Timetable Entry"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+            <div>
+              <Label className="text-xs">Lab <span className="text-red-600">*</span></Label>
+              <Select 
+                value={entryForm.lab_id ? entryForm.lab_id.toString() : ""} 
+                onValueChange={(v) => { setFormError(null); setEntryForm(s => ({ ...s, lab_id: parseInt(v) })) }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Lab" />
+                </SelectTrigger>
+                <SelectContent>
+                  {labs.map(lab => (
+                    <SelectItem key={lab.id} value={lab.id.toString()}>
+                      {lab.code === lab.name ? lab.name : `${lab.code} - ${lab.name}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Day <span className="text-red-600">*</span></Label>
+              <Select 
+                value={entryForm.day_of_week.toString()} 
+                onValueChange={(v) => { setFormError(null); setEntryForm(s => ({ ...s, day_of_week: parseInt(v) })) }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Day" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DAYS_OF_WEEK.map(day => (
+                    <SelectItem key={day.value} value={day.value.toString()}>
+                      {day.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Start Time <span className="text-red-600">*</span></Label>
+              <Input 
+                type="time"
+                value={entryForm.time_slot_start} 
+                onChange={(e) => { setFormError(null); setEntryForm(s => ({ ...s, time_slot_start: e.target.value })) }}
+                className="w-full"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">End Time <span className="text-red-600">*</span></Label>
+              <Input 
+                type="time"
+                value={entryForm.time_slot_end} 
+                onChange={(e) => { setFormError(null); setEntryForm(s => ({ ...s, time_slot_end: e.target.value })) }}
+                className="w-full"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Label className="text-xs">Details</Label>
+              <Input 
+                value={entryForm.notes || ""} 
+                onChange={(e) => setEntryForm(s => ({ ...s, notes: e.target.value }))} 
+                placeholder="e.g. Programming Lab, Data Structures Session"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEntryDialogOpen(false)}>
+              Cancel
+            </Button>
+            {formError ? (
+              <div aria-live="polite" className={`text-sm mr-auto ${formError.startsWith('✓') ? 'text-green-600 font-medium' : 'text-red-600'}`}>
+                {formError}
+              </div>
+            ) : null}
+            <Button onClick={saveEntry} disabled={loading || !entryForm.lab_id || entryForm.lab_id <= 0 || !entryForm.time_slot_start || !entryForm.time_slot_end}>
+              {loading ? (entryDialogMode === "create" ? "Creating…" : "Saving…") : (entryDialogMode === "create" ? "Create" : "Save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Timetable Entry</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this timetable entry? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteEntry} disabled={loading}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
