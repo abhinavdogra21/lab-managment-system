@@ -123,8 +123,11 @@ export default function LabStaffTimetablePage() {
       const res = await fetch("/api/lab-staff/labs")
       if (res.ok) {
         const data = await res.json()
-        console.log('Lab staff labs loaded:', data.labs)
-        setLabs(data.labs || [])
+        // Deduplicate labs by ID to prevent React key conflicts
+        const uniqueLabs = Array.from(
+          new Map((data.labs || []).map((lab: Lab) => [lab.id, lab])).values()
+        )
+        setLabs(uniqueLabs)
       } else {
         console.error('Failed to load labs, status:', res.status)
         toast({
@@ -150,7 +153,6 @@ export default function LabStaffTimetablePage() {
       const res = await fetch("/api/lab-staff/timetable/entries")
       if (res.ok) {
         const data = await res.json()
-        console.log('Timetable entries loaded:', data.entries?.length || 0)
         setTimetableEntries(data.entries || [])
       }
     } catch (error) {
@@ -285,13 +287,6 @@ export default function LabStaffTimetablePage() {
     
     return labMatch && dayMatch && searchMatch
   })
-
-  console.log('Filtered entries:', filteredEntries.length, 'Selected lab:', selectedLab, 'Assigned labs:', labs.map(l => l.id))
-
-  // Debug effect
-  useEffect(() => {
-    console.log('State update - Labs:', labs.length, 'Timetable entries:', timetableEntries.length, 'Filtered:', filteredEntries.length)
-  }, [labs, timetableEntries, filteredEntries])
 
   // Group entries by day and time for grid view
   const getWeeklyView = () => {
