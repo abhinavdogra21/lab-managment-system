@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { Clock, CheckCircle, XCircle, Users, Building, Calendar, Loader2, ChevronDown, ChevronUp } from "lucide-react"
+import { formatDate } from "@/lib/utils"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -266,7 +267,7 @@ export default function TNPMyRequestsPage() {
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Date:</span>
-            <span className="font-medium">{new Date(request.date).toLocaleDateString()}</span>
+            <span className="font-medium">{formatDate(request.date)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Time:</span>
@@ -369,13 +370,13 @@ export default function TNPMyRequestsPage() {
                       {approval.lab_staff_approved_at && (
                         <p className="flex items-center gap-1">
                           <CheckCircle className="h-3 w-3 text-green-600" />
-                          Lab Staff: {formatName(approval.lab_staff_name, approval.lab_staff_salutation)} - {new Date(approval.lab_staff_approved_at).toLocaleDateString()}
+                          Lab Staff: {formatName(approval.lab_staff_name, approval.lab_staff_salutation)} - {formatDate(approval.lab_staff_approved_at)}
                         </p>
                       )}
                       {approval.hod_approved_at && (
                         <p className="flex items-center gap-1">
                           <CheckCircle className="h-3 w-3 text-green-600" />
-                          {getAuthorityLabel(request)}: {formatName(approval.hod_name, approval.hod_salutation)} - {new Date(approval.hod_approved_at).toLocaleDateString()}
+                          {getAuthorityLabel(request)}: {formatName(approval.hod_name, approval.hod_salutation)} - {formatDate(approval.hod_approved_at)}
                         </p>
                       )}
                       {!approval.lab_staff_approved_at && (
@@ -441,19 +442,19 @@ export default function TNPMyRequestsPage() {
                       {labStaffApproved?.completed_at && (
                         <p className="flex items-center gap-1">
                           <CheckCircle className="h-3 w-3 text-green-600" />
-                          Lab Staff: {labStaffApproved.user_name} - {new Date(labStaffApproved.completed_at).toLocaleDateString()}
+                          Lab Staff: {labStaffApproved.user_name} - {formatDate(labStaffApproved.completed_at)}
                         </p>
                       )}
                       {hodApproved?.completed_at && (
                         <p className="flex items-center gap-1">
                           <CheckCircle className="h-3 w-3 text-green-600" />
-                          HOD: {hodApproved.user_name} - {new Date(hodApproved.completed_at).toLocaleDateString()}
+                          HOD: {hodApproved.user_name} - {formatDate(hodApproved.completed_at)}
                         </p>
                       )}
                       {labCoordApproved?.completed_at && (
                         <p className="flex items-center gap-1">
                           <CheckCircle className="h-3 w-3 text-green-600" />
-                          Lab Coordinator: {labCoordApproved.user_name} - {new Date(labCoordApproved.completed_at).toLocaleDateString()}
+                          Lab Coordinator: {labCoordApproved.user_name} - {formatDate(labCoordApproved.completed_at)}
                         </p>
                       )}
                       {!labStaffApproved?.completed_at && (
@@ -527,7 +528,7 @@ export default function TNPMyRequestsPage() {
                     </div>
                     {st?.completed_at && (
                       <div className="text-xs text-gray-500 text-center mt-1">
-                        {new Date(st.completed_at).toLocaleDateString()}
+                        {formatDate(st.completed_at)}
                       </div>
                     )}
                   </div>
@@ -723,7 +724,7 @@ export default function TNPMyRequestsPage() {
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
-                  {new Date(request.date).toLocaleDateString()}
+                  {formatDate(request.date)}
                 </span>
                 <span>{formatTime(request.start_time)} - {formatTime(request.end_time)}</span>
               </div>

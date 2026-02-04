@@ -590,13 +590,14 @@ export async function POST(
         }).catch(err => console.error('Email send failed:', err))
         
         // If requester has a faculty supervisor and status reached beyond pending_faculty, notify them too
+        // BUT only if faculty email is different from student email (avoid duplicate)
         if (updatedRequest.faculty_name && updatedRequest.booking_date) {
           const facultyResult = await db.query(
             'SELECT email, salutation FROM users WHERE id = ?',
             [updatedRequest.faculty_supervisor_id]
           )
           
-          if (facultyResult.rows.length > 0) {
+          if (facultyResult.rows.length > 0 && facultyResult.rows[0].email !== updatedRequest.student_email) {
             const facultyEmailData = emailTemplates.labBookingRejected({
               requesterName: facultyResult.rows[0].name || updatedRequest.faculty_name,
               requesterSalutation: facultyResult.rows[0].salutation,

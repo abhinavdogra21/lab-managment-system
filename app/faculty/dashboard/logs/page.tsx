@@ -531,7 +531,7 @@ export default function FacultyLogsPage() {
     doc.setFont('helvetica', 'bold')
     doc.text('The LNM Institute of Information Technology, Jaipur', 105, 20, { align: 'center' })
     doc.setFontSize(14)
-    doc.text('Component Issue/Return Form', 105, 27, { align: 'center' })
+    doc.text('Component Issue/Return Report', 105, 27, { align: 'center' })
     
     // Horizontal line
     doc.setLineWidth(0.5)
@@ -811,7 +811,7 @@ export default function FacultyLogsPage() {
     doc.setFont('helvetica', 'bold')
     doc.text('The LNM Institute of Information Technology, Jaipur', 105, 20, { align: 'center' })
     doc.setFontSize(14)
-    doc.text('Lab Booking Approval Form', 105, 27, { align: 'center' })
+    doc.text('Lab Booking Approval Report', 105, 27, { align: 'center' })
     
     // Horizontal line
     doc.setLineWidth(0.5)

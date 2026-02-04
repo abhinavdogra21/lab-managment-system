@@ -142,10 +142,24 @@ export async function GET(req: NextRequest) {
       const bookingResult = await db.query(sql, params)
       
       // Process logs to extract booking details from snapshot
-      results.bookingLogs = bookingResult.rows.map((log: any) => {
+      // For multi-lab bookings, fetch individual lab approval status
+      const bookingLogsWithStatus = await Promise.all(bookingResult.rows.map(async (log: any) => {
         const snapshot = typeof log.booking_snapshot === 'string'
           ? JSON.parse(log.booking_snapshot)
           : log.booking_snapshot
+        
+        // For multi-lab bookings, get the specific lab's status
+        let individualLabStatus = snapshot?.status || 'approved'
+        if (snapshot?.is_multi_lab) {
+          const multiLabStatus = await db.query(
+            `SELECT status FROM multi_lab_approvals 
+             WHERE booking_request_id = ? AND lab_id = ?`,
+            [log.booking_id, log.lab_id]
+          )
+          if (multiLabStatus.rows.length > 0) {
+            individualLabStatus = multiLabStatus.rows[0].status
+          }
+        }
         
         return {
           id: log.id,
@@ -160,7 +174,8 @@ export async function GET(req: NextRequest) {
           booking_date: snapshot?.booking_date || null,
           start_time: snapshot?.start_time || null,
           end_time: snapshot?.end_time || null,
-          status: snapshot?.status || 'approved',
+          status: individualLabStatus, // Use individual lab status for multi-lab bookings
+          is_multi_lab: snapshot?.is_multi_lab || false,
           faculty_supervisor_name: snapshot?.faculty_name || null,
           faculty_supervisor_salutation: snapshot?.faculty_salutation || 'none',
           faculty_approved_at: snapshot?.faculty_approved_at || null,
@@ -177,7 +192,9 @@ export async function GET(req: NextRequest) {
           final_approver_role: snapshot?.final_approver_role || null,
           created_at: log.created_at,
         }
-      })
+      }))
+      
+      results.bookingLogs = bookingLogsWithStatus
     }
 
     // Fetch component logs with proper snapshot extraction

@@ -122,10 +122,24 @@ export async function GET(request: NextRequest) {
     }
 
     // Parse booking_snapshot JSON for each log
-    const logs = logsRes.rows.map((row: any) => {
+    // For multi-lab bookings, check individual lab status
+    const logs = await Promise.all(logsRes.rows.map(async (row: any) => {
       const snapshot = typeof row.booking_snapshot === 'string' 
         ? JSON.parse(row.booking_snapshot) 
         : row.booking_snapshot
+      
+      // For multi-lab bookings, get the specific lab's status
+      let individualLabStatus = snapshot?.status || 'approved'
+      if (snapshot?.is_multi_lab) {
+        const multiLabStatus = await db.query(
+          `SELECT status FROM multi_lab_approvals 
+           WHERE booking_request_id = ? AND lab_id = ?`,
+          [row.booking_id, row.lab_id]
+        )
+        if (multiLabStatus.rows.length > 0) {
+          individualLabStatus = multiLabStatus.rows[0].status
+        }
+      }
       
       return {
         id: row.booking_id,
@@ -137,7 +151,8 @@ export async function GET(request: NextRequest) {
         booking_date: snapshot?.booking_date || null,
         start_time: snapshot?.start_time || null,
         end_time: snapshot?.end_time || null,
-        status: snapshot?.status || 'approved',
+        status: individualLabStatus, // Use individual lab status for multi-lab bookings
+        is_multi_lab: snapshot?.is_multi_lab || false,
         created_at: snapshot?.created_at || row.created_at,
         lab_coordinator_approved_at: snapshot?.lab_coordinator_approved_at || (row.action === 'approved_by_lab_coordinator' ? row.created_at : null),
         hod_approved_at: snapshot?.hod_approved_at || (row.action === 'approved_by_hod' ? row.created_at : null),
@@ -161,7 +176,7 @@ export async function GET(request: NextRequest) {
         current_lab_coordinator_email: row.current_lab_coordinator_email,
         action_description: row.action_description,
       }
-    })
+    }))
 
     return NextResponse.json({ logs: logs || [] })
   } catch (error) {

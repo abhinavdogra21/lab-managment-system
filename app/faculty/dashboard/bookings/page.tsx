@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { Clock, CheckCircle, XCircle, User, Users, Building, Eye, Calendar, ChevronDown, ChevronUp, Filter, AlertCircle, Loader2 } from "lucide-react"
+import { formatDate } from "@/lib/utils"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -308,7 +309,7 @@ export default function FacultyBookingsPage() {
           <div className="space-y-6">
             <div className="text-sm space-y-1 p-4 bg-gray-50 rounded-lg">
               <p><span className="font-medium">Lab:</span> {request.lab_name}</p>
-              <p><span className="font-medium">Date:</span> {new Date(request.date).toLocaleDateString()}</p>
+              <p><span className="font-medium">Date:</span> {formatDate(request.date)}</p>
               <p><span className="font-medium">Time:</span> {formatTime(request.start_time)} - {formatTime(request.end_time)}</p>
             </div>
 
@@ -407,13 +408,13 @@ export default function FacultyBookingsPage() {
                           {approval.lab_staff_approved_at && (
                             <p className="flex items-center gap-1">
                               <CheckCircle className="h-3 w-3 text-green-600" />
-                              Lab Staff: {formatName(approval.lab_staff_name, approval.lab_staff_salutation)} - {new Date(approval.lab_staff_approved_at).toLocaleDateString()}
+                              Lab Staff: {formatName(approval.lab_staff_name, approval.lab_staff_salutation)} - {formatDate(approval.lab_staff_approved_at)}
                             </p>
                           )}
                           {approval.hod_approved_at && (
                             <p className="flex items-center gap-1">
                               <CheckCircle className="h-3 w-3 text-green-600" />
-                              {getAuthorityLabel(request)}: {formatName(approval.hod_name, approval.hod_salutation)} - {new Date(approval.hod_approved_at).toLocaleDateString()}
+                              {getAuthorityLabel(request)}: {formatName(approval.hod_name, approval.hod_salutation)} - {formatDate(approval.hod_approved_at)}
                             </p>
                           )}
                           {!approval.lab_staff_approved_at && 
@@ -478,19 +479,19 @@ export default function FacultyBookingsPage() {
                           {labStaffApproved?.completed_at && (
                             <p className="flex items-center gap-1">
                               <CheckCircle className="h-3 w-3 text-green-600" />
-                              Lab Staff: {labStaffApproved.user_name} - {new Date(labStaffApproved.completed_at).toLocaleDateString()}
+                              Lab Staff: {labStaffApproved.user_name} - {formatDate(labStaffApproved.completed_at)}
                             </p>
                           )}
                           {hodApproved?.completed_at && (
                             <p className="flex items-center gap-1">
                               <CheckCircle className="h-3 w-3 text-green-600" />
-                              HOD: {hodApproved.user_name} - {new Date(hodApproved.completed_at).toLocaleDateString()}
+                              HOD: {hodApproved.user_name} - {formatDate(hodApproved.completed_at)}
                             </p>
                           )}
                           {labCoordApproved?.completed_at && (
                             <p className="flex items-center gap-1">
                               <CheckCircle className="h-3 w-3 text-green-600" />
-                              Lab Coordinator: {labCoordApproved.user_name} - {new Date(labCoordApproved.completed_at).toLocaleDateString()}
+                              Lab Coordinator: {labCoordApproved.user_name} - {formatDate(labCoordApproved.completed_at)}
                             </p>
                           )}
                           {!labStaffApproved?.completed_at && request.status !== 'pending_faculty' && request.status !== 'approved' && request.status !== 'rejected' && (
@@ -554,7 +555,7 @@ export default function FacultyBookingsPage() {
                       </div>
                       {st?.completed_at && (
                         <div className="text-xs text-gray-500 text-center mt-1">
-                          {new Date(st.completed_at).toLocaleDateString()}
+                          {formatDate(st.completed_at)}
                         </div>
                       )}
                     </div>
@@ -685,9 +686,9 @@ export default function FacultyBookingsPage() {
                       {getOverallStatusBadge(request)}
                     </div>
                     <div className="text-sm text-muted-foreground grid grid-cols-2 gap-1">
-                      <p>Date: {new Date(request.date).toLocaleDateString()}</p>
+                      <p>Date: {formatDate(request.date)}</p>
                       <p>Time: {formatTime(request.start_time)} - {formatTime(request.end_time)}</p>
-                      <p>Submitted: {new Date(request.created_at).toLocaleDateString()}</p>
+                      <p>Submitted: {formatDate(request.created_at)}</p>
                     </div>
                     <p className="text-sm mt-2">{request.purpose}</p>
                   </div>

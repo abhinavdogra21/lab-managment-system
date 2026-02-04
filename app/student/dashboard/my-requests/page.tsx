@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { Clock, CheckCircle, XCircle, User, Users, Building, Eye, Calendar, ArrowRight, Filter, ChevronUp, ChevronDown, CheckCircle2 } from "lucide-react"
+import { formatDate } from "@/lib/utils"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -418,13 +419,13 @@ export default function MyRequestsPage() {
                         {approval.lab_staff_approved_at && (
                           <p className="flex items-center gap-1">
                             <CheckCircle2 className="h-3 w-3 text-green-600" />
-                            Lab Staff: {approval.lab_staff_name} - {new Date(approval.lab_staff_approved_at).toLocaleDateString()}
+                            Lab Staff: {approval.lab_staff_name} - {formatDate(approval.lab_staff_approved_at)}
                           </p>
                         )}
                         {approval.hod_approved_at && (
                           <p className="flex items-center gap-1">
                             <CheckCircle2 className="h-3 w-3 text-green-600" />
-                            {getAuthorityLabel(request)}: {approval.hod_name} - {new Date(approval.hod_approved_at).toLocaleDateString()}
+                            {getAuthorityLabel(request)}: {approval.hod_name} - {formatDate(approval.hod_approved_at)}
                           </p>
                         )}
                         {!approval.lab_staff_approved_at && request.status !== 'pending_faculty' && (
@@ -497,13 +498,13 @@ export default function MyRequestsPage() {
                       {labStaffApproved?.completed_at && (
                         <p className="flex items-center gap-1">
                           <CheckCircle2 className="h-3 w-3 text-green-600" />
-                          Lab Staff: {labStaffApproved.user_name} - {new Date(labStaffApproved.completed_at).toLocaleDateString()}
+                          Lab Staff: {labStaffApproved.user_name} - {formatDate(labStaffApproved.completed_at)}
                         </p>
                       )}
                       {hodApproved?.completed_at && (
                         <p className="flex items-center gap-1">
                           <CheckCircle2 className="h-3 w-3 text-green-600" />
-                          {getAuthorityLabel(request)}: {hodApproved.user_name} - {new Date(hodApproved.completed_at).toLocaleDateString()}
+                          {getAuthorityLabel(request)}: {hodApproved.user_name} - {formatDate(hodApproved.completed_at)}
                         </p>
                       )}
                       {!labStaffApproved?.completed_at && request.status !== 'pending_faculty' && (
@@ -598,7 +599,7 @@ export default function MyRequestsPage() {
                   {/* Show completion details */}
                   {timelineStep?.completed_at && (
                     <div className="text-xs text-gray-500 text-center mt-1">
-                      {new Date(timelineStep.completed_at).toLocaleDateString()}
+                      {formatDate(timelineStep.completed_at)}
                     </div>
                   )}
                 </div>
@@ -800,9 +801,9 @@ export default function MyRequestsPage() {
                           {request.responsible_person_email && ` (${request.responsible_person_email})`}
                         </p>
                       )}
-                      <p>Date: {new Date(request.date).toLocaleDateString()}</p>
+                      <p>Date: {formatDate(request.date)}</p>
                       <p>Time: {formatTime(request.start_time)} - {formatTime(request.end_time)}</p>
-                      <p>Submitted: {new Date(request.created_at).toLocaleDateString()}</p>
+                      <p>Submitted: {formatDate(request.created_at)}</p>
                     </div>
                     <p className="text-sm mt-2">{request.purpose}</p>
                   </div>
