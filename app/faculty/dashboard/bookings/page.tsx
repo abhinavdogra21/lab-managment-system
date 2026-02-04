@@ -43,6 +43,8 @@ interface BookingWithTimeline {
   purpose: string
   status: string
   created_at: string
+  highest_approval_authority?: 'hod' | 'lab_coordinator'
+  final_approver_role?: 'hod' | 'lab_coordinator' | null
   is_multi_lab?: number | boolean
   multi_lab_approvals?: Array<{
     lab_id: number
@@ -236,14 +238,45 @@ export default function FacultyBookingsPage() {
     }
   }
 
+  // Helper function to determine the correct authority label for completed approvals
+  const getAuthorityLabel = (request: BookingWithTimeline): 'Lab Coordinator' | 'HOD' => {
+    // Check timeline data first to see what actually happened
+    const hasLabCoordApproval = request.timeline.some(t => t.step_name === 'Lab Coordinator Approval' && t.step_status === 'completed')
+    const hasHODApproval = request.timeline.some(t => t.step_name === 'HOD Approval' && t.step_status === 'completed')
+    
+    if (hasLabCoordApproval) return 'Lab Coordinator'
+    if (hasHODApproval) return 'HOD'
+    
+    // For pending requests, use current setting
+    return request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'
+  }
+
   const TimelineView = ({ request }: { request: BookingWithTimeline }) => {
     // Faculty-initiated bookings skip the Faculty Approval step entirely
     const hasFacultyStep = request.status === 'pending_faculty' || request.timeline.some(t => t.step_name.includes('Faculty Approval'))
-    // Use "Recommendation" for Faculty and Lab Staff, "Approval" only for HOD
+    
+    // Determine the correct label for final approval based on actual timeline data
+    // Check if Lab Coordinator or HOD actually approved in the timeline
+    const hasLabCoordApproval = request.timeline.some(t => t.step_name === 'Lab Coordinator Approval' && t.step_status === 'completed')
+    const hasHODApproval = request.timeline.some(t => t.step_name === 'HOD Approval' && t.step_status === 'completed')
+    
+    let finalApprovalLabel: string
+    if (hasLabCoordApproval) {
+      finalApprovalLabel = 'Lab Coordinator Approval'
+    } else if (hasHODApproval) {
+      finalApprovalLabel = 'HOD Approval'
+    } else {
+      // For pending requests, use current setting
+      finalApprovalLabel = request.highest_approval_authority === 'lab_coordinator' 
+        ? 'Lab Coordinator Approval' 
+        : 'HOD Approval'
+    }
+    
+    // Use "Recommendation" for Faculty and Lab Staff, "Approval" only for HOD/Lab Coordinator
     const steps = [
       ...(hasFacultyStep ? [{ key: 'Faculty Recommendation', apiKey: 'Faculty Approval', icon: User }] : []),
       { key: 'Lab Staff Recommendation', apiKey: 'Lab Staff Approval', icon: Users },
-      { key: 'HOD Approval', apiKey: 'HOD Approval', icon: Building },
+      { key: finalApprovalLabel, apiKey: 'HOD Approval', icon: Building },
     ]
     const findStep = (key: string) => request.timeline.find(t => t.step_name.includes(key))
     const iconForStatus = (s?: string) => s === 'completed' ? 'completed' : s === 'pending' ? 'pending' : s === 'rejected' ? 'rejected' : 'waiting'
@@ -380,7 +413,7 @@ export default function FacultyBookingsPage() {
                           {approval.hod_approved_at && (
                             <p className="flex items-center gap-1">
                               <CheckCircle className="h-3 w-3 text-green-600" />
-                              {request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}: {formatName(approval.hod_name, approval.hod_salutation)} - {new Date(approval.hod_approved_at).toLocaleDateString()}
+                              {getAuthorityLabel(request)}: {formatName(approval.hod_name, approval.hod_salutation)} - {new Date(approval.hod_approved_at).toLocaleDateString()}
                             </p>
                           )}
                           {!approval.lab_staff_approved_at && 
@@ -504,8 +537,8 @@ export default function FacultyBookingsPage() {
                             {request.multi_lab_approvals.filter(a => a.lab_staff_approved_at).length}/{request.multi_lab_approvals.length}
                           </p>
                         )}
-                        {/* Show progress for multi-lab HOD step */}
-                        {(request.is_multi_lab === 1 || request.is_multi_lab === true) && request.multi_lab_approvals && s.key === 'HOD Approval' && (
+                        {/* Show progress for multi-lab HOD/Lab Coordinator step */}
+                        {(request.is_multi_lab === 1 || request.is_multi_lab === true) && request.multi_lab_approvals && (s.key === 'HOD Approval' || s.key === 'Lab Coordinator Approval') && (
                           <p className="text-xs text-blue-600 font-medium">
                             {request.multi_lab_approvals.filter(a => a.hod_approved_at).length}/{request.multi_lab_approvals.length}
                           </p>
@@ -536,11 +569,19 @@ export default function FacultyBookingsPage() {
               {request.timeline.some(t => t.remarks) && (
                 <>
                   <h4 className="text-sm font-medium">Remarks:</h4>
-                  {request.timeline.filter(t => t.remarks).map((step, index) => (
-                    <div key={index} className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
-                      <span className="font-medium">{step.step_name}:</span> {step.remarks}
-                    </div>
-                  ))}
+                  {request.timeline.filter(t => t.remarks).map((step, index) => {
+                    // Display the correct label for HOD/Lab Coordinator based on who actually approved
+                    const displayStepName = step.step_name.includes('HOD Approval') || step.step_name.includes('Lab Coordinator Approval')
+                      ? (getAuthorityLabel(request) === 'Lab Coordinator'
+                        ? step.step_name.replace('HOD Approval', 'Lab Coordinator Approval')
+                        : step.step_name.replace('Lab Coordinator Approval', 'HOD Approval'))
+                      : step.step_name
+                    return (
+                      <div key={index} className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
+                        <span className="font-medium">{displayStepName}:</span> {step.remarks}
+                      </div>
+                    )
+                  })}
                 </>
               )}
               
@@ -564,7 +605,7 @@ export default function FacultyBookingsPage() {
                           )}
                           {approval.hod_remarks && (
                             <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
-                              <span className="font-medium">{request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}:</span> {approval.hod_remarks}
+                              <span className="font-medium">{getAuthorityLabel(request)}:</span> {approval.hod_remarks}
                             </div>
                           )}
                         </div>

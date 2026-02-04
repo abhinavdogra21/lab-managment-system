@@ -63,8 +63,8 @@ interface BookingWithTimeline {
     hod_remarks: string | null
     responsible_person_name?: string
     responsible_person_email?: string
-  }>
-  highest_approval_authority?: 'hod' | 'lab_coordinator'
+  }>  highest_approval_authority?: 'hod' | 'lab_coordinator'
+  final_approver_role?: 'hod' | 'lab_coordinator' | null
   timeline: TimelineStep[]
 }
 
@@ -232,13 +232,13 @@ export default function TNPMyRequestsPage() {
   const TimelineView = ({ request }: { request: BookingWithTimeline }) => {
     // Others-initiated bookings don't have Faculty Approval step
     // Use "Recommendation" for Lab Staff, "Approval" only for HOD/Lab Coordinator
-    const finalApprovalLabel = request.highest_approval_authority === 'lab_coordinator' 
+    const finalApprovalLabel = getAuthorityLabel(request) === 'Lab Coordinator'
       ? 'Lab Coordinator Approval' 
       : 'HOD Approval'
     
     const steps = [
       { key: 'Lab Staff Recommendation', apiKey: 'Lab Staff Approval', icon: Users },
-      { key: finalApprovalLabel, apiKey: request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator Approval' : 'HOD Approval', icon: Building },
+      { key: finalApprovalLabel, apiKey: getAuthorityLabel(request) === 'Lab Coordinator' ? 'Lab Coordinator Approval' : 'HOD Approval', icon: Building },
     ]
     
     const findStep = (key: string) => request.timeline.find(t => t.step_name.includes(key))
@@ -375,7 +375,7 @@ export default function TNPMyRequestsPage() {
                       {approval.hod_approved_at && (
                         <p className="flex items-center gap-1">
                           <CheckCircle className="h-3 w-3 text-green-600" />
-                          {request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}: {formatName(approval.hod_name, approval.hod_salutation)} - {new Date(approval.hod_approved_at).toLocaleDateString()}
+                          {getAuthorityLabel(request)}: {formatName(approval.hod_name, approval.hod_salutation)} - {new Date(approval.hod_approved_at).toLocaleDateString()}
                         </p>
                       )}
                       {!approval.lab_staff_approved_at && (
@@ -603,7 +603,7 @@ export default function TNPMyRequestsPage() {
                             <div className="flex items-start gap-2">
                               <Building className="h-4 w-4 mt-0.5 flex-shrink-0" />
                               <div className="flex-1">
-                                <span className="font-medium text-sm">{request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}:</span>
+                                <span className="font-medium text-sm">{getAuthorityLabel(request)}:</span>
                                 <p className="text-sm text-muted-foreground">{approval.hod_remarks}</p>
                               </div>
                             </div>

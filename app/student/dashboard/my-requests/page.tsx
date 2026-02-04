@@ -44,6 +44,7 @@ interface BookingWithTimeline {
   status: string
   created_at: string
   highest_approval_authority?: 'hod' | 'lab_coordinator'
+  final_approver_role?: 'hod' | 'lab_coordinator' | null
   is_multi_lab?: boolean | number
   responsible_person_name?: string
   responsible_person_email?: string
@@ -273,9 +274,22 @@ export default function MyRequestsPage() {
     }
   }
 
+  // Helper function to determine the correct authority label for completed approvals
+  const getAuthorityLabel = (request: BookingWithTimeline): 'Lab Coordinator' | 'HOD' => {
+    // Check timeline data first to see what actually happened
+    const hasLabCoordApproval = request.timeline.some(t => t.step_name === 'Lab Coordinator Approval' && t.step_status === 'completed')
+    const hasHODApproval = request.timeline.some(t => t.step_name === 'HOD Approval' && t.step_status === 'completed')
+    
+    if (hasLabCoordApproval) return 'Lab Coordinator'
+    if (hasHODApproval) return 'HOD'
+    
+    // For pending requests, use current setting
+    return request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'
+  }
+
   const TimelineView = ({ request }: { request: BookingWithTimeline }) => {
-    // Determine the approval authority label based on department settings
-    const approvalAuthorityLabel = request.highest_approval_authority === 'lab_coordinator' 
+    // Determine the approval authority label based on actual timeline data
+    const approvalAuthorityLabel = getAuthorityLabel(request) === 'Lab Coordinator'
       ? 'Lab Coordinator Approval' 
       : 'HOD Approval'
     
@@ -410,7 +424,7 @@ export default function MyRequestsPage() {
                         {approval.hod_approved_at && (
                           <p className="flex items-center gap-1">
                             <CheckCircle2 className="h-3 w-3 text-green-600" />
-                            {request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}: {approval.hod_name} - {new Date(approval.hod_approved_at).toLocaleDateString()}
+                            {getAuthorityLabel(request)}: {approval.hod_name} - {new Date(approval.hod_approved_at).toLocaleDateString()}
                           </p>
                         )}
                         {!approval.lab_staff_approved_at && request.status !== 'pending_faculty' && (
@@ -489,7 +503,7 @@ export default function MyRequestsPage() {
                       {hodApproved?.completed_at && (
                         <p className="flex items-center gap-1">
                           <CheckCircle2 className="h-3 w-3 text-green-600" />
-                          {request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}: {hodApproved.user_name} - {new Date(hodApproved.completed_at).toLocaleDateString()}
+                          {getAuthorityLabel(request)}: {hodApproved.user_name} - {new Date(hodApproved.completed_at).toLocaleDateString()}
                         </p>
                       )}
                       {!labStaffApproved?.completed_at && request.status !== 'pending_faculty' && (
@@ -626,7 +640,7 @@ export default function MyRequestsPage() {
                         )}
                         {approval.hod_remarks && (
                           <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
-                            <span className="font-medium">{request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}:</span> {approval.hod_remarks}
+                            <span className="font-medium">{getAuthorityLabel(request)}:</span> {approval.hod_remarks}
                           </div>
                         )}
                       </div>

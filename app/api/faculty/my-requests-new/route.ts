@@ -40,7 +40,8 @@ export async function GET(request: NextRequest) {
         f.name as faculty_approver_name,
         s.name as staff_approver_name,
         h.name as hod_approver_name,
-        d.highest_approval_authority
+        d.highest_approval_authority,
+        br.final_approver_role
       FROM booking_requests br
       LEFT JOIN labs l ON br.lab_id = l.id
       LEFT JOIN departments d ON l.department_id = d.id
@@ -163,9 +164,21 @@ export async function GET(request: NextRequest) {
       }
 
       // HOD/Lab Coordinator approval
-      const approvalAuthorityLabel = booking.highest_approval_authority === 'lab_coordinator' 
-        ? 'Lab Coordinator Approval' 
-        : 'HOD Approval'
+      // For completed approvals, use final_approver_role to maintain historical accuracy
+      // For pending approvals, use current highest_approval_authority
+      let approvalAuthorityLabel = 'HOD Approval'
+      
+      if (booking.hod_approved_at && booking.final_approver_role) {
+        // Completed approval - use historical data
+        approvalAuthorityLabel = booking.final_approver_role === 'lab_coordinator' 
+          ? 'Lab Coordinator Approval' 
+          : 'HOD Approval'
+      } else {
+        // Pending or no final_approver_role - use current setting
+        approvalAuthorityLabel = booking.highest_approval_authority === 'lab_coordinator' 
+          ? 'Lab Coordinator Approval' 
+          : 'HOD Approval'
+      }
       
       if (booking.status === 'pending_hod') {
         timeline.push({
