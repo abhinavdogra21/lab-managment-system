@@ -46,7 +46,9 @@ export async function GET(req: NextRequest) {
       FROM lab_booking_activity_logs lbal
       LEFT JOIN users requester ON requester.id = JSON_EXTRACT(lbal.booking_snapshot, '$.requested_by')
       LEFT JOIN labs ON labs.id = lbal.lab_id
+      LEFT JOIN multi_lab_approvals mla ON mla.booking_request_id = lbal.booking_id AND mla.lab_id = lbal.lab_id
       WHERE lbal.action IN ('approved_by_hod', 'approved_by_lab_coordinator')
+        AND (mla.status IS NULL OR mla.status NOT IN ('rejected', 'withdrawn'))
     `;
 
     const params: any[] = [];

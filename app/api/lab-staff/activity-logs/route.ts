@@ -75,6 +75,7 @@ export async function GET(req: NextRequest) {
 
     // Fetch booking logs with proper snapshot extraction
     // Only fetch final approval logs (approved_by_hod or approved_by_lab_coordinator)
+    // For multi-lab bookings, exclude rejected labs
     if (type === "booking" || type === "all") {
       let sql = `
         SELECT 
@@ -104,11 +105,14 @@ export async function GET(req: NextRequest) {
             JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_role')),
             requester.role,
             'student'
-          ) as requester_role
+          ) as requester_role,
+          mla.status as multi_lab_status
         FROM lab_booking_activity_logs lbal
         LEFT JOIN users requester ON requester.id = JSON_EXTRACT(lbal.booking_snapshot, '$.requested_by')
         LEFT JOIN labs ON labs.id = lbal.lab_id
+        LEFT JOIN multi_lab_approvals mla ON mla.booking_request_id = lbal.booking_id AND mla.lab_id = lbal.lab_id
         WHERE lbal.action IN ('approved_by_hod', 'approved_by_lab_coordinator')
+          AND (mla.status IS NULL OR mla.status NOT IN ('rejected', 'withdrawn'))
       `
       
       const params: any[] = []

@@ -80,7 +80,10 @@ export async function GET(request: NextRequest) {
          LEFT JOIN labs l ON lbal.lab_id = l.id
          LEFT JOIN departments d ON l.department_id = d.id
          LEFT JOIN users lc_user ON d.lab_coordinator_id = lc_user.id
-         WHERE lbal.action IN ('approved_by_lab_coordinator', 'approved_by_hod') ${searchCondition} ${dateCondition}
+         LEFT JOIN multi_lab_approvals mla ON mla.booking_request_id = lbal.booking_id AND mla.lab_id = lbal.lab_id
+         WHERE lbal.action IN ('approved_by_lab_coordinator', 'approved_by_hod')
+           AND (mla.status IS NULL OR mla.status NOT IN ('rejected', 'withdrawn'))
+           ${searchCondition} ${dateCondition}
          ORDER BY lbal.created_at DESC
          LIMIT 100`,
         params
@@ -114,7 +117,11 @@ export async function GET(request: NextRequest) {
          LEFT JOIN labs l ON lbal.lab_id = l.id
          LEFT JOIN departments d ON l.department_id = d.id
          LEFT JOIN users lc_user ON d.lab_coordinator_id = lc_user.id
-         WHERE lbal.action IN ('approved_by_lab_coordinator', 'approved_by_hod') AND l.department_id IN (${placeholders}) ${searchCondition} ${dateCondition}
+         LEFT JOIN multi_lab_approvals mla ON mla.booking_request_id = lbal.booking_id AND mla.lab_id = lbal.lab_id
+         WHERE lbal.action IN ('approved_by_lab_coordinator', 'approved_by_hod')
+           AND l.department_id IN (${placeholders})
+           AND (mla.status IS NULL OR mla.status NOT IN ('rejected', 'withdrawn'))
+           ${searchCondition} ${dateCondition}
          ORDER BY lbal.created_at DESC
          LIMIT 100`,
         params
