@@ -26,16 +26,35 @@ export async function GET(request: NextRequest) {
     const dayOfWeek = new Date(date).getDay()
 
     // Get existing bookings for this lab and date
-    const bookings = await db.query(
+    // Single-lab bookings: check main booking status
+    const singleLabBookings = await db.query(
       `SELECT br.start_time, br.end_time, u.name as booker_name, u.salutation as booker_salutation, br.purpose
        FROM booking_requests br
        LEFT JOIN users u ON br.requested_by = u.id
        WHERE br.lab_id = ? 
-         AND br.booking_date = ? 
+         AND br.booking_date = ?
+         AND br.is_multi_lab = 0
          AND br.status IN ('pending_faculty', 'pending_lab_staff', 'pending_hod', 'approved')
        ORDER BY br.start_time`,
       [labId, date]
     )
+    
+    // Multi-lab bookings: check if this specific lab is NOT rejected in multi_lab_approvals
+    const multiLabBookings = await db.query(
+      `SELECT br.start_time, br.end_time, u.name as booker_name, u.salutation as booker_salutation, br.purpose
+       FROM booking_requests br
+       LEFT JOIN users u ON br.requested_by = u.id
+       JOIN multi_lab_approvals mla ON mla.booking_request_id = br.id AND mla.lab_id = ?
+       WHERE br.booking_date = ?
+         AND br.is_multi_lab = 1
+         AND mla.status != 'rejected'
+         AND mla.status != 'withdrawn'
+         AND br.status IN ('pending_lab_staff', 'pending_hod', 'approved')
+       ORDER BY br.start_time`,
+      [labId, date]
+    )
+    
+    const bookings = { rows: [...singleLabBookings.rows, ...multiLabBookings.rows] }
 
     // Get timetable entries for this lab and day
     const timetableEntries = await db.query(

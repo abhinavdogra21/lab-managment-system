@@ -20,6 +20,7 @@ interface BookingRequest {
   end_time: string
   purpose: string
   status: string
+  highest_approval_authority?: 'hod' | 'lab_coordinator'
   faculty_remarks?: string
   lab_staff_remarks?: string
   hod_remarks?: string
@@ -49,10 +50,15 @@ export default function TNPMyBookingsPage() {
     }
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (booking: BookingRequest) => {
+    const status = booking.status
     const statusConfig = {
       'pending_lab_staff': { label: 'Pending Lab Staff', variant: 'secondary' as const, icon: Clock },
-      'pending_hod': { label: 'Pending HOD', variant: 'secondary' as const, icon: Clock },
+      'pending_hod': { 
+        label: booking.highest_approval_authority === 'lab_coordinator' ? 'Pending Lab Coordinator' : 'Pending HOD', 
+        variant: 'secondary' as const, 
+        icon: Clock 
+      },
       'approved': { label: 'Approved', variant: 'default' as const, icon: CheckCircle },
       'rejected': { label: 'Rejected', variant: 'destructive' as const, icon: XCircle },
     }
@@ -97,7 +103,7 @@ export default function TNPMyBookingsPage() {
               {booking.start_time} - {booking.end_time}
             </div>
           </div>
-          {getStatusBadge(booking.status)}
+          {getStatusBadge(booking)}
         </div>
       </CardHeader>
       <CardContent className="space-y-3">

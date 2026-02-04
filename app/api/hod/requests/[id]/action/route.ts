@@ -109,29 +109,52 @@ export async function POST(
       }
     }
     
+    // For multi-lab bookings, also check if there are any labs pending HOD approval
+    const isMultiLab = booking.is_multi_lab === 1 || booking.is_multi_lab === true
+    
     if (booking.status !== 'pending_hod') {
-      return NextResponse.json({ error: "Request is not pending HOD approval" }, { status: 400 })
+      // For multi-lab, check if there are actually any labs pending approval
+      if (isMultiLab) {
+        const pendingCheck = await db.query(
+          `SELECT COUNT(*) as pending_count 
+           FROM multi_lab_approvals 
+           WHERE booking_request_id = ? AND status = 'approved_by_lab_staff'`,
+          [requestId]
+        )
+        
+        if (Number(pendingCheck.rows[0].pending_count) === 0) {
+          return NextResponse.json({ error: "Request is not pending HOD approval" }, { status: 400 })
+        }
+      } else {
+        return NextResponse.json({ error: "Request is not pending HOD approval" }, { status: 400 })
+      }
     }
 
-    // For multi-lab bookings, verify ALL labs have been approved by lab staff
-    const isMultiLab = booking.is_multi_lab === 1 || booking.is_multi_lab === true
+    // For multi-lab bookings, verify at least one lab has been approved by lab staff
+    // HOD can only approve the labs that lab staff approved (rejected labs stay rejected)
     
     if (isMultiLab) {
       const allApprovals = await db.query(`
         SELECT COUNT(*) as total,
-               SUM(CASE WHEN status = 'approved_by_lab_staff' THEN 1 ELSE 0 END) as approved
+               SUM(CASE WHEN status = 'approved_by_lab_staff' THEN 1 ELSE 0 END) as approved,
+               SUM(CASE WHEN status = 'withdrawn' THEN 1 ELSE 0 END) as withdrawn
         FROM multi_lab_approvals
         WHERE booking_request_id = ?
       `, [requestId])
       
       const total = Number(allApprovals.rows[0].total)
       const approved = Number(allApprovals.rows[0].approved || 0)
+      const withdrawn = Number(allApprovals.rows[0].withdrawn || 0)
+      const activeLabs = total - withdrawn
       
-      if (total !== approved) {
+      if (approved === 0) {
         return NextResponse.json({ 
-          error: `Cannot approve: Only ${approved} of ${total} labs have been approved by Lab Staff` 
+          error: `Cannot approve: No labs have been approved by Lab Staff (all rejected or withdrawn)` 
         }, { status: 400 })
       }
+      
+      // Note: HOD will approve only the labs that were approved by lab staff
+      // Rejected labs remain rejected
     }
 
     // Update the booking status
@@ -154,9 +177,8 @@ export async function POST(
       `
       updateParams = [newStatus, user.userId, remarks || null, approverRole, requestId]
       
-      // For multi-lab bookings, update all multi_lab_approvals rows to 'approved' status
-      // Note: hod_approved_by and hod_approved_at are set, but hod_remarks should NOT be duplicated
-      // The overall HOD remarks are stored in booking_requests.hod_remarks
+      // For multi-lab bookings, only approve labs that were approved by lab staff
+      // Rejected labs remain rejected - explicitly exclude them for safety
       if (isMultiLab) {
         await db.query(`
           UPDATE multi_lab_approvals
@@ -164,6 +186,9 @@ export async function POST(
               hod_approved_by = ?,
               hod_approved_at = NOW()
           WHERE booking_request_id = ?
+            AND status = 'approved_by_lab_staff'
+            AND status != 'rejected'
+            AND status != 'withdrawn'
         `, [user.userId, requestId])
       }
     } else {
@@ -176,8 +201,8 @@ export async function POST(
       `
       updateParams = [newStatus, user.userId, remarks || null, user.userId, remarks || 'Rejected by HOD', approverRole, requestId]
       
-      // For multi-lab bookings, mark all multi_lab_approvals as rejected
-      // Note: hod_remarks should NOT be duplicated - it's in booking_requests.hod_remarks
+      // For multi-lab bookings, reject only the labs that were approved by lab staff
+      // Already rejected labs remain as-is - explicitly exclude them for safety
       if (isMultiLab) {
         await db.query(`
           UPDATE multi_lab_approvals
@@ -185,6 +210,9 @@ export async function POST(
               hod_approved_by = ?,
               hod_approved_at = NOW()
           WHERE booking_request_id = ?
+            AND status = 'approved_by_lab_staff'
+            AND status != 'rejected'
+            AND status != 'withdrawn'
         `, [user.userId, requestId])
       }
     }
@@ -353,24 +381,20 @@ export async function POST(
       if (studentDetails.rows.length > 0) {
         const student = studentDetails.rows[0]
         
-        // For multi-lab, get all lab names
+        // For multi-lab, get only APPROVED lab names
         let labDetails = student.lab_name
         if (isMultiLab && booking.lab_ids) {
-          let labIds: number[] = []
-          if (Array.isArray(booking.lab_ids)) {
-            labIds = booking.lab_ids
-          } else if (Buffer.isBuffer(booking.lab_ids)) {
-            labIds = JSON.parse(booking.lab_ids.toString('utf-8'))
-          } else if (typeof booking.lab_ids === 'string') {
-            labIds = JSON.parse(booking.lab_ids)
-          }
+          // Get only the approved labs
+          const approvedLabs = await db.query(`
+            SELECT l.name 
+            FROM labs l
+            JOIN multi_lab_approvals mla ON l.id = mla.lab_id
+            WHERE mla.booking_request_id = ?
+              AND mla.status = 'approved'
+          `, [requestId])
           
-          if (labIds.length > 0) {
-            const labs = await db.query(
-              `SELECT name FROM labs WHERE id IN (${labIds.map(() => '?').join(',')})`,
-              labIds
-            )
-            labDetails = labs.rows.map((l: any) => l.name).join(', ')
+          if (approvedLabs.rows.length > 0) {
+            labDetails = approvedLabs.rows.map((l: any) => l.name).join(', ')
           }
         }
         
@@ -399,15 +423,18 @@ export async function POST(
             ...emailData
           }).catch(err => console.error('Email send failed:', err))
           
-          // Send confirmation emails to ALL responsible persons
+          // Send confirmation emails to responsible persons for APPROVED labs only
           if (isMultiLab || booking.responsible_person_name) {
             const responsiblePersons = await db.query(`
               SELECT rp.name, rp.email, l.name as lab_name, l.id as lab_id,
-                     u.name as lab_staff_name, u.salutation as lab_staff_salutation
+                     u.name as lab_staff_name, u.salutation as lab_staff_salutation,
+                     mla.status as lab_status
               FROM multi_lab_responsible_persons rp
               JOIN labs l ON rp.lab_id = l.id
               LEFT JOIN users u ON l.staff_id = u.id
+              LEFT JOIN multi_lab_approvals mla ON mla.booking_request_id = rp.booking_request_id AND mla.lab_id = rp.lab_id
               WHERE rp.booking_request_id = ?
+                AND mla.status = 'approved'
             `, [requestId])
             
             // If no multi-lab entries but has responsible person (old single-lab bookings)

@@ -12,6 +12,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { Clock, CheckCircle, XCircle, User, Users, Building, Eye, Calendar, ArrowRight, Filter, ChevronUp, ChevronDown, CheckCircle2 } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 interface TimelineStep {
   step_name: string
@@ -88,6 +99,77 @@ export default function MyRequestsPage() {
     }
   }
 
+  const formatTime = (time: string) => {
+    // Convert HH:MM:SS or HH:MM to 12-hour format with AM/PM
+    const [hours, minutes] = time.split(':')
+    const h = parseInt(hours, 10)
+    const m = minutes || '00'
+    const period = h >= 12 ? 'PM' : 'AM'
+    const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h
+    return `${displayHour}:${m} ${period}`
+  }
+
+  const handleWithdraw = async (requestId: number) => {
+    try {
+      const res = await fetch(`/api/student/booking-requests?id=${requestId}`, {
+        method: 'DELETE',
+      })
+
+      if (res.ok) {
+        toast({
+          title: 'Success',
+          description: 'Booking request withdrawn successfully',
+        })
+        loadMyRequests()
+      } else {
+        const data = await res.json()
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to withdraw booking',
+          variant: 'destructive',
+        })
+      }
+    } catch (e) {
+      toast({
+        title: 'Error',
+        description: 'Failed to withdraw booking',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleWithdrawLab = async (requestId: number, labId: number, labName: string) => {
+    try {
+      const res = await fetch(`/api/student/booking-requests/${requestId}/withdraw-lab`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lab_id: labId })
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        toast({
+          title: 'Success',
+          description: `${labName} withdrawn successfully`,
+        })
+        loadMyRequests()
+      } else {
+        const data = await res.json()
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to withdraw lab',
+          variant: 'destructive',
+        })
+      }
+    } catch (e) {
+      toast({
+        title: 'Error',
+        description: 'Failed to withdraw lab',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
@@ -148,18 +230,44 @@ export default function MyRequestsPage() {
     }
   }
 
-  const getOverallStatusBadge = (status: string) => {
+  const getOverallStatusBadge = (request: BookingWithTimeline) => {
+    const status = request.status
+    
+    // For multi-lab bookings, check if only some labs are withdrawn
+    if ((request.is_multi_lab === 1 || request.is_multi_lab === true) && request.multi_lab_approvals) {
+      const allStatuses = request.multi_lab_approvals.map(a => a.status)
+      const withdrawnCount = allStatuses.filter(s => s === 'withdrawn').length
+      const rejectedCount = allStatuses.filter(s => s === 'rejected').length
+      const activeCount = allStatuses.length - withdrawnCount - rejectedCount
+      
+      // If some labs withdrawn but others active, show "Partially Withdrawn"
+      if (withdrawnCount > 0 && activeCount > 0) {
+        return <Badge className="bg-orange-600">Partially Withdrawn ({activeCount} active)</Badge>
+      }
+      
+      // If all labs withdrawn/rejected, show "Withdrawn"
+      if (activeCount === 0) {
+        return <Badge variant="outline">Withdrawn</Badge>
+      }
+    }
+    
     switch (status) {
+      case 'approved':
       case 'hod_approved':
         return <Badge className="bg-green-600">Fully Approved</Badge>
+      case 'pending_hod':
       case 'staff_approved':
-        return <Badge variant="outline">Pending HOD</Badge>
+        return <Badge variant="outline">{request.highest_approval_authority === 'lab_coordinator' ? 'Pending Lab Coordinator' : 'Pending HOD'}</Badge>
+      case 'pending_lab_staff':
       case 'faculty_approved':
         return <Badge variant="outline">Pending Lab Staff</Badge>
+      case 'pending_faculty':
       case 'pending':
         return <Badge variant="secondary">Pending Faculty</Badge>
       case 'rejected':
         return <Badge variant="destructive">Rejected</Badge>
+      case 'withdrawn':
+        return <Badge variant="outline">Withdrawn</Badge>
       default:
         return <Badge variant="secondary">{status}</Badge>
     }
@@ -226,7 +334,7 @@ export default function MyRequestsPage() {
                     displayStatus = '✓ Fully Approved'
                     badgeVariant = 'default'
                   } else if (approval.status === 'approved_by_lab_staff') {
-                    displayStatus = 'Pending HOD'
+                    displayStatus = request.highest_approval_authority === 'lab_coordinator' ? 'Pending Lab Coordinator' : 'Pending HOD'
                     badgeVariant = 'secondary'
                   } else if (approval.status === 'pending' && request.status === 'pending_lab_staff') {
                     displayStatus = 'Pending Lab Staff'
@@ -237,13 +345,55 @@ export default function MyRequestsPage() {
                   } else if (approval.status === 'rejected') {
                     displayStatus = 'Rejected'
                     badgeVariant = 'destructive'
+                  } else if (approval.status === 'withdrawn') {
+                    displayStatus = 'Withdrawn'
+                    badgeVariant = 'outline'
                   }
+                  
+                  const canWithdrawLab = (
+                    ['pending_faculty','pending_lab_staff','pending_hod','approved'].includes(request.status) ||
+                    ['pending', 'approved_by_lab_staff', 'approved'].includes(approval.status)
+                  ) && approval.status !== 'rejected' && approval.status !== 'withdrawn'
                   
                   return (
                     <div key={approval.lab_id} className="p-2 bg-white rounded border text-xs">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium">{approval.lab_name}</span>
-                        <Badge variant={badgeVariant} className="text-xs">{displayStatus}</Badge>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{approval.lab_name}</span>
+                          <Badge variant={badgeVariant} className="text-xs">{displayStatus}</Badge>
+                        </div>
+                        {canWithdrawLab && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-6 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <XCircle className="h-3 w-3 mr-1" />
+                                Withdraw
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Withdraw {approval.lab_name}?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to withdraw {approval.lab_name} from this multi-lab booking? 
+                                  Other labs will remain active. This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleWithdrawLab(request.id, approval.lab_id, approval.lab_name)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  Withdraw Lab
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
                       </div>
                       {approval.responsible_person_name && (
                         <div className="text-xs text-blue-700 mb-1">
@@ -260,7 +410,7 @@ export default function MyRequestsPage() {
                         {approval.hod_approved_at && (
                           <p className="flex items-center gap-1">
                             <CheckCircle2 className="h-3 w-3 text-green-600" />
-                            HOD: {approval.hod_name} - {new Date(approval.hod_approved_at).toLocaleDateString()}
+                            {request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}: {approval.hod_name} - {new Date(approval.hod_approved_at).toLocaleDateString()}
                           </p>
                         )}
                         {!approval.lab_staff_approved_at && request.status !== 'pending_faculty' && (
@@ -305,7 +455,7 @@ export default function MyRequestsPage() {
                   displayStatus = '✓ Fully Approved'
                   badgeVariant = 'default'
                 } else if (labStaffApproved?.completed_at && request.status === 'pending_hod') {
-                  displayStatus = 'Pending HOD'
+                  displayStatus = request.highest_approval_authority === 'lab_coordinator' ? 'Pending Lab Coordinator' : 'Pending HOD'
                   badgeVariant = 'secondary'
                 } else if (request.status === 'pending_lab_staff') {
                   displayStatus = 'Pending Lab Staff'
@@ -339,7 +489,7 @@ export default function MyRequestsPage() {
                       {hodApproved?.completed_at && (
                         <p className="flex items-center gap-1">
                           <CheckCircle2 className="h-3 w-3 text-green-600" />
-                          HOD: {hodApproved.user_name} - {new Date(hodApproved.completed_at).toLocaleDateString()}
+                          {request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}: {hodApproved.user_name} - {new Date(hodApproved.completed_at).toLocaleDateString()}
                         </p>
                       )}
                       {!labStaffApproved?.completed_at && request.status !== 'pending_faculty' && (
@@ -476,7 +626,7 @@ export default function MyRequestsPage() {
                         )}
                         {approval.hod_remarks && (
                           <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
-                            <span className="font-medium">HOD:</span> {approval.hod_remarks}
+                            <span className="font-medium">{request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}:</span> {approval.hod_remarks}
                           </div>
                         )}
                       </div>
@@ -556,6 +706,21 @@ export default function MyRequestsPage() {
       return request.status.startsWith('pending_')
     }
     
+    if (statusFilter === "approved") {
+      // Include fully approved and partially withdrawn bookings that have approved status
+      if (request.status === 'approved' || request.status === 'hod_approved') {
+        return true
+      }
+      // Also check if multi-lab booking has at least one approved lab
+      if ((request.is_multi_lab === 1 || request.is_multi_lab === true) && request.multi_lab_approvals) {
+        const hasApprovedLab = request.multi_lab_approvals.some(a => a.status === 'approved')
+        if (hasApprovedLab && request.status === 'approved') {
+          return true
+        }
+      }
+      return false
+    }
+    
     return request.status === statusFilter
   })
 
@@ -611,7 +776,7 @@ export default function MyRequestsPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <h3 className="font-medium">{request.lab_name}</h3>
-                      {getOverallStatusBadge(request.status)}
+                      {getOverallStatusBadge(request)}
                     </div>
                     <div className="text-sm text-muted-foreground space-y-1">
                       <p>Faculty: {request.faculty_name}</p>
@@ -622,7 +787,7 @@ export default function MyRequestsPage() {
                         </p>
                       )}
                       <p>Date: {new Date(request.date).toLocaleDateString()}</p>
-                      <p>Time: {request.start_time} - {request.end_time}</p>
+                      <p>Time: {formatTime(request.start_time)} - {formatTime(request.end_time)}</p>
                       <p>Submitted: {new Date(request.created_at).toLocaleDateString()}</p>
                     </div>
                     <p className="text-sm mt-2">{request.purpose}</p>
@@ -630,21 +795,32 @@ export default function MyRequestsPage() {
                   <div className="flex flex-col gap-2 items-end">
                     {/* Withdraw button for pending requests */}
                     {['pending_faculty','pending_lab_staff','pending_hod'].includes(request.status) && (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={async () => {
-                          const res = await fetch(`/api/student/booking-requests/${request.id}/withdraw`, { method: 'POST' })
-                          if (res.ok) {
-                            toast({ title: 'Request withdrawn', description: 'Your booking request has been withdrawn.' })
-                            loadMyRequests()
-                          } else {
-                            toast({ title: 'Error', description: 'Failed to withdraw request', variant: 'destructive' })
-                          }
-                        }}
-                      >
-                        Withdraw Request
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50">
+                            <XCircle className="h-4 w-4 mr-1" />
+                            Withdraw
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Withdraw Booking Request?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to withdraw this booking request? This action cannot be undone.
+                              All relevant parties will be notified.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleWithdraw(request.id)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Withdraw Request
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     )}
                   </div>
                 </div>

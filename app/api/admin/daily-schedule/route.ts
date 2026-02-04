@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
 
     // Get booking requests for the specific date (only approved bookings)
     // For multi-lab bookings, we need to get entries for ALL labs, not just br.lab_id
+    // IMPORTANT: For multi-lab, only show labs that are NOT rejected
     const bookingsQuery = labId
       ? `SELECT 
            CONCAT('booking_', br.id, '_', COALESCE(mla.lab_id, br.lab_id)) as id,
@@ -88,6 +89,7 @@ export async function GET(request: NextRequest) {
          JOIN users u ON br.requested_by = u.id
          WHERE br.booking_date = ? AND COALESCE(mla.lab_id, br.lab_id) = ?
          AND br.status = 'approved'
+         AND (br.is_multi_lab = 0 OR (mla.status != 'rejected' AND mla.status != 'withdrawn'))
          ORDER BY br.start_time`
       : `SELECT 
            CONCAT('booking_', br.id, '_', COALESCE(mla.lab_id, br.lab_id)) as id,
@@ -109,6 +111,7 @@ export async function GET(request: NextRequest) {
          JOIN users u ON br.requested_by = u.id
          WHERE br.booking_date = ?
          AND br.status = 'approved'
+         AND (br.is_multi_lab = 0 OR (mla.status != 'rejected' AND mla.status != 'withdrawn'))
          ORDER BY l.name, br.start_time`
 
     const bookingsParams = labId ? [date, labId] : [date]

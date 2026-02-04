@@ -11,7 +11,18 @@ import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { Clock, CheckCircle, XCircle, User, Users, Building, Eye, Calendar, ChevronDown, ChevronUp, Filter } from "lucide-react"
+import { Clock, CheckCircle, XCircle, User, Users, Building, Eye, Calendar, ChevronDown, ChevronUp, Filter, AlertCircle, Loader2 } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 interface TimelineStep {
   step_name: string
@@ -58,6 +69,7 @@ export default function FacultyBookingsPage() {
   const [requests, setRequests] = useState<BookingWithTimeline[]>([])
   const [showTimeline, setShowTimeline] = useState<Record<number, boolean>>({})
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [withdrawing, setWithdrawing] = useState<number | null>(null)
 
   useEffect(() => { loadMyRequests() }, [])
 
@@ -80,18 +92,145 @@ export default function FacultyBookingsPage() {
     } finally { setLoading(false) }
   }
 
-  const getOverallStatusBadge = (status: string) => {
+  const formatTime = (time: string) => {
+    // Convert HH:MM:SS or HH:MM to 12-hour format with AM/PM
+    const [hours, minutes] = time.split(':')
+    const h = parseInt(hours, 10)
+    const m = minutes || '00'
+    const period = h >= 12 ? 'PM' : 'AM'
+    const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h
+    return `${displayHour}:${m} ${period}`
+  }
+
+  const handleWithdraw = async (requestId: number) => {
+    try {
+      console.log('Withdrawing booking:', requestId)
+      setWithdrawing(requestId)
+      const res = await fetch(`/api/faculty/booking-requests?id=${requestId}`, {
+        method: 'DELETE',
+      })
+
+      console.log('Withdraw response status:', res.status)
+      
+      if (res.ok) {
+        toast({
+          title: 'Success',
+          description: 'Booking request withdrawn successfully',
+        })
+        loadMyRequests()
+      } else {
+        const data = await res.json()
+        console.error('Withdraw error:', data)
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to withdraw booking',
+          variant: 'destructive',
+        })
+      }
+    } catch (e) {
+      console.error('Withdraw exception:', e)
+      toast({
+        title: 'Error',
+        description: 'Failed to withdraw booking',
+        variant: 'destructive',
+      })
+    } finally {
+      setWithdrawing(null)
+    }
+  }
+
+  const canWithdraw = (status: string, booking?: any) => {
+    // Allow withdrawal if status is withdrawable
+    const isWithdrawableStatus = status === 'pending_faculty' || status === 'pending_lab_staff' || status === 'pending_hod' || status === 'approved'
+    
+    if (!isWithdrawableStatus) return false
+    
+    // For multi-lab bookings, check if at least one lab is still active (not withdrawn/rejected)
+    if (booking && (booking.is_multi_lab === 1 || booking.is_multi_lab === true)) {
+      // If we have multi_lab_approvals data, check if any labs are active
+      if (booking.multi_lab_approvals && booking.multi_lab_approvals.length > 0) {
+        const activeLabsExist = booking.multi_lab_approvals.some((a: any) => 
+          a.status !== 'withdrawn' && a.status !== 'rejected'
+        )
+        // Only hide withdraw button if we know for sure all labs are withdrawn/rejected
+        if (!activeLabsExist) return false
+      }
+      // If no multi_lab_approvals data or has active labs, allow withdrawal
+    }
+    
+    return true
+  }
+
+  const handleWithdrawLab = async (requestId: number, labId: number, labName: string) => {
+    try {
+      setWithdrawing(requestId)
+      const res = await fetch(`/api/faculty/booking-requests/${requestId}/withdraw-lab`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lab_id: labId })
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        toast({
+          title: 'Success',
+          description: `${labName} withdrawn successfully`,
+        })
+        loadMyRequests()
+      } else {
+        const data = await res.json()
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to withdraw lab',
+          variant: 'destructive',
+        })
+      }
+    } catch (e) {
+      toast({
+        title: 'Error',
+        description: 'Failed to withdraw lab',
+        variant: 'destructive',
+      })
+    } finally {
+      setWithdrawing(null)
+    }
+  }
+
+  const getOverallStatusBadge = (request: BookingWithTimeline) => {
+    const status = request.status
+    
+    // For multi-lab bookings, check if only some labs are withdrawn
+    if ((request.is_multi_lab === 1 || request.is_multi_lab === true) && request.multi_lab_approvals) {
+      const allStatuses = request.multi_lab_approvals.map(a => a.status)
+      const withdrawnCount = allStatuses.filter(s => s === 'withdrawn').length
+      const rejectedCount = allStatuses.filter(s => s === 'rejected').length
+      const activeCount = allStatuses.length - withdrawnCount - rejectedCount
+      
+      // If some labs withdrawn but others active, show "Partially Withdrawn"
+      if (withdrawnCount > 0 && activeCount > 0) {
+        return <Badge className="bg-orange-600">Partially Withdrawn ({activeCount} active)</Badge>
+      }
+      
+      // If all labs withdrawn/rejected, show "Withdrawn"
+      if (activeCount === 0) {
+        return <Badge variant="outline">Withdrawn</Badge>
+      }
+    }
+    
     switch (status) {
       case 'approved':
         return <Badge className="bg-green-600">Approved</Badge>
       case 'pending_hod':
-        return <Badge variant="outline">Pending HOD</Badge>
+        // Check if this request has highest_approval_authority set to lab_coordinator
+        return <Badge variant="outline">{request.highest_approval_authority === 'lab_coordinator' ? 'Pending Lab Coordinator' : 'Pending HOD'}</Badge>
       case 'pending_lab_staff':
         return <Badge variant="outline">Pending Lab Staff</Badge>
       case 'pending_faculty':
         return <Badge variant="secondary">Pending Faculty</Badge>
       case 'rejected':
         return <Badge variant="destructive">Rejected</Badge>
+      case 'withdrawn':
+        return <Badge variant="outline">Withdrawn</Badge>
       default:
         return <Badge variant="secondary">{status}</Badge>
     }
@@ -137,7 +276,7 @@ export default function FacultyBookingsPage() {
             <div className="text-sm space-y-1 p-4 bg-gray-50 rounded-lg">
               <p><span className="font-medium">Lab:</span> {request.lab_name}</p>
               <p><span className="font-medium">Date:</span> {new Date(request.date).toLocaleDateString()}</p>
-              <p><span className="font-medium">Time:</span> {request.start_time} - {request.end_time}</p>
+              <p><span className="font-medium">Time:</span> {formatTime(request.start_time)} - {formatTime(request.end_time)}</p>
             </div>
 
             {/* Multi-Lab Approval Status */}
@@ -157,7 +296,7 @@ export default function FacultyBookingsPage() {
                       displayStatus = '✓ Fully Approved'
                       badgeVariant = 'default'
                     } else if (approval.status === 'approved_by_lab_staff') {
-                      displayStatus = 'Pending HOD'
+                      displayStatus = request.highest_approval_authority === 'lab_coordinator' ? 'Pending Lab Coordinator' : 'Pending HOD'
                       badgeVariant = 'secondary'
                     } else if (approval.status === 'pending' && request.status === 'pending_lab_staff') {
                       displayStatus = 'Pending Lab Staff'
@@ -168,7 +307,15 @@ export default function FacultyBookingsPage() {
                     } else if (approval.status === 'rejected') {
                       displayStatus = 'Rejected'
                       badgeVariant = 'destructive'
+                    } else if (approval.status === 'withdrawn') {
+                      displayStatus = 'Withdrawn'
+                      badgeVariant = 'outline'
                     }
+                    
+                    const canWithdrawLab = (
+                      ['pending_faculty','pending_lab_staff','pending_hod','approved'].includes(request.status) ||
+                      ['pending', 'approved_by_lab_staff', 'approved'].includes(approval.status)
+                    ) && approval.status !== 'rejected' && approval.status !== 'withdrawn'
                     
                     // Format names with salutations
                     const formatName = (name: string | null, salutation: string | null) => {
@@ -186,8 +333,42 @@ export default function FacultyBookingsPage() {
                     return (
                       <div key={approval.lab_id} className="p-2 bg-white rounded border text-xs">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-medium">{approval.lab_name}</span>
-                          <Badge variant={badgeVariant} className="text-xs">{displayStatus}</Badge>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{approval.lab_name}</span>
+                            <Badge variant={badgeVariant} className="text-xs">{displayStatus}</Badge>
+                          </div>
+                          {canWithdrawLab && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="h-6 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <XCircle className="h-3 w-3 mr-1" />
+                                  Withdraw
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Withdraw {approval.lab_name}?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to withdraw {approval.lab_name} from this multi-lab booking? 
+                                    Other labs will remain active. This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleWithdrawLab(request.id, approval.lab_id, approval.lab_name)}
+                                    className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    Withdraw Lab
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
                         </div>
                         <div className="text-xs space-y-1 text-muted-foreground">
                           {approval.lab_staff_approved_at && (
@@ -199,10 +380,14 @@ export default function FacultyBookingsPage() {
                           {approval.hod_approved_at && (
                             <p className="flex items-center gap-1">
                               <CheckCircle className="h-3 w-3 text-green-600" />
-                              HOD: {formatName(approval.hod_name, approval.hod_salutation)} - {new Date(approval.hod_approved_at).toLocaleDateString()}
+                              {request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}: {formatName(approval.hod_name, approval.hod_salutation)} - {new Date(approval.hod_approved_at).toLocaleDateString()}
                             </p>
                           )}
-                          {!approval.lab_staff_approved_at && request.status !== 'pending_faculty' && (
+                          {!approval.lab_staff_approved_at && 
+                           request.status !== 'pending_faculty' && 
+                           approval.status !== 'approved' && 
+                           approval.status !== 'rejected' && 
+                           approval.status !== 'withdrawn' && (
                             <p className="flex items-center gap-1">
                               <Clock className="h-3 w-3 text-yellow-600" />
                               Awaiting Lab Staff approval
@@ -275,7 +460,7 @@ export default function FacultyBookingsPage() {
                               Lab Coordinator: {labCoordApproved.user_name} - {new Date(labCoordApproved.completed_at).toLocaleDateString()}
                             </p>
                           )}
-                          {!labStaffApproved?.completed_at && request.status !== 'pending_faculty' && (
+                          {!labStaffApproved?.completed_at && request.status !== 'pending_faculty' && request.status !== 'approved' && request.status !== 'rejected' && (
                             <p className="flex items-center gap-1">
                               <Clock className="h-3 w-3 text-yellow-600" />
                               Awaiting Lab Staff approval
@@ -379,7 +564,7 @@ export default function FacultyBookingsPage() {
                           )}
                           {approval.hod_remarks && (
                             <div className="text-xs p-2 bg-gray-50 rounded border-l-2 border-blue-300">
-                              <span className="font-medium">HOD:</span> {approval.hod_remarks}
+                              <span className="font-medium">{request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}:</span> {approval.hod_remarks}
                             </div>
                           )}
                         </div>
@@ -456,15 +641,59 @@ export default function FacultyBookingsPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <h3 className="font-medium">{request.lab_name}</h3>
-                      {getOverallStatusBadge(request.status)}
+                      {getOverallStatusBadge(request)}
                     </div>
                     <div className="text-sm text-muted-foreground grid grid-cols-2 gap-1">
                       <p>Date: {new Date(request.date).toLocaleDateString()}</p>
-                      <p>Time: {request.start_time} - {request.end_time}</p>
+                      <p>Time: {formatTime(request.start_time)} - {formatTime(request.end_time)}</p>
                       <p>Submitted: {new Date(request.created_at).toLocaleDateString()}</p>
                     </div>
                     <p className="text-sm mt-2">{request.purpose}</p>
                   </div>
+                  
+                  {/* Withdraw button for pending requests */}
+                  {canWithdraw(request.status, request) && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          disabled={withdrawing === request.id}
+                        >
+                          {withdrawing === request.id ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              Withdrawing...
+                            </>
+                          ) : (
+                            <>
+                              <XCircle className="h-4 w-4 mr-1" />
+                              Withdraw
+                            </>
+                          )}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Withdraw Booking Request?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to withdraw this booking request? This action cannot be undone.
+                            All relevant parties will be notified.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleWithdraw(request.id)}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            Withdraw Request
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                 </div>
                 
                 {/* Inline Timeline */}

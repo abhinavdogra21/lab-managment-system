@@ -97,6 +97,16 @@ export default function HODLogsPage() {
     return prefix ? `${prefix} ${name}` : name
   }
   
+  const formatTime = (time: string) => {
+    // Convert HH:MM:SS or HH:MM to 12-hour format with AM/PM
+    const [hours, minutes] = time.split(':')
+    const h = parseInt(hours, 10)
+    const m = minutes || '00'
+    const period = h >= 12 ? 'PM' : 'AM'
+    const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h
+    return `${displayHour}:${m} ${period}`
+  }
+  
   const getDefaultDates = () => {
     const today = new Date()
     const currentYear = today.getFullYear()
@@ -761,7 +771,7 @@ export default function HODLogsPage() {
                               year: 'numeric',
                               month: 'long',
                               day: 'numeric'
-                            })} • {log.start_time} - {log.end_time}
+                            })} • {formatTime(log.start_time)} - {formatTime(log.end_time)}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">

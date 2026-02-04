@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
         // For rejected status, only show requests rejected BY HOD (not by faculty or lab staff)
         query += ` AND br.status = 'rejected' AND br.hod_approved_by IS NOT NULL`
       } else {
-        // specific status requested
+        // specific status requested - check overall booking status only
         query += ` AND br.status = ?`
         params.push(status)
       }
@@ -118,6 +118,7 @@ export async function GET(request: NextRequest) {
       query += ` AND (br.status = 'pending_hod' OR br.status = 'approved' OR (br.status = 'rejected' AND br.hod_approved_by IS NOT NULL))`
     } else {
       // Default: show requests waiting for HOD approval when no status provided
+      // Only show bookings where overall status is pending_hod (all lab staff have decided)
       query += ` AND br.status = 'pending_hod'`
     }
 

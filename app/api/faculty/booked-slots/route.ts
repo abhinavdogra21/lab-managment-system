@@ -25,14 +25,32 @@ export async function GET(request: NextRequest) {
 
     let bookedSlots: any[] = []
     try {
-      const bookings = await db.query(
+      // Single-lab bookings: check main booking status
+      const singleLabBookings = await db.query(
         `SELECT br.start_time, br.end_time, br.purpose, u.name as booker_name, u.salutation as booker_salutation
          FROM booking_requests br
          JOIN users u ON br.requested_by = u.id
          WHERE br.lab_id = ? AND br.booking_date = ?
+           AND br.is_multi_lab = 0
            AND br.status IN ('pending_faculty','pending_lab_staff','pending_hod','approved')`,
         [labId, date]
       )
+      
+      // Multi-lab bookings: check if this specific lab is NOT rejected in multi_lab_approvals
+      const multiLabBookings = await db.query(
+        `SELECT br.start_time, br.end_time, br.purpose, u.name as booker_name, u.salutation as booker_salutation
+         FROM booking_requests br
+         JOIN users u ON br.requested_by = u.id
+         JOIN multi_lab_approvals mla ON mla.booking_request_id = br.id AND mla.lab_id = ?
+         WHERE br.booking_date = ?
+           AND br.is_multi_lab = 1
+           AND mla.status != 'rejected'
+           AND mla.status != 'withdrawn'
+           AND br.status IN ('pending_lab_staff','pending_hod','approved')`,
+        [labId, date]
+      )
+      
+      const bookings = { rows: [...singleLabBookings.rows, ...multiLabBookings.rows] }
       bookedSlots = [
         ...bookedSlots,
         ...bookings.rows.map((b: any) => ({

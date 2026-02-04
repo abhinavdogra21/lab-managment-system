@@ -25,9 +25,30 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     if (!id || !action) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
     // Ensure faculty owns this request and it's pending_faculty
-    const reqRes = await db.query(`SELECT * FROM booking_requests WHERE id = ? AND faculty_supervisor_id = ? AND status = 'pending_faculty'`, [id, user.userId])
+    // For multi-lab bookings, also check if there are any labs pending faculty approval
+    const reqRes = await db.query(
+      `SELECT * FROM booking_requests 
+       WHERE id = ? AND faculty_supervisor_id = ? 
+       AND (status = 'pending_faculty' OR (is_multi_lab = 1 AND status != 'approved' AND status != 'rejected'))`,
+      [id, user.userId]
+    )
     const req = reqRes.rows?.[0]
     if (!req) return NextResponse.json({ error: 'Request not found or not actionable' }, { status: 404 })
+    
+    // For multi-lab bookings, verify there are actually pending labs
+    const isMultiLab = req.is_multi_lab === 1 || req.is_multi_lab === true
+    if (isMultiLab && req.status !== 'pending_faculty') {
+      const pendingCheck = await db.query(
+        `SELECT COUNT(*) as pending_count 
+         FROM multi_lab_approvals 
+         WHERE booking_request_id = ? AND status = 'pending'`,
+        [id]
+      )
+      
+      if (Number(pendingCheck.rows[0].pending_count) === 0) {
+        return NextResponse.json({ error: 'No pending labs to approve' }, { status: 400 })
+      }
+    }
 
     if (action === 'approve') {
       await db.query(

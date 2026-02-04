@@ -226,6 +226,24 @@ export default function LabStaffApprovePage() {
   }
 
   const getStatusBadge = (status: string, item?: RequestItem) => {
+    // For multi-lab bookings, check if only some labs are withdrawn
+    if (item && (item.is_multi_lab === 1 || item.is_multi_lab === true) && item.multi_lab_approvals) {
+      const allStatuses = item.multi_lab_approvals.map(a => a.status)
+      const withdrawnCount = allStatuses.filter(s => s === 'withdrawn').length
+      const rejectedCount = allStatuses.filter(s => s === 'rejected').length
+      const activeCount = allStatuses.length - withdrawnCount - rejectedCount
+      
+      // If some labs withdrawn but others active, show "Partially Withdrawn"
+      if (withdrawnCount > 0 && activeCount > 0) {
+        return <Badge className="bg-orange-600 text-white">Partially Withdrawn ({activeCount} active)</Badge>
+      }
+      
+      // If all labs withdrawn/rejected, show "Withdrawn"
+      if (activeCount === 0) {
+        return <Badge variant="outline">Withdrawn</Badge>
+      }
+    }
+    
     switch (status) {
       case 'pending_lab_staff':
         return <Badge variant="secondary" className="bg-orange-100 text-orange-800">Pending Lab Staff Approval</Badge>
@@ -238,6 +256,8 @@ export default function LabStaffApprovePage() {
         return <Badge variant="secondary" className="bg-green-100 text-green-800">Approved</Badge>
       case 'rejected':
         return <Badge variant="destructive">Rejected</Badge>
+      case 'withdrawn':
+        return <Badge variant="outline">Withdrawn</Badge>
       default:
         return <Badge variant="outline">{status}</Badge>
     }
@@ -537,7 +557,7 @@ export default function LabStaffApprovePage() {
             <h4 className="text-xs font-medium text-blue-900">Individual Lab Approval Status</h4>
             {item.multi_lab_approvals.map((approval) => {
               let displayStatus = 'Pending Lab Staff'
-              let badgeVariant: "secondary" | "destructive" | "default" = "secondary"
+              let badgeVariant: "secondary" | "destructive" | "default" | "outline" = "secondary"
               
               if (approval.status === 'approved') {
                 displayStatus = 'Approved'
@@ -545,6 +565,9 @@ export default function LabStaffApprovePage() {
               } else if (approval.status === 'rejected') {
                 displayStatus = 'Rejected'
                 badgeVariant = "destructive"
+              } else if (approval.status === 'withdrawn') {
+                displayStatus = 'Withdrawn'
+                badgeVariant = "outline"
               } else if (approval.status === 'approved_by_lab_staff') {
                 displayStatus = item.highest_approval_authority === 'lab_coordinator' ? 'Pending Lab Coordinator' : 'Pending HOD'
                 badgeVariant = "secondary"
@@ -573,6 +596,9 @@ export default function LabStaffApprovePage() {
                   {approval.status === 'pending' && (
                     <p className="text-xs text-gray-600">Awaiting Lab Staff approval</p>
                   )}
+                  {approval.status === 'withdrawn' && (
+                    <p className="text-xs text-orange-600">Withdrawn by requester</p>
+                  )}
                   {approval.lab_staff_approved_at && (
                     <p className="text-xs text-green-700">
                       Lab Staff: {approval.lab_staff_name} - {formatDate(approval.lab_staff_approved_at)}
@@ -580,7 +606,7 @@ export default function LabStaffApprovePage() {
                   )}
                   {approval.hod_approved_at && (
                     <p className="text-xs text-purple-700">
-                      HOD: {approval.hod_name} - {formatDate(approval.hod_approved_at)}
+                      {item.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}: {approval.hod_name} - {formatDate(approval.hod_approved_at)}
                     </p>
                   )}
                 </div>
@@ -673,7 +699,7 @@ export default function LabStaffApprovePage() {
             )}
             {item.hod_remarks && (
               <div className="bg-purple-50 p-2 rounded text-xs">
-                <span className="font-medium text-purple-800">HOD: </span>
+                <span className="font-medium text-purple-800">{item.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}: </span>
                 <span className="text-purple-600 italic">"{item.hod_remarks}"</span>
               </div>
             )}
@@ -691,7 +717,7 @@ export default function LabStaffApprovePage() {
             )}
             {item.hod_remarks && (
               <div className="bg-purple-50 p-2 rounded text-xs">
-                <span className="font-medium text-purple-800">HOD: </span>
+                <span className="font-medium text-purple-800">{item.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}: </span>
                 <span className="text-purple-600 italic">"{item.hod_remarks}"</span>
               </div>
             )}

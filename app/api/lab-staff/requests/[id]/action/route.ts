@@ -35,9 +35,18 @@ export async function POST(
       )
     }
 
-    // Get the request details first
+    // Get the request details with department info to determine next approval level
+    // For multi-lab bookings, also check if there are any pending labs in multi_lab_approvals
     const requestResult = await db.query(
-      "SELECT * FROM booking_requests WHERE id = ? AND status = 'pending_lab_staff'",
+      `SELECT br.*, l.department_id, d.highest_approval_authority 
+       FROM booking_requests br
+       LEFT JOIN labs l ON br.lab_id = l.id
+       LEFT JOIN departments d ON l.department_id = d.id
+       WHERE br.id = ? 
+       AND (
+         br.status = 'pending_lab_staff' 
+         OR (br.is_multi_lab = 1 AND br.status != 'approved' AND br.status != 'rejected')
+       )`,
       [id]
     )
 
@@ -49,7 +58,25 @@ export async function POST(
     }
 
     const bookingRequest = requestResult.rows[0]
+    
+    // For multi-lab bookings, verify there are actually pending labs to approve
+    if (bookingRequest.is_multi_lab === 1 || bookingRequest.is_multi_lab === true) {
+      const pendingCheck = await db.query(
+        `SELECT COUNT(*) as pending_count 
+         FROM multi_lab_approvals 
+         WHERE booking_request_id = ? AND status = 'pending'`,
+        [id]
+      )
+      
+      if (Number(pendingCheck.rows[0].pending_count) === 0) {
+        return NextResponse.json(
+          { success: false, error: "No pending labs to approve for this booking" },
+          { status: 400 }
+        )
+      }
+    }
     const isMultiLab = bookingRequest.is_multi_lab === 1 || bookingRequest.is_multi_lab === true
+    const highestAuthority = bookingRequest.highest_approval_authority
 
     // For multi-lab bookings, check which specific lab this staff is approving
     let targetLabId = bookingRequest.lab_id
@@ -118,22 +145,41 @@ export async function POST(
           WHERE booking_request_id = ? AND lab_id = ?
         `, [userId, remarks || null, id, targetLabId])
         
-        // Check if ALL labs have been approved by lab staff
-        const allApprovals = await db.query(`
+        // Check if ALL lab staff have made their decisions (no pending labs, excluding withdrawn)
+        const approvalStatus = await db.query(`
           SELECT COUNT(*) as total,
-                 SUM(CASE WHEN status = 'approved_by_lab_staff' THEN 1 ELSE 0 END) as approved
+                 SUM(CASE WHEN status = 'approved_by_lab_staff' THEN 1 ELSE 0 END) as approved,
+                 SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected,
+                 SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                 SUM(CASE WHEN status = 'withdrawn' THEN 1 ELSE 0 END) as withdrawn
           FROM multi_lab_approvals
           WHERE booking_request_id = ?
         `, [id])
         
-        const total = Number(allApprovals.rows[0].total)
-        const approved = Number(allApprovals.rows[0].approved || 0)
-        const allApproved = total === approved
+        const total = Number(approvalStatus.rows[0].total)
+        const approved = Number(approvalStatus.rows[0].approved || 0)
+        const rejected = Number(approvalStatus.rows[0].rejected || 0)
+        const pending = Number(approvalStatus.rows[0].pending || 0)
+        const withdrawn = Number(approvalStatus.rows[0].withdrawn || 0)
+        const activeLabs = total - withdrawn // Only count non-withdrawn labs
+        const allDecided = (pending === 0) // All lab staff have made their decisions (withdrawn doesn't count as pending)
         
-        console.log(`Multi-lab approval check: ${approved}/${total} labs approved by staff`)
+        console.log(`Multi-lab approval check: ${approved} approved, ${rejected} rejected, ${pending} pending, ${withdrawn} withdrawn out of ${total} total (${activeLabs} active)`)
         
-        if (allApproved) {
-          // All lab staff approved - move to HOD
+        // If all active labs are withdrawn or rejected, mark as withdrawn
+        if (activeLabs === 0 || (approved === 0 && activeLabs === (rejected + withdrawn))) {
+          newStatus = 'withdrawn'
+          updateQuery = `
+            UPDATE booking_requests 
+            SET status = ?, 
+                withdrawn_at = NOW()
+            WHERE id = ?
+          `
+          updateParams = [newStatus, id]
+          console.log(`All labs withdrawn or rejected! Marking booking ${id} as withdrawn`)
+        } else if (allDecided && approved > 0) {
+          // All lab staff made decisions AND at least one lab approved
+          // Move to pending_hod status (applies to both HOD and Lab Coordinator)
           newStatus = 'pending_hod'
           updateQuery = `
             UPDATE booking_requests 
@@ -143,7 +189,21 @@ export async function POST(
             WHERE id = ?
           `
           updateParams = [newStatus, userId, id]
-          console.log(`All labs approved! Moving booking ${id} to pending_hod status`)
+          console.log(`All lab staff decided and at least one approved! Moving booking ${id} to ${newStatus} status (highest authority: ${highestAuthority})`)
+        } else if (allDecided && approved === 0) {
+          // All lab staff decided but none approved (all rejected) - reject entire booking
+          newStatus = 'rejected'
+          updateQuery = `
+            UPDATE booking_requests 
+            SET 
+              status = ?,
+              rejected_at = NOW(),
+              rejected_by = ?,
+              rejection_reason = ?
+            WHERE id = ?
+          `
+          updateParams = [newStatus, userId, 'All labs rejected by lab staff', id]
+          console.log(`All labs rejected! Marking booking ${id} as rejected`)
         } else {
           // Still waiting for other lab staff approvals
           newStatus = 'pending_lab_staff'
@@ -151,7 +211,7 @@ export async function POST(
           updateParams = []
         }
       } else {
-        // Single lab approval - move to HOD
+        // Single lab approval - move to pending_hod (applies to both HOD and Lab Coordinator)
         newStatus = 'pending_hod'
         updateQuery = `
           UPDATE booking_requests 
@@ -166,33 +226,107 @@ export async function POST(
       }
     } else {
       // Reject the request
-      newStatus = 'rejected'
       
       if (isMultiLab) {
-        // If ANY lab staff rejects, entire multi-lab booking is rejected
+        // Only reject the specific lab, not the entire booking
         await db.query(`
           UPDATE multi_lab_approvals
           SET status = 'rejected', 
               lab_staff_approved_by = ?,
               lab_staff_approved_at = NOW(),
               lab_staff_remarks = ?
+          WHERE booking_request_id = ? AND lab_id = ?
+        `, [userId, remarks || null, id, targetLabId])
+        
+        // Check if ALL lab staff have made their decisions (no pending labs)
+        const rejectionCheck = await db.query(`
+          SELECT COUNT(*) as total,
+                 SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected,
+                 SUM(CASE WHEN status = 'approved_by_lab_staff' THEN 1 ELSE 0 END) as approved,
+                 SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                 SUM(CASE WHEN status = 'withdrawn' THEN 1 ELSE 0 END) as withdrawn
+          FROM multi_lab_approvals
           WHERE booking_request_id = ?
-        `, [userId, remarks || null, id])
+        `, [id])
+        
+        const total = Number(rejectionCheck.rows[0].total)
+        const rejected = Number(rejectionCheck.rows[0].rejected || 0)
+        const approved = Number(rejectionCheck.rows[0].approved || 0)
+        const pending = Number(rejectionCheck.rows[0].pending || 0)
+        const withdrawn = Number(rejectionCheck.rows[0].withdrawn || 0)
+        const allDecided = (pending === 0) // All lab staff have made their decisions
+        const activeLabs = total - withdrawn // Labs that are not withdrawn
+        
+        console.log(`Multi-lab rejection: ${approved} approved, ${rejected} rejected, ${pending} pending, ${withdrawn} withdrawn out of ${total} total`)
+        
+        if (allDecided && approved > 0) {
+          // All lab staff made decisions AND at least one lab approved
+          // Determine next status based on highest approval authority
+          if (highestAuthority === 'lab_coordinator') {
+            newStatus = 'approved' // Lab coordinator approves automatically if set as highest authority
+          } else {
+            newStatus = 'pending_hod' // Default to HOD approval
+          }
+          updateQuery = `
+            UPDATE booking_requests 
+            SET status = ?, 
+                lab_staff_approved_at = NOW(),
+                lab_staff_approved_by = ?
+            WHERE id = ?
+          `
+          updateParams = [newStatus, userId, id]
+          console.log(`All lab staff decided and at least one approved! Moving booking ${id} to ${newStatus} status`)
+        } else if (allDecided && approved === 0 && (rejected + withdrawn) >= total) {
+          // All lab staff decided but none approved
+          // Check if any active labs were rejected (not just all withdrawn)
+          if (rejected > 0) {
+            // At least one lab was rejected - reject entire booking
+            newStatus = 'rejected'
+            updateQuery = `
+              UPDATE booking_requests 
+              SET 
+                status = ?,
+                rejected_at = NOW(),
+                rejected_by = ?,
+                rejection_reason = ?
+              WHERE id = ?
+            `
+            updateParams = [newStatus, userId, 'All active labs rejected by lab staff', id]
+            console.log(`All active labs rejected! Marking booking ${id} as rejected`)
+          } else {
+            // All labs are withdrawn, none rejected - mark as withdrawn
+            newStatus = 'withdrawn'
+            updateQuery = `
+              UPDATE booking_requests 
+              SET status = ?, withdrawn_at = NOW()
+              WHERE id = ?
+            `
+            updateParams = [newStatus, id]
+            console.log(`All labs withdrawn! Marking booking ${id} as withdrawn`)
+          }
+        } else {
+          // Still waiting for other lab staff approvals
+          newStatus = 'pending_lab_staff'
+          updateQuery = `SELECT 1` // No-op
+          updateParams = []
+        }
+      } else {
+        // Single lab rejection - reject entire booking
+        newStatus = 'rejected'
+        updateQuery = `
+          UPDATE booking_requests 
+          SET 
+            status = ?,
+            lab_staff_approved_at = NOW(),
+            lab_staff_approved_by = ?,
+            lab_staff_remarks = ?,
+            rejected_at = NOW(),
+            rejected_by = ?,
+            rejection_reason = ?
+          WHERE id = ?
+        `
+        updateParams = [newStatus, userId, remarks || null, userId, remarks || 'Rejected by lab staff', id]
       }
-      
-      updateQuery = `
-        UPDATE booking_requests 
-        SET 
-          status = ?,
-          lab_staff_approved_at = NOW(),
-          lab_staff_approved_by = ?,
-          lab_staff_remarks = ?,
-          rejected_at = NOW(),
-          rejected_by = ?,
-          rejection_reason = ?
-        WHERE id = ?
-      `
-      updateParams = [newStatus, userId, remarks || null, userId, remarks || 'Rejected by lab staff', id]
     }
 
     if (updateParams.length > 0) {
@@ -419,32 +553,29 @@ export async function POST(
           }
         }
       } else {
-        // Rejection - Email to student with multi-lab details if applicable
+        // Rejection - email requester about the rejected lab
+        // For multi-lab: always email about individual lab rejection
+        // For single lab: email about full rejection
+        
+        // Get the lab name that was rejected
         let labDetails = updatedRequest.lab_name
-        if (isMultiLab && bookingRequest.lab_ids) {
-          // Parse lab_ids JSON - handle Buffer/String/Array formats
-          let labIds: number[] = []
-          if (Array.isArray(bookingRequest.lab_ids)) {
-            labIds = bookingRequest.lab_ids
-          } else if (Buffer.isBuffer(bookingRequest.lab_ids)) {
-            labIds = JSON.parse(bookingRequest.lab_ids.toString('utf-8'))
-          } else if (typeof bookingRequest.lab_ids === 'string') {
-            labIds = JSON.parse(bookingRequest.lab_ids)
-          }
-          
-          const labs = await db.query(
-            `SELECT name FROM labs WHERE id IN (${labIds.map(() => '?').join(',')}) ORDER BY code`,
-            labIds
+        if (isMultiLab) {
+          // For multi-lab, show the specific rejected lab
+          const rejectedLabInfo = await db.query(
+            'SELECT name FROM labs WHERE id = ?',
+            [targetLabId]
           )
-          labDetails = labs.rows.map((l: any) => l.name).join(', ')
+          if (rejectedLabInfo.rows.length > 0) {
+            labDetails = rejectedLabInfo.rows[0].name
+          }
         }
 
-        // Email to student for rejection with salutation
+        // Email to requester for rejection with salutation
         const emailData = emailTemplates.labBookingRejected({
           requesterName: updatedRequest.student_name,
           requesterSalutation: updatedRequest.student_salutation,
           requesterRole: updatedRequest.requester_role === 'student' ? 'student' : updatedRequest.requester_role === 'faculty' ? 'faculty' : 'others',
-          labName: isMultiLab ? `Multiple Labs (${labDetails})` : updatedRequest.lab_name,
+          labName: labDetails,
           bookingDate: updatedRequest.booking_date,
           startTime: updatedRequest.start_time,
           endTime: updatedRequest.end_time,
@@ -457,6 +588,34 @@ export async function POST(
           to: updatedRequest.student_email,
           ...emailData
         }).catch(err => console.error('Email send failed:', err))
+        
+        // If requester has a faculty supervisor and status reached beyond pending_faculty, notify them too
+        if (updatedRequest.faculty_name && updatedRequest.booking_date) {
+          const facultyResult = await db.query(
+            'SELECT email, salutation FROM users WHERE id = ?',
+            [updatedRequest.faculty_supervisor_id]
+          )
+          
+          if (facultyResult.rows.length > 0) {
+            const facultyEmailData = emailTemplates.labBookingRejected({
+              requesterName: facultyResult.rows[0].name || updatedRequest.faculty_name,
+              requesterSalutation: facultyResult.rows[0].salutation,
+              requesterRole: 'faculty',
+              labName: labDetails,
+              bookingDate: updatedRequest.booking_date,
+              startTime: updatedRequest.start_time,
+              endTime: updatedRequest.end_time,
+              requestId: Number(id),
+              reason: remarks || 'No reason provided',
+              rejectedBy: updatedRequest.staff_name || 'Lab Staff'
+            })
+
+            await sendEmail({
+              to: facultyResult.rows[0].email,
+              ...facultyEmailData
+            }).catch(err => console.error('Faculty email send failed:', err))
+          }
+        }
       }
     } catch (emailError) {
       console.error('Failed to send email notification:', emailError)

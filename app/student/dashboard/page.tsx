@@ -23,6 +23,7 @@ interface BookingRequest {
   end_time: string
   purpose: string
   status: 'pending_faculty' | 'pending_lab_staff' | 'pending_hod' | 'approved' | 'rejected'
+  highest_approval_authority?: 'hod' | 'lab_coordinator'
   created_at: string
   faculty_remarks?: string
   lab_staff_remarks?: string
@@ -112,14 +113,15 @@ export default function StudentDashboard() {
     }
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (request: BookingRequest) => {
+    const status = request.status
     switch (status) {
       case 'pending_faculty':
         return <Badge variant="secondary">Pending Faculty</Badge>
       case 'pending_lab_staff':
         return <Badge variant="outline">Pending Lab Staff</Badge>
       case 'pending_hod':
-        return <Badge variant="outline">Pending HOD</Badge>
+        return <Badge variant="outline">{request.highest_approval_authority === 'lab_coordinator' ? 'Pending Lab Coordinator' : 'Pending HOD'}</Badge>
       case 'approved':
         return <Badge variant="default" className="bg-green-600">Approved</Badge>
       case 'rejected':
@@ -232,13 +234,13 @@ export default function StudentDashboard() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <h4 className="font-medium">{request.lab_name}</h4>
-                      {getStatusBadge(request.status)}
+                      {getStatusBadge(request)}
                     </div>
                     <p className="text-sm text-muted-foreground">
                       Faculty: {request.faculty_name}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {new Date(request.date).toLocaleDateString()} • {request.start_time} - {request.end_time}
+                      {new Date(request.date).toLocaleDateString()} • {formatTime(request.start_time)} - {formatTime(request.end_time)}
                     </p>
                     <p className="text-sm mt-1">{request.purpose}</p>
                   </div>

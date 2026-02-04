@@ -40,9 +40,15 @@ export async function GET(request: NextRequest) {
     let remindersSent = 0
     for (const booking of upcomingBookings.rows) {
       // Get all labs for this booking (multi-lab or single)
-      let labIds = []
+      let labIds: number[] = []
       if (booking.is_multi_lab) {
-        labIds = JSON.parse(booking.lab_ids)
+        if (Buffer.isBuffer(booking.lab_ids)) {
+          labIds = JSON.parse(booking.lab_ids.toString('utf-8'))
+        } else if (typeof booking.lab_ids === 'string') {
+          labIds = JSON.parse(booking.lab_ids)
+        } else if (Array.isArray(booking.lab_ids)) {
+          labIds = booking.lab_ids
+        }
       } else {
         labIds = [booking.lab_id]
       }

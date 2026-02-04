@@ -53,19 +53,29 @@ export default function LabStaffDashboardPage() {
 				const totalEquipment = componentsData.components?.length || 0
 				
 				// Fetch pending component requests
-				const requestsRes = await fetch('/api/lab-staff/component-requests')
-				if (requestsRes.ok) {
-					const requestsData = await requestsRes.json()
+				const componentRequestsRes = await fetch('/api/lab-staff/component-requests')
+				let pendingComponentRequests = 0
+				if (componentRequestsRes.ok) {
+					const componentRequestsData = await componentRequestsRes.json()
 					// Count requests with status 'pending_lab_staff'
-					const pendingIssues = requestsData.requests?.filter((r: any) => 
+					pendingComponentRequests = componentRequestsData.requests?.filter((r: any) => 
 						r.status === 'pending_lab_staff' || r.status === 'pending_faculty' || r.status === 'pending_hod'
 					).length || 0
-					
-					setStats({
-						totalEquipment,
-						pendingIssues
-					})
 				}
+				
+				// Fetch pending lab booking requests
+				const labBookingRes = await fetch('/api/lab-staff/requests?status=pending_lab_staff')
+				let pendingLabBookings = 0
+				if (labBookingRes.ok) {
+					const labBookingData = await labBookingRes.json()
+					pendingLabBookings = labBookingData.requests?.length || 0
+				}
+				
+				// Total pending issues = component requests + lab booking requests
+				setStats({
+					totalEquipment,
+					pendingIssues: pendingComponentRequests + pendingLabBookings
+				})
 			}
 		} catch (error) {
 			console.error('Failed to load stats:', error)

@@ -11,6 +11,17 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { Clock, CheckCircle, XCircle, Users, Building, Calendar, Loader2, ChevronDown, ChevronUp } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 interface TimelineStep {
   step_name: string
@@ -83,11 +94,108 @@ export default function TNPMyRequestsPage() {
     }
   }
 
-  const getStatusBadge = (status: string) => {
+  const formatTime = (time: string) => {
+    // Convert HH:MM:SS or HH:MM to 12-hour format with AM/PM
+    const [hours, minutes] = time.split(':')
+    const h = parseInt(hours, 10)
+    const m = minutes || '00'
+    const period = h >= 12 ? 'PM' : 'AM'
+    const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h
+    return `${displayHour}:${m} ${period}`
+  }
+
+  const handleWithdraw = async (requestId: number) => {
+    try {
+      const res = await fetch(`/api/others/booking-requests?id=${requestId}`, {
+        method: 'DELETE',
+      })
+
+      if (res.ok) {
+        toast({
+          title: 'Success',
+          description: 'Booking request withdrawn successfully',
+        })
+        loadMyRequests()
+      } else {
+        const data = await res.json()
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to withdraw booking',
+          variant: 'destructive',
+        })
+      }
+    } catch (e) {
+      toast({
+        title: 'Error',
+        description: 'Failed to withdraw booking',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const canWithdraw = (status: string) => {
+    return status === 'pending_faculty' || status === 'pending_lab_staff' || status === 'pending_hod'
+  }
+
+  const handleWithdrawLab = async (requestId: number, labId: number, labName: string) => {
+    try {
+      const res = await fetch(`/api/others/booking-requests/${requestId}/withdraw-lab`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lab_id: labId })
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        toast({
+          title: 'Success',
+          description: `${labName} withdrawn successfully`,
+        })
+        loadMyRequests()
+      } else {
+        const data = await res.json()
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to withdraw lab',
+          variant: 'destructive',
+        })
+      }
+    } catch (e) {
+      toast({
+        title: 'Error',
+        description: 'Failed to withdraw lab',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const getStatusBadge = (request: BookingWithTimeline) => {
+    const status = request.status
+    
+    // For multi-lab bookings, check if only some labs are withdrawn
+    if ((request.is_multi_lab === 1 || request.is_multi_lab === true) && request.multi_lab_approvals) {
+      const allStatuses = request.multi_lab_approvals.map(a => a.status)
+      const withdrawnCount = allStatuses.filter(s => s === 'withdrawn').length
+      const rejectedCount = allStatuses.filter(s => s === 'rejected').length
+      const activeCount = allStatuses.length - withdrawnCount - rejectedCount
+      
+      // If some labs withdrawn but others active, show "Partially Withdrawn"
+      if (withdrawnCount > 0 && activeCount > 0) {
+        return <Badge className="bg-orange-600">Partially Withdrawn ({activeCount} active)</Badge>
+      }
+      
+      // If all labs withdrawn/rejected, show "Withdrawn"
+      if (activeCount === 0) {
+        return <Badge variant="outline">Withdrawn</Badge>
+      }
+    }
+    
     if (status === 'approved') {
       return <Badge variant="default">Approved</Badge>
     } else if (status === 'rejected') {
       return <Badge variant="destructive">Rejected</Badge>
+    } else if (status === 'withdrawn') {
+      return <Badge variant="outline">Withdrawn</Badge>
     } else if (status.includes('pending')) {
       return <Badge variant="secondary">Pending</Badge>
     }
@@ -162,11 +270,11 @@ export default function TNPMyRequestsPage() {
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Time:</span>
-            <span className="font-medium">{request.start_time} - {request.end_time}</span>
+            <span className="font-medium">{formatTime(request.start_time)} - {formatTime(request.end_time)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Status:</span>
-            {getStatusBadge(request.status)}
+            {getStatusBadge(request)}
           </div>
         </div>
 
@@ -192,7 +300,7 @@ export default function TNPMyRequestsPage() {
                   displayStatus = '✓ Fully Approved'
                   badgeVariant = 'default'
                 } else if (approval.status === 'approved_by_lab_staff') {
-                  displayStatus = 'Pending HOD'
+                  displayStatus = request.highest_approval_authority === 'lab_coordinator' ? 'Pending Lab Coordinator' : 'Pending HOD'
                   badgeVariant = 'secondary'
                 } else if (approval.status === 'pending' && request.status === 'pending_lab_staff') {
                   displayStatus = 'Pending Lab Staff'
@@ -203,13 +311,54 @@ export default function TNPMyRequestsPage() {
                 } else if (approval.status === 'rejected') {
                   displayStatus = 'Rejected'
                   badgeVariant = 'destructive'
+                } else if (approval.status === 'withdrawn') {
+                  displayStatus = 'Withdrawn'
+                  badgeVariant = 'outline'
                 }
+                
+                const canWithdrawLab = ['pending_faculty','pending_lab_staff','pending_hod','approved'].includes(request.status) && 
+                                       approval.status !== 'rejected' && 
+                                       approval.status !== 'withdrawn'
                 
                 return (
                   <div key={approval.lab_id} className="p-2 bg-white rounded border text-xs">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium">{approval.lab_name}</span>
-                      <Badge variant={badgeVariant} className="text-xs">{displayStatus}</Badge>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{approval.lab_name}</span>
+                        <Badge variant={badgeVariant} className="text-xs">{displayStatus}</Badge>
+                      </div>
+                      {canWithdrawLab && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-6 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Withdraw
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Withdraw {approval.lab_name}?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to withdraw {approval.lab_name} from this multi-lab booking? 
+                                Other labs will remain active. This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleWithdrawLab(request.id, approval.lab_id, approval.lab_name)}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Withdraw Lab
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
                     </div>
                     {approval.responsible_person_name && (
                       <div className="text-xs text-blue-700 mb-1">
@@ -226,7 +375,7 @@ export default function TNPMyRequestsPage() {
                       {approval.hod_approved_at && (
                         <p className="flex items-center gap-1">
                           <CheckCircle className="h-3 w-3 text-green-600" />
-                          HOD: {formatName(approval.hod_name, approval.hod_salutation)} - {new Date(approval.hod_approved_at).toLocaleDateString()}
+                          {request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}: {formatName(approval.hod_name, approval.hod_salutation)} - {new Date(approval.hod_approved_at).toLocaleDateString()}
                         </p>
                       )}
                       {!approval.lab_staff_approved_at && (
@@ -454,7 +603,7 @@ export default function TNPMyRequestsPage() {
                             <div className="flex items-start gap-2">
                               <Building className="h-4 w-4 mt-0.5 flex-shrink-0" />
                               <div className="flex-1">
-                                <span className="font-medium text-sm">HOD:</span>
+                                <span className="font-medium text-sm">{request.highest_approval_authority === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'}:</span>
                                 <p className="text-sm text-muted-foreground">{approval.hod_remarks}</p>
                               </div>
                             </div>
@@ -576,11 +725,39 @@ export default function TNPMyRequestsPage() {
                   <Calendar className="h-3 w-3" />
                   {new Date(request.date).toLocaleDateString()}
                 </span>
-                <span>{request.start_time} - {request.end_time}</span>
+                <span>{formatTime(request.start_time)} - {formatTime(request.end_time)}</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
               {getStatusBadge(request.status)}
+              {canWithdraw(request.status) && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50">
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Withdraw
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Withdraw Booking Request?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to withdraw this booking request? This action cannot be undone.
+                        All relevant parties will be notified.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => handleWithdraw(request.id)}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        Withdraw Request
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
               <Button 
                 variant="outline" 
                 size="sm"

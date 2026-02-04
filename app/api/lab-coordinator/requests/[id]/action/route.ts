@@ -84,8 +84,25 @@ export async function POST(
       }
     }
     
+    // For multi-lab bookings, also check if there are any labs pending approval
+    const isMultiLab = booking.is_multi_lab === 1 || booking.is_multi_lab === true
+    
     if (booking.status !== 'pending_hod') {
-      return NextResponse.json({ error: "Request is not pending approval" }, { status: 400 })
+      // For multi-lab, check if there are actually any labs pending approval
+      if (isMultiLab) {
+        const pendingCheck = await db.query(
+          `SELECT COUNT(*) as pending_count 
+           FROM multi_lab_approvals 
+           WHERE booking_request_id = ? AND status = 'approved_by_lab_staff'`,
+          [requestId]
+        )
+        
+        if (Number(pendingCheck.rows[0].pending_count) === 0) {
+          return NextResponse.json({ error: "Request is not pending approval" }, { status: 400 })
+        }
+      } else {
+        return NextResponse.json({ error: "Request is not pending approval" }, { status: 400 })
+      }
     }
 
     // Update the booking status
@@ -100,6 +117,20 @@ export async function POST(
         WHERE id = ?
       `
       updateParams = [newStatus, user.userId, remarks || null, requestId]
+      
+      // For multi-lab bookings, only approve labs that were approved by lab staff
+      if (isMultiLab) {
+        await db.query(`
+          UPDATE multi_lab_approvals
+          SET status = 'approved',
+              hod_approved_by = ?,
+              hod_approved_at = NOW()
+          WHERE booking_request_id = ?
+            AND status = 'approved_by_lab_staff'
+            AND status != 'rejected'
+            AND status != 'withdrawn'
+        `, [user.userId, requestId])
+      }
     } else {
       // For rejection, also set rejected_by and rejected_at
       updateQuery = `
@@ -109,6 +140,20 @@ export async function POST(
         WHERE id = ?
       `
       updateParams = [newStatus, user.userId, remarks || null, user.userId, remarks || 'Rejected by Lab Coordinator', requestId]
+      
+      // For multi-lab bookings, reject only the labs that were approved by lab staff
+      if (isMultiLab) {
+        await db.query(`
+          UPDATE multi_lab_approvals
+          SET status = 'rejected',
+              hod_approved_by = ?,
+              hod_approved_at = NOW()
+          WHERE booking_request_id = ?
+            AND status = 'approved_by_lab_staff'
+            AND status != 'rejected'
+            AND status != 'withdrawn'
+        `, [user.userId, requestId])
+      }
     }
     
     await db.query(updateQuery, updateParams)
@@ -118,7 +163,18 @@ export async function POST(
     
     // Handle multi-lab bookings - create separate activity logs for each lab
     const isMultiLab = booking.is_multi_lab === 1 || booking.is_multi_lab === true
-    const labIds = isMultiLab && booking.lab_ids ? JSON.parse(booking.lab_ids) : [booking.lab_id]
+    let labIds: number[] = []
+    if (isMultiLab && booking.lab_ids) {
+      if (Buffer.isBuffer(booking.lab_ids)) {
+        labIds = JSON.parse(booking.lab_ids.toString('utf-8'))
+      } else if (typeof booking.lab_ids === 'string') {
+        labIds = JSON.parse(booking.lab_ids)
+      } else if (Array.isArray(booking.lab_ids)) {
+        labIds = booking.lab_ids
+      }
+    } else {
+      labIds = [booking.lab_id]
+    }
     
     for (const labId of labIds) {
       // Get complete booking details with lab-specific info

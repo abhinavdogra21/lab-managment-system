@@ -28,9 +28,12 @@ export async function GET(request: NextRequest) {
         br.lab_staff_remarks,
         br.hod_remarks,
         br.created_at,
-        l.name as lab_name
+        l.name as lab_name,
+        l.department_id,
+        d.highest_approval_authority
       FROM booking_requests br
       JOIN labs l ON l.id = br.lab_id
+      LEFT JOIN departments d ON l.department_id = d.id
       WHERE br.requested_by = ?
       ORDER BY br.created_at DESC`,
       [user.userId]

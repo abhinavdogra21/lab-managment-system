@@ -92,6 +92,16 @@ export default function FacultyDashboardPage() {
     }
   }
 
+  const formatTime = (time: string) => {
+    // Convert HH:MM:SS or HH:MM to 12-hour format with AM/PM
+    const [hours, minutes] = time.split(':')
+    const h = parseInt(hours, 10)
+    const m = minutes || '00'
+    const period = h >= 12 ? 'PM' : 'AM'
+    const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h
+    return `${displayHour}:${m} ${period}`
+  }
+
   if (!currentUser) return null
 
   return (
@@ -198,7 +208,7 @@ export default function FacultyDashboardPage() {
                       Student: {request.student_name}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {new Date(request.booking_date).toLocaleDateString()} • {request.start_time} - {request.end_time}
+                      {new Date(request.booking_date).toLocaleDateString()} • {formatTime(request.start_time)} - {formatTime(request.end_time)}
                     </p>
                     <p className="text-sm mt-1">{request.purpose}</p>
                   </div>
