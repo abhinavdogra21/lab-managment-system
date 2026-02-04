@@ -192,6 +192,7 @@ export async function POST(
           faculty.salutation as faculty_salutation,
           faculty.email as faculty_email,
           mla.lab_staff_approved_by,
+          mla.status as individual_lab_status,
           lab_staff.name as lab_staff_name,
           lab_staff.salutation as lab_staff_salutation,
           lab_staff.email as lab_staff_email,
@@ -217,6 +218,13 @@ export async function POST(
       `, [labId, labId, labId, requestId])
       
       if (bookingDetails.rows.length > 0) {
+        const individualLabStatus = bookingDetails.rows[0].individual_lab_status
+        
+        // Skip logging for rejected labs - they already have rejection log entry
+        if (individualLabStatus === 'rejected') {
+          continue
+        }
+        
         logLabBookingActivity({
           bookingId: requestId,
           labId: Number(labId),

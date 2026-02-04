@@ -75,7 +75,6 @@ export async function GET(req: NextRequest) {
 
     // Fetch booking logs with proper snapshot extraction
     // Only fetch final approval logs (approved_by_hod or approved_by_lab_coordinator)
-    // For multi-lab bookings, exclude rejected labs
     if (type === "booking" || type === "all") {
       let sql = `
         SELECT 
@@ -105,14 +104,11 @@ export async function GET(req: NextRequest) {
             JSON_UNQUOTE(JSON_EXTRACT(lbal.booking_snapshot, '$.requester_role')),
             requester.role,
             'student'
-          ) as requester_role,
-          mla.status as multi_lab_status
+          ) as requester_role
         FROM lab_booking_activity_logs lbal
         LEFT JOIN users requester ON requester.id = JSON_EXTRACT(lbal.booking_snapshot, '$.requested_by')
         LEFT JOIN labs ON labs.id = lbal.lab_id
-        LEFT JOIN multi_lab_approvals mla ON mla.booking_request_id = lbal.booking_id AND mla.lab_id = lbal.lab_id
         WHERE lbal.action IN ('approved_by_hod', 'approved_by_lab_coordinator')
-          AND (mla.status IS NULL OR mla.status NOT IN ('rejected', 'withdrawn'))
       `
       
       const params: any[] = []
@@ -146,8 +142,8 @@ export async function GET(req: NextRequest) {
       const bookingResult = await db.query(sql, params)
       
       // Process logs to extract booking details from snapshot
-      // For multi-lab bookings, fetch individual lab approval status
-      const bookingLogsWithStatus = await Promise.all(bookingResult.rows.map(async (log: any) => {
+      // For multi-lab bookings, fetch individual lab approval status and filter out rejected labs
+      const bookingLogsWithStatus = (await Promise.all(bookingResult.rows.map(async (log: any) => {
         const snapshot = typeof log.booking_snapshot === 'string'
           ? JSON.parse(log.booking_snapshot)
           : log.booking_snapshot
@@ -165,6 +161,11 @@ export async function GET(req: NextRequest) {
           }
         }
         
+        // Skip rejected labs in multi-lab bookings
+        if (snapshot?.is_multi_lab && individualLabStatus === 'rejected') {
+          return null
+        }
+
         return {
           id: log.id,
           booking_id: log.booking_id,
@@ -196,7 +197,7 @@ export async function GET(req: NextRequest) {
           final_approver_role: snapshot?.final_approver_role || null,
           created_at: log.created_at,
         }
-      }))
+      }))).filter(log => log !== null) // Remove null entries (rejected labs)
       
       results.bookingLogs = bookingLogsWithStatus
     }

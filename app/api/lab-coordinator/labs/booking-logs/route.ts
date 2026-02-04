@@ -80,10 +80,7 @@ export async function GET(request: NextRequest) {
          LEFT JOIN labs l ON lbal.lab_id = l.id
          LEFT JOIN departments d ON l.department_id = d.id
          LEFT JOIN users lc_user ON d.lab_coordinator_id = lc_user.id
-         LEFT JOIN multi_lab_approvals mla ON mla.booking_request_id = lbal.booking_id AND mla.lab_id = lbal.lab_id
-         WHERE lbal.action IN ('approved_by_lab_coordinator', 'approved_by_hod')
-           AND (mla.status IS NULL OR mla.status NOT IN ('rejected', 'withdrawn'))
-           ${searchCondition} ${dateCondition}
+         WHERE lbal.action IN ('approved_by_lab_coordinator', 'approved_by_hod') ${searchCondition} ${dateCondition}
          ORDER BY lbal.created_at DESC
          LIMIT 100`,
         params
@@ -117,11 +114,7 @@ export async function GET(request: NextRequest) {
          LEFT JOIN labs l ON lbal.lab_id = l.id
          LEFT JOIN departments d ON l.department_id = d.id
          LEFT JOIN users lc_user ON d.lab_coordinator_id = lc_user.id
-         LEFT JOIN multi_lab_approvals mla ON mla.booking_request_id = lbal.booking_id AND mla.lab_id = lbal.lab_id
-         WHERE lbal.action IN ('approved_by_lab_coordinator', 'approved_by_hod')
-           AND l.department_id IN (${placeholders})
-           AND (mla.status IS NULL OR mla.status NOT IN ('rejected', 'withdrawn'))
-           ${searchCondition} ${dateCondition}
+         WHERE lbal.action IN ('approved_by_lab_coordinator', 'approved_by_hod') AND l.department_id IN (${placeholders}) ${searchCondition} ${dateCondition}
          ORDER BY lbal.created_at DESC
          LIMIT 100`,
         params
@@ -129,8 +122,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Parse booking_snapshot JSON for each log
-    // For multi-lab bookings, check individual lab status
-    const logs = await Promise.all(logsRes.rows.map(async (row: any) => {
+    // For multi-lab bookings, check individual lab status and filter out rejected labs
+    const logs = (await Promise.all(logsRes.rows.map(async (row: any) => {
       const snapshot = typeof row.booking_snapshot === 'string' 
         ? JSON.parse(row.booking_snapshot) 
         : row.booking_snapshot
@@ -148,6 +141,11 @@ export async function GET(request: NextRequest) {
         }
       }
       
+      // Skip rejected labs in multi-lab bookings
+      if (snapshot?.is_multi_lab && individualLabStatus === 'rejected') {
+        return null
+      }
+
       return {
         id: row.booking_id,
         log_id: row.log_id,
@@ -183,7 +181,7 @@ export async function GET(request: NextRequest) {
         current_lab_coordinator_email: row.current_lab_coordinator_email,
         action_description: row.action_description,
       }
-    }))
+    }))).filter(log => log !== null) // Remove null entries (rejected labs)
 
     return NextResponse.json({ logs: logs || [] })
   } catch (error) {

@@ -261,12 +261,8 @@ export async function POST(
         
         if (allDecided && approved > 0) {
           // All lab staff made decisions AND at least one lab approved
-          // Determine next status based on highest approval authority
-          if (highestAuthority === 'lab_coordinator') {
-            newStatus = 'approved' // Lab coordinator approves automatically if set as highest authority
-          } else {
-            newStatus = 'pending_hod' // Default to HOD approval
-          }
+          // Move to pending_hod status (applies to both HOD and Lab Coordinator)
+          newStatus = 'pending_hod'
           updateQuery = `
             UPDATE booking_requests 
             SET status = ?, 
@@ -275,7 +271,7 @@ export async function POST(
             WHERE id = ?
           `
           updateParams = [newStatus, userId, id]
-          console.log(`All lab staff decided and at least one approved! Moving booking ${id} to ${newStatus} status`)
+          console.log(`All lab staff decided and at least one approved! Moving booking ${id} to ${newStatus} status (highest authority: ${highestAuthority})`)
         } else if (allDecided && approved === 0 && (rejected + withdrawn) >= total) {
           // All lab staff decided but none approved
           // Check if any active labs were rejected (not just all withdrawn)

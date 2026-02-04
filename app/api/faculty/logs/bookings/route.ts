@@ -46,9 +46,7 @@ export async function GET(req: NextRequest) {
       FROM lab_booking_activity_logs lbal
       LEFT JOIN users requester ON requester.id = JSON_EXTRACT(lbal.booking_snapshot, '$.requested_by')
       LEFT JOIN labs ON labs.id = lbal.lab_id
-      LEFT JOIN multi_lab_approvals mla ON mla.booking_request_id = lbal.booking_id AND mla.lab_id = lbal.lab_id
       WHERE lbal.action IN ('approved_by_hod', 'approved_by_lab_coordinator')
-        AND (mla.status IS NULL OR mla.status NOT IN ('rejected', 'withdrawn'))
     `;
 
     const params: any[] = [];
@@ -93,8 +91,8 @@ export async function GET(req: NextRequest) {
     const logs = result.rows;
 
     // Process logs to extract booking details from snapshot
-    // For multi-lab bookings, check individual lab status
-    const processedLogs = await Promise.all(logs.map(async (log: any) => {
+    // For multi-lab bookings, check individual lab status and filter out rejected labs
+    const processedLogs = (await Promise.all(logs.map(async (log: any) => {
       const snapshot = typeof log.booking_snapshot === 'string'
         ? JSON.parse(log.booking_snapshot)
         : log.booking_snapshot;
@@ -110,6 +108,11 @@ export async function GET(req: NextRequest) {
         if (multiLabStatus.rows.length > 0) {
           individualLabStatus = multiLabStatus.rows[0].status
         }
+      }
+
+      // Skip rejected labs in multi-lab bookings
+      if (snapshot?.is_multi_lab && individualLabStatus === 'rejected') {
+        return null
       }
 
       return {
@@ -140,7 +143,7 @@ export async function GET(req: NextRequest) {
         highest_approval_authority: snapshot?.highest_approval_authority || 'hod',
         final_approver_role: snapshot?.final_approver_role || null,
       };
-    }));
+    }))).filter(log => log !== null); // Remove null entries (rejected labs)
 
     return NextResponse.json(processedLogs);
   } catch (error) {
