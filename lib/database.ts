@@ -555,7 +555,7 @@ export const dbOperations = {
       await client.query("UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL", [userId])
       const result = await client.query(
   `INSERT INTO password_resets (user_id, token, expires_at)
-     VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 60 MINUTE))`,
+     VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 2880 MINUTE))`,
     [userId, token]
       )
       const selectRes = await client.query(

@@ -134,7 +134,7 @@ export async function sendPasswordResetEmail(
                     <p><a href="${url}" style="display:inline-block; background:#034da2; color:#ffffff; text-decoration:none; padding:10px 16px; border-radius:6px; font-weight:600;">Reset Password</a></p>
                     <p>If the button doesn’t work, copy and paste this link into your browser:</p>
                     <p style="word-break:break-all;"><a href="${url}" style="color:#034da2; text-decoration:underline;">${url}</a></p>
-                    <p style="color:#555;">This link will expire in 60 minutes.</p>
+                    <p style="color:#555;">This link will expire in 48 hours.</p>
                   </td>
                 </tr>
                 <tr>
@@ -237,7 +237,7 @@ export async function sendWelcomeEmail(
                     <p><a href="${url}" style="display:inline-block; background:#034da2; color:#ffffff; text-decoration:none; padding:10px 16px; border-radius:6px; font-weight:600;">Set Up Password</a></p>
                     <p>If the button doesn't work, copy and paste this link into your browser:</p>
                     <p style="word-break:break-all;"><a href="${url}" style="color:#034da2; text-decoration:underline;">${url}</a></p>
-                    <p style="color:#555;">This link will expire in 60 minutes.</p>
+                    <p style="color:#555;">This link will expire in 48 hours.</p>
                     <p>Your account details:</p>
                     <ul style="color:#555;">
                       <li><b>Email:</b> ${email}</li>

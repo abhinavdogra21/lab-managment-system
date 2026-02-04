@@ -53,8 +53,8 @@ export async function POST(req: Request) {
     }
 
     const token = crypto.randomBytes(32).toString("hex")
-    // DB layer sets 60m expiry; expiresAt argument is unused but kept for clarity
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+    // DB layer sets 48 hour expiry; expiresAt argument is unused but kept for clarity
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
     await dbOperations.upsertPasswordReset(user.id, token, expiresAt)
 
     const hostHeader = (req.headers as any).get?.("x-forwarded-host") || (req.headers as any).get?.("host") || undefined

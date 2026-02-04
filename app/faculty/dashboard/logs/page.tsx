@@ -521,26 +521,24 @@ export default function FacultyLogsPage() {
         logoImg.onload = resolve
         logoImg.onerror = resolve
       })
-      doc.addImage(logoImg, 'PNG', 15, 12, 40, 20)
+      doc.addImage(logoImg, 'PNG', 15, 12, 35, 15)
     } catch (error) {
       console.error('Logo loading failed:', error)
     }
 
     // Header
-    doc.setFontSize(16)
-    doc.setFont('helvetica', 'bold')
-    doc.text('LNMIIT', 105, 20, { align: 'center' })
     doc.setFontSize(12)
-    doc.text('The LNM Institute of Information Technology', 105, 27, { align: 'center' })
+    doc.setFont('helvetica', 'bold')
+    doc.text('The LNM Institute of Information Technology, Jaipur', 105, 20, { align: 'center' })
     doc.setFontSize(14)
-    doc.text('Component Issue/Return Certificate', 105, 34, { align: 'center' })
+    doc.text('Component Issue/Return Form', 105, 27, { align: 'center' })
     
     // Horizontal line
     doc.setLineWidth(0.5)
-    doc.line(15, 38, 195, 38)
+    doc.line(15, 31, 195, 31)
     
     // Request Details
-    let yPos = 50
+    let yPos = 43
     doc.setFontSize(12)
     doc.setFont('helvetica', 'bold')
     doc.text('Request Details:', 15, yPos)
@@ -803,26 +801,24 @@ export default function FacultyLogsPage() {
         logoImg.onload = resolve
         logoImg.onerror = resolve
       })
-      doc.addImage(logoImg, 'PNG', 15, 12, 40, 20)
+      doc.addImage(logoImg, 'PNG', 15, 12, 35, 15)
     } catch (error) {
       console.error('Logo loading failed:', error)
     }
 
     // Header
-    doc.setFontSize(16)
-    doc.setFont('helvetica', 'bold')
-    doc.text('LNMIIT', 105, 20, { align: 'center' })
     doc.setFontSize(12)
-    doc.text('The LNM Institute of Information Technology', 105, 27, { align: 'center' })
+    doc.setFont('helvetica', 'bold')
+    doc.text('The LNM Institute of Information Technology, Jaipur', 105, 20, { align: 'center' })
     doc.setFontSize(14)
-    doc.text('Lab Booking Approval Certificate', 105, 34, { align: 'center' })
+    doc.text('Lab Booking Approval Form', 105, 27, { align: 'center' })
     
     // Horizontal line
     doc.setLineWidth(0.5)
-    doc.line(15, 38, 195, 38)
+    doc.line(15, 31, 195, 31)
     
     // Booking Details
-    let yPos = 50
+    let yPos = 43
     doc.setFontSize(12)
     doc.setFont('helvetica', 'bold')
     doc.text('Booking Details:', 15, yPos)
