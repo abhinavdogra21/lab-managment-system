@@ -248,18 +248,20 @@ function ComponentRow({ comp, onChanged }: { comp: ComponentItem; onChanged: () 
 	}
 
 	return (
-		<div className="p-3 border rounded space-y-2">
+		<div className="p-3 border rounded space-y-2 bg-white">
 			{!editing ? (
-				<div className="flex items-center justify-between">
-					<div>
-						<div className="font-medium text-sm">{comp.name} {comp.model ? `(${comp.model})` : ''}</div>
-						<div className="text-xs text-muted-foreground">{comp.category || 'Uncategorized'} • {comp.condition_status} • Total: {comp.quantity_total} • Available: {comp.quantity_available}</div>
+				<>
+					<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+						<div className="flex-1">
+							<div className="font-medium text-sm">{comp.name} {comp.model ? `(${comp.model})` : ''}</div>
+							<div className="text-xs text-muted-foreground">{comp.category || 'Uncategorized'} • {comp.condition_status} • Available: {comp.quantity_available}/{comp.quantity_total}</div>
+						</div>
+						<div className="flex gap-2 flex-shrink-0">
+							<Button variant="outline" size="sm" onClick={() => setEditing(true)}>Edit</Button>
+							<Button variant="destructive" size="sm" onClick={remove}>Delete</Button>
+						</div>
 					</div>
-					<div className="flex gap-2">
-						<Button variant="outline" size="sm" onClick={() => setEditing(true)}>Edit</Button>
-						<Button variant="destructive" size="sm" onClick={remove}>Delete</Button>
-					</div>
-				</div>
+				</>
 			) : (
 				<div className="space-y-2">
 					<div className="grid grid-cols-2 gap-2">

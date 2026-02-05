@@ -758,20 +758,11 @@ export default function LabHeadLabsPage() {
                                    c.category?.toLowerCase().includes(q)
                           })
                           .map(c => (
-                            <div key={c.id} className="p-3 border rounded">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <div className="font-medium text-sm">{c.name} {c.model && `(${c.model})`}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {c.category || 'Uncategorized'} • {c.condition_status} • 
-                                    Available: {c.quantity_available}/{c.quantity_total}
-                                  </div>
-                                </div>
-                                <Badge variant={c.quantity_available > 0 ? 'default' : 'destructive'}>
-                                  {c.quantity_available}/{c.quantity_total}
-                                </Badge>
-                              </div>
-                            </div>
+                            <InventoryComponentRow 
+                              key={c.id} 
+                              comp={c} 
+                              onChanged={() => loadInventoryComponents(Number(inventoryLab))}
+                            />
                           ))}
                       </div>
                     </>
@@ -920,6 +911,133 @@ export default function LabHeadLabsPage() {
           )}
         </TabsContent>
       </Tabs>
+    </div>
+  )
+}
+
+// Component for inline editing in inventory tab
+function InventoryComponentRow({ comp, onChanged }: { comp: LabComponent; onChanged: () => void }) {
+  const { toast } = useToast()
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [local, setLocal] = useState({
+    name: comp.name,
+    category: comp.category || '',
+    model: comp.model || '',
+    condition_status: comp.condition_status,
+    quantity_total: comp.quantity_total,
+    quantity_available: comp.quantity_available,
+  })
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/lab-staff/components/${comp.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: local.name,
+          category: local.category || null,
+          model: local.model || null,
+          condition_status: local.condition_status,
+          quantity_total: Number(local.quantity_total),
+          quantity_available: Number(local.quantity_available),
+        }),
+      })
+      const text = await res.text()
+      if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
+      toast({ title: 'Saved', description: 'Component updated successfully' })
+      setEditing(false)
+      onChanged()
+    } catch (e: any) {
+      toast({ title: 'Update failed', description: e?.message || 'Could not update', variant: 'destructive' })
+    } finally { setSaving(false) }
+  }
+
+  const remove = async () => {
+    if (!confirm('Delete this component? This cannot be undone.')) return
+    try {
+      const res = await fetch(`/api/lab-staff/components/${comp.id}`, { method: 'DELETE' })
+      const text = await res.text()
+      if (!res.ok) throw new Error((() => { try { return JSON.parse(text)?.error } catch { return text } })() || 'Failed')
+      toast({ title: 'Deleted', description: 'Component removed successfully' })
+      onChanged()
+    } catch (e: any) {
+      toast({ title: 'Delete failed', description: e?.message || 'Could not delete', variant: 'destructive' })
+    }
+  }
+
+  return (
+    <div className="p-3 border rounded bg-white space-y-2">
+      {!editing ? (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+          <div className="flex-1">
+            <div className="font-medium text-sm">{comp.name} {comp.model && `(${comp.model})`}</div>
+            <div className="text-xs text-muted-foreground">
+              {comp.category || 'Uncategorized'} • {comp.condition_status} • 
+              Available: {comp.quantity_available}/{comp.quantity_total}
+            </div>
+          </div>
+          <div className="flex gap-2 items-center flex-shrink-0">
+            <Badge variant={comp.quantity_available > 0 ? 'default' : 'destructive'}>
+              {comp.quantity_available}/{comp.quantity_total}
+            </Badge>
+            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>Edit</Button>
+            <Button variant="destructive" size="sm" onClick={remove}>Delete</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label>Name</Label>
+              <Input value={local.name} onChange={(e) => setLocal({ ...local, name: e.target.value })} />
+            </div>
+            <div>
+              <Label>Model</Label>
+              <Input value={local.model} onChange={(e) => setLocal({ ...local, model: e.target.value })} />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <Label>Category</Label>
+              <Input value={local.category} onChange={(e) => setLocal({ ...local, category: e.target.value })} />
+            </div>
+            <div>
+              <Label>Condition</Label>
+              <Select value={local.condition_status} onValueChange={(v) => setLocal({ ...local, condition_status: v as any })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="working">Working</SelectItem>
+                  <SelectItem value="dead">Dead</SelectItem>
+                  <SelectItem value="consumable">Consumable</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Total</Label>
+              <Input type="number" min={0} value={local.quantity_total} onChange={(e) => setLocal({ ...local, quantity_total: Number(e.target.value) })} />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <Label>Available</Label>
+              <Input type="number" min={0} value={local.quantity_available} onChange={(e) => setLocal({ ...local, quantity_available: Number(e.target.value) })} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
+            <Button variant="outline" size="sm" onClick={() => { setEditing(false); setLocal({
+              name: comp.name,
+              category: comp.category || '',
+              model: comp.model || '',
+              condition_status: comp.condition_status,
+              quantity_total: comp.quantity_total,
+              quantity_available: comp.quantity_available,
+            })}}>Cancel</Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

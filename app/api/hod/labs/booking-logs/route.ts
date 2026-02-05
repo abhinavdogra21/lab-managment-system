@@ -177,6 +177,9 @@ export async function GET(request: NextRequest) {
         current_hod_name: row.current_hod_name, // Current HOD assigned to department
         current_hod_email: row.current_hod_email, // Current HOD email
         action_description: row.action_description,
+        action: row.action, // Who actually approved: approved_by_hod or approved_by_lab_coordinator
+        final_approver_role: snapshot?.final_approver_role || null, // The role that gave final approval
+        highest_approval_authority: snapshot?.highest_approval_authority || null, // Fallback for old data
       }
     }))).filter(log => log !== null) // Remove null entries (rejected labs)
 

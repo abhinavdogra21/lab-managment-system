@@ -43,6 +43,8 @@ interface BookingLog {
   lab_staff_approved_at: string | null
   lab_coordinator_approved_at: string | null
   hod_approved_at?: string | null
+  highest_approval_authority?: 'hod' | 'lab_coordinator'
+  final_approver_role?: 'hod' | 'lab_coordinator' | null
 }
 
 interface ComponentLog {
@@ -77,6 +79,8 @@ interface ComponentLog {
   hod_approved_at?: string | null
   components_list: string
   created_at: string
+  highest_approval_authority?: 'hod' | 'lab_coordinator'
+  final_approver_role?: 'hod' | 'lab_coordinator' | null
 }
 
 export default function HODLogsPage() {
@@ -315,24 +319,11 @@ export default function HODLogsPage() {
       yPos += 3
     }
     
-    if (log.lab_coordinator_name) {
-      doc.setFont('helvetica', 'bold')
-      doc.text('✓', 20, yPos)
-      doc.setFont('helvetica', 'normal')
-      doc.setFont('helvetica', 'bold')
-      doc.text(`APPROVED BY LAB COORDINATOR:`, 25, yPos)
-      doc.setFont('helvetica', 'normal')
-      doc.text(formatNameWithSalutation(log.lab_coordinator_name, log.lab_coordinator_salutation), 110, yPos)
-      yPos += 7
-      if (log.lab_coordinator_approved_at) {
-        doc.setFontSize(9)
-        doc.setTextColor(100, 100, 100)
-        doc.text(`Final approval on: ${new Date(log.lab_coordinator_approved_at).toLocaleString('en-IN')}`, 110, yPos)
-        doc.setTextColor(0, 0, 0)
-        doc.setFontSize(11)
-        yPos += 7
-      }
-    } else if (log.hod_name) {
+    // Use final_approver_role (who ACTUALLY approved) with fallback to highest_approval_authority
+    const actualApproverRole = log.final_approver_role || log.highest_approval_authority
+    const approverIsHOD = actualApproverRole === 'hod' || (!actualApproverRole && log.hod_name && !log.lab_coordinator_name)
+    
+    if (approverIsHOD && log.hod_name) {
       doc.setFont('helvetica', 'bold')
       doc.text('✓', 20, yPos)
       doc.setFont('helvetica', 'normal')
@@ -345,6 +336,23 @@ export default function HODLogsPage() {
         doc.setFontSize(9)
         doc.setTextColor(100, 100, 100)
         doc.text(`Final approval on: ${new Date(log.hod_approved_at).toLocaleString('en-IN')}`, 85, yPos)
+        doc.setTextColor(0, 0, 0)
+        doc.setFontSize(11)
+        yPos += 7
+      }
+    } else if (log.lab_coordinator_name) {
+      doc.setFont('helvetica', 'bold')
+      doc.text('✓', 20, yPos)
+      doc.setFont('helvetica', 'normal')
+      doc.setFont('helvetica', 'bold')
+      doc.text(`APPROVED BY LAB COORDINATOR:`, 25, yPos)
+      doc.setFont('helvetica', 'normal')
+      doc.text(formatNameWithSalutation(log.lab_coordinator_name, log.lab_coordinator_salutation), 110, yPos)
+      yPos += 7
+      if (log.lab_coordinator_approved_at) {
+        doc.setFontSize(9)
+        doc.setTextColor(100, 100, 100)
+        doc.text(`Final approval on: ${new Date(log.lab_coordinator_approved_at).toLocaleString('en-IN')}`, 110, yPos)
         doc.setTextColor(0, 0, 0)
         doc.setFontSize(11)
         yPos += 7
@@ -564,7 +572,29 @@ export default function HODLogsPage() {
       yPos += 3
     }
     
-    if (log.lab_coordinator_name) {
+    // Use final_approver_role (who ACTUALLY approved) with fallback to highest_approval_authority
+    const actualApproverRole = log.final_approver_role || log.highest_approval_authority
+    const approverIsHOD = actualApproverRole === 'hod' || (!actualApproverRole && log.hod_name && !log.lab_coordinator_name)
+    
+    if (approverIsHOD && log.hod_name) {
+      yPos = checkAddPage(yPos, 20)
+      doc.setFont('helvetica', 'bold')
+      doc.text('✓', 20, yPos)
+      doc.setFont('helvetica', 'normal')
+      doc.setFont('helvetica', 'bold')
+      doc.text(`APPROVED BY HOD:`, 25, yPos)
+      doc.setFont('helvetica', 'normal')
+      doc.text(formatNameWithSalutation(log.hod_name, log.hod_salutation), 80, yPos)
+      yPos += 7
+      if (log.hod_approved_at) {
+        doc.setFontSize(9)
+        doc.setTextColor(100, 100, 100)
+        doc.text(`Final approval on: ${new Date(log.hod_approved_at).toLocaleString('en-IN')}`, 80, yPos)
+        doc.setTextColor(0, 0, 0)
+        doc.setFontSize(11)
+        yPos += 7
+      }
+    } else if (log.lab_coordinator_name) {
       yPos = checkAddPage(yPos, 20)
       doc.setFont('helvetica', 'bold')
       doc.text('✓', 20, yPos)
@@ -582,20 +612,21 @@ export default function HODLogsPage() {
         doc.setFontSize(11)
         yPos += 7
       }
-    } else if (log.hod_name) {
+    } else if (log.lab_coordinator_name) {
+      // Fallback to old logic if action is not available
       yPos = checkAddPage(yPos, 20)
       doc.setFont('helvetica', 'bold')
       doc.text('✓', 20, yPos)
       doc.setFont('helvetica', 'normal')
       doc.setFont('helvetica', 'bold')
-      doc.text(`APPROVED BY HOD:`, 25, yPos)
+      doc.text(`APPROVED BY LAB COORDINATOR:`, 25, yPos)
       doc.setFont('helvetica', 'normal')
-      doc.text(formatNameWithSalutation(log.hod_name, log.hod_salutation), 80, yPos)
+      doc.text(formatNameWithSalutation(log.lab_coordinator_name, log.lab_coordinator_salutation), 110, yPos)
       yPos += 7
-      if (log.hod_approved_at) {
+      if (log.lab_coordinator_approved_at) {
         doc.setFontSize(9)
         doc.setTextColor(100, 100, 100)
-        doc.text(`Final approval on: ${new Date(log.hod_approved_at).toLocaleString('en-IN')}`, 80, yPos)
+        doc.text(`Final approval on: ${new Date(log.lab_coordinator_approved_at).toLocaleString('en-IN')}`, 110, yPos)
         doc.setTextColor(0, 0, 0)
         doc.setFontSize(11)
         yPos += 7
@@ -830,22 +861,21 @@ export default function HODLogsPage() {
                               <span className="font-medium">{formatNameWithSalutation(log.lab_staff_name, log.lab_staff_salutation)}</span>
                             </div>
                           )}
-                          {(log.lab_coordinator_name || log.hod_name) && (
-                            <div className="flex items-center gap-2 text-sm">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              {log.lab_coordinator_name ? (
-                                <>
-                                  <span className="text-muted-foreground">Approved by Lab Coordinator:</span>
-                                  <span className="font-medium">{formatNameWithSalutation(log.lab_coordinator_name, log.lab_coordinator_salutation)}</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span className="text-muted-foreground">Approved by HOD:</span>
-                                  <span className="font-medium">{formatNameWithSalutation(log.hod_name, log.hod_salutation)}</span>
-                                </>
-                              )}
-                            </div>
-                          )}
+                          {(log.lab_coordinator_name || log.hod_name) && (() => {
+                            const actualApproverRole = log.final_approver_role || log.highest_approval_authority
+                            const approvalAuthorityLabel = actualApproverRole === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'
+                            const approverName = actualApproverRole === 'lab_coordinator'
+                              ? formatNameWithSalutation(log.lab_coordinator_name || '', log.lab_coordinator_salutation)
+                              : formatNameWithSalutation(log.hod_name || '', log.hod_salutation)
+                            
+                            return (
+                              <div className="flex items-center gap-2 text-sm">
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                <span className="text-muted-foreground">Approved by {approvalAuthorityLabel}:</span>
+                                <span className="font-medium">{approverName}</span>
+                              </div>
+                            )
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -1029,19 +1059,21 @@ export default function HODLogsPage() {
                             <span className="font-medium">{formatNameWithSalutation(log.lab_staff_name, log.lab_staff_salutation)}</span>
                           </div>
                         )}
-                        {log.lab_coordinator_name ? (
-                          <div className="flex items-center gap-2 text-sm">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <span className="text-muted-foreground font-bold">APPROVED BY LAB COORDINATOR:</span>
-                            <span className="font-medium">{formatNameWithSalutation(log.lab_coordinator_name, log.lab_coordinator_salutation)}</span>
-                          </div>
-                        ) : log.hod_name && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <span className="text-muted-foreground font-bold">APPROVED BY HOD:</span>
-                            <span className="font-medium">{formatNameWithSalutation(log.hod_name, log.hod_salutation)}</span>
-                          </div>
-                        )}
+                        {(log.lab_coordinator_name || log.hod_name) && (() => {
+                          const actualApproverRole = log.final_approver_role || log.highest_approval_authority
+                          const approvalAuthorityLabel = actualApproverRole === 'lab_coordinator' ? 'Lab Coordinator' : 'HOD'
+                          const approverName = actualApproverRole === 'lab_coordinator'
+                            ? formatNameWithSalutation(log.lab_coordinator_name || '', log.lab_coordinator_salutation)
+                            : formatNameWithSalutation(log.hod_name || '', log.hod_salutation)
+                          
+                          return (
+                            <div className="flex items-center gap-2 text-sm">
+                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                              <span className="text-muted-foreground font-bold">APPROVED BY {approvalAuthorityLabel.toUpperCase()}:</span>
+                              <span className="font-medium">{approverName}</span>
+                            </div>
+                          )
+                        })()}
                       </div>
                     </div>
                   </CardContent>

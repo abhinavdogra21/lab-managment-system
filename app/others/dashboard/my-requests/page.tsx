@@ -64,8 +64,9 @@ interface BookingWithTimeline {
     hod_remarks: string | null
     responsible_person_name?: string
     responsible_person_email?: string
-  }>  highest_approval_authority?: 'hod' | 'lab_coordinator'
-  final_approver_role?: 'hod' | 'lab_coordinator' | null
+    highest_approval_authority?: 'hod' | 'lab_coordinator'
+    final_approver_role?: 'hod' | 'lab_coordinator' | null
+  }>
   timeline: TimelineStep[]
 }
 

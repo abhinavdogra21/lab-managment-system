@@ -162,7 +162,7 @@ export async function POST(
     const userInfo = await getUserInfoForLogging(user.userId)
     
     // Handle multi-lab bookings - create separate activity logs for each lab
-    const isMultiLab = booking.is_multi_lab === 1 || booking.is_multi_lab === true
+    // isMultiLab already declared above
     let labIds: number[] = []
     if (isMultiLab && booking.lab_ids) {
       if (Buffer.isBuffer(booking.lab_ids)) {

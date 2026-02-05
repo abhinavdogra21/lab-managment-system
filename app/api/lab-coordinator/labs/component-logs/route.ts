@@ -150,6 +150,8 @@ export async function GET(request: NextRequest) {
         hod_approved_at: snapshot?.hod_approved_at || null,
         action_description: row.action_description,
         components_list,
+        final_approver_role: snapshot?.final_approver_role || null,
+        highest_approval_authority: snapshot?.highest_approval_authority || null,
       }
     })
 

@@ -180,6 +180,8 @@ export async function GET(request: NextRequest) {
         current_lab_coordinator_name: row.current_lab_coordinator_name,
         current_lab_coordinator_email: row.current_lab_coordinator_email,
         action_description: row.action_description,
+        final_approver_role: snapshot?.final_approver_role || null,
+        highest_approval_authority: snapshot?.highest_approval_authority || null,
       }
     }))).filter(log => log !== null) // Remove null entries (rejected labs)
 
