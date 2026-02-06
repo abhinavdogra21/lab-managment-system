@@ -358,12 +358,6 @@ export default function LabCoordinatorLogsPage() {
         yPos += 7
       }
     }
-        doc.text(`Final approval on: ${new Date(log.hod_approved_at).toLocaleString('en-IN')}`, 85, yPos)
-        doc.setTextColor(0, 0, 0)
-        doc.setFontSize(11)
-        yPos += 7
-      }
-    }
     
     yPos += 10
     
