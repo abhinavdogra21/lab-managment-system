@@ -18,8 +18,9 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const status = searchParams.get('status') || 'pending_faculty'
 
-    let whereClause = 'WHERE br.faculty_supervisor_id = ? AND br.request_type = \'lab_booking\''
-    let params: any[] = [user.userId]
+    // Exclude faculty's own bookings - only show student requests where faculty is the supervisor
+    let whereClause = 'WHERE br.faculty_supervisor_id = ? AND br.requested_by != ? AND br.request_type = \'lab_booking\''
+    let params: any[] = [user.userId, user.userId]
 
     if (status !== 'all') {
       if (status.includes(',')) {

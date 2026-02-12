@@ -82,7 +82,7 @@ export default function FacultyDashboardPage() {
         
         setStats({
           pending: requests.filter((r: any) => r.status === 'pending_faculty').length,
-          approved: requests.filter((r: any) => r.status !== 'pending_faculty' && r.status !== 'rejected').length,
+          approved: requests.filter((r: any) => r.status === 'approved').length,
           rejected: requests.filter((r: any) => r.status === 'rejected').length,
           total: requests.length
         })
