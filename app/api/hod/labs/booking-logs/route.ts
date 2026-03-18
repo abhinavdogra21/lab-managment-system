@@ -120,27 +120,40 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Parse booking_snapshot JSON for each log
-    // For multi-lab bookings, check individual lab status and filter out rejected labs
-    const logs = (await Promise.all(logsRes.rows.map(async (row: any) => {
+    // ── BATCH: Collect multi-lab booking IDs and fetch all statuses in one query ──
+    const parsedRows = logsRes.rows.map((row: any) => {
       const snapshot = typeof row.booking_snapshot === 'string' 
         ? JSON.parse(row.booking_snapshot) 
         : row.booking_snapshot
-      
-      // For multi-lab bookings, get the specific lab's status
+      return { row, snapshot }
+    })
+
+    const multiLabPairs = parsedRows
+      .filter(({ snapshot }) => snapshot?.is_multi_lab)
+      .map(({ row }) => ({ bookingId: row.booking_id, labId: row.lab_id }))
+
+    // Single batch query for all multi-lab statuses
+    let multiLabStatusMap = new Map<string, string>()
+    if (multiLabPairs.length > 0) {
+      const conditions = multiLabPairs.map(() => '(booking_request_id = ? AND lab_id = ?)').join(' OR ')
+      const batchParams = multiLabPairs.flatMap(p => [p.bookingId, p.labId])
+      const statusRes = await db.query(
+        `SELECT booking_request_id, lab_id, status FROM multi_lab_approvals WHERE ${conditions}`,
+        batchParams
+      )
+      for (const r of statusRes.rows) {
+        multiLabStatusMap.set(`${r.booking_request_id}-${r.lab_id}`, r.status)
+      }
+    }
+
+    // Assemble results in memory (no more DB queries)
+    const logs = parsedRows.map(({ row, snapshot }) => {
       let individualLabStatus = snapshot?.status || 'approved'
       if (snapshot?.is_multi_lab) {
-        const multiLabStatus = await db.query(
-          `SELECT status FROM multi_lab_approvals 
-           WHERE booking_request_id = ? AND lab_id = ?`,
-          [row.booking_id, row.lab_id]
-        )
-        if (multiLabStatus.rows.length > 0) {
-          individualLabStatus = multiLabStatus.rows[0].status
-        }
+        const key = `${row.booking_id}-${row.lab_id}`
+        individualLabStatus = multiLabStatusMap.get(key) || individualLabStatus
       }
       
-      // Skip rejected labs in multi-lab bookings
       if (snapshot?.is_multi_lab && individualLabStatus === 'rejected') {
         return null
       }
@@ -155,7 +168,7 @@ export async function GET(request: NextRequest) {
         booking_date: snapshot?.booking_date || null,
         start_time: snapshot?.start_time || null,
         end_time: snapshot?.end_time || null,
-        status: individualLabStatus, // Use individual lab status for multi-lab bookings
+        status: individualLabStatus,
         is_multi_lab: snapshot?.is_multi_lab || false,
         created_at: snapshot?.created_at || row.created_at,
         hod_approved_at: snapshot?.hod_approved_at || row.created_at,
@@ -174,14 +187,14 @@ export async function GET(request: NextRequest) {
         lab_coordinator_salutation: snapshot?.lab_coordinator_salutation || null,
         responsible_person_name: snapshot?.responsible_person_name || null,
         responsible_person_email: snapshot?.responsible_person_email || null,
-        current_hod_name: row.current_hod_name, // Current HOD assigned to department
-        current_hod_email: row.current_hod_email, // Current HOD email
+        current_hod_name: row.current_hod_name,
+        current_hod_email: row.current_hod_email,
         action_description: row.action_description,
-        action: row.action, // Who actually approved: approved_by_hod or approved_by_lab_coordinator
-        final_approver_role: snapshot?.final_approver_role || null, // The role that gave final approval
-        highest_approval_authority: snapshot?.highest_approval_authority || null, // Fallback for old data
+        action: row.action,
+        final_approver_role: snapshot?.final_approver_role || null,
+        highest_approval_authority: snapshot?.highest_approval_authority || null,
       }
-    }))).filter(log => log !== null) // Remove null entries (rejected labs)
+    }).filter(log => log !== null)
 
     return NextResponse.json({ logs: logs || [] })
   } catch (error) {

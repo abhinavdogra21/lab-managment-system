@@ -143,25 +143,39 @@ export async function GET(req: NextRequest) {
       
       // Process logs to extract booking details from snapshot
       // For multi-lab bookings, fetch individual lab approval status and filter out rejected labs
-      const bookingLogsWithStatus = (await Promise.all(bookingResult.rows.map(async (log: any) => {
+      // ── BATCH: Fetch all multi-lab statuses in one query ──
+      const parsedBookings = bookingResult.rows.map((log: any) => {
         const snapshot = typeof log.booking_snapshot === 'string'
           ? JSON.parse(log.booking_snapshot)
           : log.booking_snapshot
-        
-        // For multi-lab bookings, get the specific lab's status
+        return { log, snapshot }
+      })
+
+      const multiLabPairs = parsedBookings
+        .filter(({ snapshot }) => snapshot?.is_multi_lab)
+        .map(({ log }) => ({ bookingId: log.booking_id, labId: log.lab_id }))
+
+      let multiLabStatusMap = new Map<string, string>()
+      if (multiLabPairs.length > 0) {
+        const conditions = multiLabPairs.map(() => '(booking_request_id = ? AND lab_id = ?)').join(' OR ')
+        const batchParams = multiLabPairs.flatMap(p => [p.bookingId, p.labId])
+        const statusRes = await db.query(
+          `SELECT booking_request_id, lab_id, status FROM multi_lab_approvals WHERE ${conditions}`,
+          batchParams
+        )
+        for (const r of statusRes.rows) {
+          multiLabStatusMap.set(`${r.booking_request_id}-${r.lab_id}`, r.status)
+        }
+      }
+
+      // Assemble in memory (no more DB queries)
+      const bookingLogsWithStatus = parsedBookings.map(({ log, snapshot }) => {
         let individualLabStatus = snapshot?.status || 'approved'
         if (snapshot?.is_multi_lab) {
-          const multiLabStatus = await db.query(
-            `SELECT status FROM multi_lab_approvals 
-             WHERE booking_request_id = ? AND lab_id = ?`,
-            [log.booking_id, log.lab_id]
-          )
-          if (multiLabStatus.rows.length > 0) {
-            individualLabStatus = multiLabStatus.rows[0].status
-          }
+          const key = `${log.booking_id}-${log.lab_id}`
+          individualLabStatus = multiLabStatusMap.get(key) || individualLabStatus
         }
         
-        // Skip rejected labs in multi-lab bookings
         if (snapshot?.is_multi_lab && individualLabStatus === 'rejected') {
           return null
         }
@@ -179,7 +193,7 @@ export async function GET(req: NextRequest) {
           booking_date: snapshot?.booking_date || null,
           start_time: snapshot?.start_time || null,
           end_time: snapshot?.end_time || null,
-          status: individualLabStatus, // Use individual lab status for multi-lab bookings
+          status: individualLabStatus,
           is_multi_lab: snapshot?.is_multi_lab || false,
           faculty_supervisor_name: snapshot?.faculty_name || null,
           faculty_supervisor_salutation: snapshot?.faculty_salutation || 'none',
@@ -197,7 +211,7 @@ export async function GET(req: NextRequest) {
           final_approver_role: snapshot?.final_approver_role || null,
           created_at: log.created_at,
         }
-      }))).filter(log => log !== null) // Remove null entries (rejected labs)
+      }).filter(log => log !== null)
       
       results.bookingLogs = bookingLogsWithStatus
     }

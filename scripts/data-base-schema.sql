@@ -231,7 +231,7 @@ DROP TABLE IF EXISTS `booking_reminders`;
 CREATE TABLE `booking_reminders` (
   `id` int NOT NULL AUTO_INCREMENT,
   `booking_request_id` int NOT NULL,
-  `reminder_type` enum('2_hours_before','1_day_before','on_day') COLLATE utf8mb4_unicode_ci DEFAULT '2_hours_before',
+  `reminder_type` enum('1_hour_before','1_day_before','on_day') COLLATE utf8mb4_unicode_ci DEFAULT '1_hour_before',
   `scheduled_time` datetime NOT NULL COMMENT 'When the reminder should be sent',
   `sent_at` datetime DEFAULT NULL COMMENT 'When the reminder was actually sent',
   `status` enum('pending','sent','failed') COLLATE utf8mb4_unicode_ci DEFAULT 'pending',
@@ -243,7 +243,7 @@ CREATE TABLE `booking_reminders` (
   KEY `idx_reminder_scheduled` (`scheduled_time`,`status`),
   KEY `idx_reminder_status` (`status`),
   CONSTRAINT `fk_reminder_booking` FOREIGN KEY (`booking_request_id`) REFERENCES `booking_requests` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Stores scheduled reminders for lab bookings (2 hours before slot)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Stores scheduled reminders for lab bookings (1 hour before slot)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --

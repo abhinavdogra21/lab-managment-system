@@ -524,7 +524,7 @@ export async function POST(
                     </ul>
                     
                     <p style="background-color: #fff3cd; padding: 10px; border-left: 4px solid #ffc107; margin: 20px 0;">
-                      <strong>⏰ Reminder:</strong> You will receive a reminder 2 hours before the booking starts.
+                      <strong>⏰ Reminder:</strong> You will receive a reminder 1 hour before the booking starts.
                     </p>
                     
                     <p>If you have any questions or concerns, please contact:</p>

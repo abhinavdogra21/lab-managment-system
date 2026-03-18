@@ -25,11 +25,23 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Use IST (Asia/Kolkata) explicitly — the DB stores times in IST
     const now = new Date()
-    const oneHourLater = new Date(now.getTime() + 1 * 60 * 60 * 1000)
-    const today = now.toISOString().slice(0, 10)
-    const nowTime = now.toTimeString().slice(0, 8)
-    const oneHourTime = oneHourLater.toTimeString().slice(0, 8)
+    const istFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' })
+    const istTimeFormatter = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+
+    const today = istFormatter.format(now) // YYYY-MM-DD in IST
+    const nowTimeIST = istTimeFormatter.format(now) // HH:MM:SS in IST
+
+    // Look for bookings starting between NOW-5min and NOW+65min
+    // The -5min catches bookings barely missed if cron ran a few minutes late
+    // The +65min gives a 5-minute buffer beyond the 1-hour target
+    const fiveMinAgo = new Date(now.getTime() - 5 * 60 * 1000)
+    const sixtyFiveMinLater = new Date(now.getTime() + 65 * 60 * 1000)
+    const windowStart = istTimeFormatter.format(fiveMinAgo)
+    const windowEnd = istTimeFormatter.format(sixtyFiveMinLater)
+
+    console.log(`[Reminder Cron] Running at IST ${nowTimeIST}, looking for bookings on ${today} starting between ${windowStart} and ${windowEnd}`)
 
     // ── 1. Single efficient query: fetch all upcoming bookings that need reminders ──
     const upcomingBookings = await db.query(`
@@ -55,7 +67,7 @@ export async function GET(request: NextRequest) {
         AND br.start_time BETWEEN ? AND ?
         AND br.reminder_sent = 0
         AND br.request_type = 'lab_booking'
-    `, [today, nowTime, oneHourTime])
+    `, [today, windowStart, windowEnd])
 
     if (upcomingBookings.rows.length === 0) {
       return NextResponse.json({ success: true, remindersSent: 0, message: 'No upcoming bookings need reminders' })
@@ -241,7 +253,7 @@ export async function GET(request: NextRequest) {
 
       await db.query(`
         INSERT INTO booking_reminders (booking_request_id, reminder_type, scheduled_time, sent_at, status, recipients)
-        VALUES (?, '2_hours_before', NOW(), NOW(), ?, ?)
+        VALUES (?, '1_hour_before', NOW(), NOW(), ?, ?)
       `, [
         bookingId,
         allSuccessful ? 'sent' : 'failed',

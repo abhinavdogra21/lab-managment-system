@@ -310,7 +310,28 @@ Visit these URLs to manually trigger cron jobs:
 - **Booking Reminders:** `http://localhost:3000/api/cron/booking-reminders`
 - **Equipment Reminders:** `http://localhost:3000/api/cron/loan-reminders`
 
-### 8.2 Production (Vercel Cron)
+### 8.2 Production (Linux Crontab) - Recommended for College Servers
+
+If you are running this on a college server (which is likely Linux), the easiest and most reliable way to make the reminders work without changing any of your code is to use the server's built-in Linux Crontab.
+
+This allows the server's operating system to automatically ping your API endpoints on a schedule while your Next.js app is running on `localhost:3000`.
+
+**The Linux Crontab Method:**
+1. Open the terminal (SSH) on your college server.
+2. Type the following command to edit your background tasks:
+   ```bash
+   crontab -e
+   ```
+3. Add these two lines to the bottom of the file (this tells the server to secretly run the curl command to visit both of your reminder endpoints exactly at Minute 0 of every hour):
+   ```bash
+   0 * * * * curl http://localhost:3000/api/cron/booking-reminders > /dev/null 2>&1
+   0 * * * * curl http://localhost:3000/api/cron/component-reminders > /dev/null 2>&1
+   ```
+4. Save and exit the editor.
+
+That's it! As long as your Next.js application is running, the college server will securely trigger the emails every hour in the background automatically.
+
+### 8.3 Production (Vercel Cron)
 
 Add to `vercel.json`:
 
@@ -333,7 +354,22 @@ Add to `vercel.json`:
 
 ## Step 9: Production Deployment
 
-### 9.1 Deploy to Vercel
+### 9.1 Deploy to Linux Server (PM2) - Recommended for College Servers
+
+While `npm run dev` works for testing, it is generally unoptimized for a live server and can crash easily if memory runs out. It is highly recommended to run these three commands instead when you put it on the college server:
+
+```bash
+# 1. Build an optimized production version
+pnpm build 
+
+# 2. Install PM2 (a background process manager)
+npm install -g pm2 
+
+# 3. Start your app in the background! (It will auto-restart if it crashes!)
+pm2 start pnpm --name "lab-system" -- run start
+```
+
+### 9.2 Deploy to Vercel
 
 1. Install Vercel CLI:
    ```bash
