@@ -76,65 +76,51 @@ export async function GET(request: NextRequest) {
       ORDER BY br.created_at DESC
     `, params)
 
-    // Transform data to include timeline and multi-lab information
-    const requestsWithTimeline = await Promise.all(result.rows.map(async (request: any) => {
-      // Handle multi-lab bookings - get all lab names and approvals
+    // ── BATCH: Fetch all multi-lab data in bulk ──
+    const multiLabBookingIds = result.rows
+      .filter((b: any) => b.is_multi_lab === 1 || b.is_multi_lab === true)
+      .map((b: any) => b.id)
+
+    let allApprovals: any[] = []
+
+    if (multiLabBookingIds.length > 0) {
+      const ph = multiLabBookingIds.map(() => '?').join(',')
+      const approvalsRes = await db.query(`
+        SELECT 
+          mla.booking_request_id,
+          mla.lab_id,
+          mla.status,
+          mla.lab_staff_approved_at,
+          mla.lab_staff_approved_by,
+          mla.hod_approved_at,
+          mla.hod_approved_by,
+          mlrp.name as responsible_person_name,
+          mlrp.email as responsible_person_email,
+          l.name as lab_name,
+          l.code as lab_code,
+          ls.name as lab_staff_name,
+          h.name as hod_name
+        FROM multi_lab_approvals mla
+        JOIN labs l ON mla.lab_id = l.id
+        LEFT JOIN multi_lab_responsible_persons mlrp ON (mlrp.booking_request_id = mla.booking_request_id AND mlrp.lab_id = mla.lab_id)
+        LEFT JOIN users ls ON mla.lab_staff_approved_by = ls.id
+        LEFT JOIN users h ON mla.hod_approved_by = h.id
+        WHERE mla.booking_request_id IN (${ph})
+        ORDER BY l.code
+      `, multiLabBookingIds)
+      allApprovals = approvalsRes.rows
+    }
+
+    // ── Assemble results in memory (no more DB queries) ──
+    const requestsWithTimeline = result.rows.map((request: any) => {
       let labNames = request.lab_name
       let multiLabApprovals: any[] = []
       
       if ((request.is_multi_lab === 1 || request.is_multi_lab === true) && request.lab_ids) {
-        try {
-          // Handle different formats of lab_ids
-          let labIds: number[]
-          if (Array.isArray(request.lab_ids)) {
-            labIds = request.lab_ids
-          } else if (Buffer.isBuffer(request.lab_ids)) {
-            labIds = JSON.parse(request.lab_ids.toString('utf-8'))
-          } else if (typeof request.lab_ids === 'string') {
-            labIds = JSON.parse(request.lab_ids)
-          } else {
-            labIds = []
-          }
-          
-          if (labIds && labIds.length > 0) {
-            // Get all lab names
-            const labNamesResult = await db.query(`
-              SELECT id, name, code
-              FROM labs
-              WHERE id IN (${labIds.map(() => '?').join(',')})
-              ORDER BY code
-            `, labIds)
-            
-            labNames = labNamesResult.rows.map((l: any) => l.name).join(', ')
-            
-            // Get individual approval status for each lab
-            const approvalsResult = await db.query(`
-              SELECT 
-                mla.lab_id,
-                mla.status,
-                mla.lab_staff_approved_at,
-                mla.lab_staff_approved_by,
-                mla.hod_approved_at,
-                mla.hod_approved_by,
-                mlrp.name as responsible_person_name,
-                mlrp.email as responsible_person_email,
-                l.name as lab_name,
-                l.code as lab_code,
-                ls.name as lab_staff_name,
-                h.name as hod_name
-              FROM multi_lab_approvals mla
-              JOIN labs l ON mla.lab_id = l.id
-              LEFT JOIN multi_lab_responsible_persons mlrp ON (mlrp.booking_request_id = mla.booking_request_id AND mlrp.lab_id = mla.lab_id)
-              LEFT JOIN users ls ON mla.lab_staff_approved_by = ls.id
-              LEFT JOIN users h ON mla.hod_approved_by = h.id
-              WHERE mla.booking_request_id = ?
-              ORDER BY l.code
-            `, [request.id])
-            
-            multiLabApprovals = approvalsResult.rows
-          }
-        } catch (e) {
-          console.error('Error parsing multi-lab data for faculty requests:', e)
+        // Filter approvals for this booking from batched data
+        multiLabApprovals = allApprovals.filter((a: any) => a.booking_request_id === request.id)
+        if (multiLabApprovals.length > 0) {
+          labNames = multiLabApprovals.map((a: any) => a.lab_name).join(', ')
         }
       }
       
@@ -154,10 +140,7 @@ export async function GET(request: NextRequest) {
         timeline.push({
           step_name: 'Faculty Approval',
           step_status: 'pending',
-          completed_at: null,
-          completed_by: null,
-          remarks: null,
-          user_name: null
+          completed_at: null, completed_by: null, remarks: null, user_name: null
         })
       }
       
@@ -175,20 +158,11 @@ export async function GET(request: NextRequest) {
         timeline.push({
           step_name: 'Lab Staff Approval',
           step_status: 'pending',
-          completed_at: null,
-        })
-      } else if (request.status === 'pending_lab_staff') {
-        timeline.push({
-          step_name: 'Lab Staff Approval',
-          step_status: 'pending',
-          completed_at: null,
-          completed_by: null,
-          remarks: null,
-          user_name: null
+          completed_at: null, completed_by: null, remarks: null, user_name: null
         })
       }
       
-      // HOD/Lab Coordinator approval step (dynamic based on department settings)
+      // HOD/Lab Coordinator approval step
       const approvalAuthorityLabel = request.highest_approval_authority === 'lab_coordinator'
         ? 'Lab Coordinator Approval'
         : 'HOD Approval'
@@ -206,10 +180,7 @@ export async function GET(request: NextRequest) {
         timeline.push({
           step_name: approvalAuthorityLabel,
           step_status: 'pending',
-          completed_at: null,
-          completed_by: null,
-          remarks: null,
-          user_name: null
+          completed_at: null, completed_by: null, remarks: null, user_name: null
         })
       }
       
@@ -234,7 +205,7 @@ export async function GET(request: NextRequest) {
         hod_name: request.hod_approver_name,
         timeline
       }
-    }))
+    })
 
     return NextResponse.json({ success: true, requests: requestsWithTimeline })
   } catch (error) {

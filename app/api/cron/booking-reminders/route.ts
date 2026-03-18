@@ -1,13 +1,19 @@
 /**
  * Created by Abhinav Dogra (23ucs507) and Abhinav Thulal (23ucs508)
  *
- * Sends automatic reminder emails to responsible persons and head lab staff
- * for all approved lab bookings (student, faculty, others) 1 hour before start.
+ * Sends automatic reminder emails to the person who booked and head lab staff
+ * for all approved lab bookings 1 hour before start.
+ *
+ * Performance optimizations:
+ *  - Single batched SQL query with JOINs (no N+1)
+ *  - Parallel email dispatch via Promise.allSettled
+ *  - Batch UPDATE for reminder_sent flag
+ *  - Tracks reminders in booking_reminders table
  */
 
 import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
-import { sendEmail } from "@/lib/notifications"
+import { sendEmail, emailTemplates } from "@/lib/notifications"
 
 const db = Database.getInstance()
 
@@ -25,9 +31,23 @@ export async function GET(request: NextRequest) {
     const nowTime = now.toTimeString().slice(0, 8)
     const oneHourTime = oneHourLater.toTimeString().slice(0, 8)
 
-    // Find all approved bookings for today, starting in 2 hours, not reminded
+    // ── 1. Single efficient query: fetch all upcoming bookings that need reminders ──
     const upcomingBookings = await db.query(`
-      SELECT br.*, u.name as requester_name, u.email as requester_email
+      SELECT
+        br.id,
+        br.booking_date,
+        br.start_time,
+        br.end_time,
+        br.purpose,
+        br.lab_id,
+        br.is_multi_lab,
+        br.lab_ids,
+        br.responsible_person_name,
+        br.responsible_person_email,
+        u.id AS requester_id,
+        u.name AS requester_name,
+        u.email AS requester_email,
+        u.salutation AS requester_salutation
       FROM booking_requests br
       JOIN users u ON br.requested_by = u.id
       WHERE br.status = 'approved'
@@ -37,118 +57,204 @@ export async function GET(request: NextRequest) {
         AND br.request_type = 'lab_booking'
     `, [today, nowTime, oneHourTime])
 
-    let remindersSent = 0
+    if (upcomingBookings.rows.length === 0) {
+      return NextResponse.json({ success: true, remindersSent: 0, message: 'No upcoming bookings need reminders' })
+    }
+
+    // ── 2. Collect all lab IDs across all bookings for batch lab staff lookup ──
+    const allLabIds = new Set<number>()
+    const bookingLabMap = new Map<number, number[]>() // bookingId -> labIds
+
     for (const booking of upcomingBookings.rows) {
-      // Get all labs for this booking (multi-lab or single)
       let labIds: number[] = []
       if (booking.is_multi_lab) {
-        if (Buffer.isBuffer(booking.lab_ids)) {
-          labIds = JSON.parse(booking.lab_ids.toString('utf-8'))
-        } else if (typeof booking.lab_ids === 'string') {
-          labIds = JSON.parse(booking.lab_ids)
-        } else if (Array.isArray(booking.lab_ids)) {
-          labIds = booking.lab_ids
-        }
+        try {
+          let raw = booking.lab_ids
+          if (Buffer.isBuffer(raw)) raw = raw.toString('utf-8')
+          if (typeof raw === 'string') labIds = JSON.parse(raw)
+          else if (Array.isArray(raw)) labIds = raw
+        } catch { labIds = [booking.lab_id] }
       } else {
         labIds = [booking.lab_id]
       }
+      labIds = labIds.map(Number).filter(Boolean)
+      bookingLabMap.set(booking.id, labIds)
+      labIds.forEach(id => allLabIds.add(id))
+    }
 
-      // Get responsible persons for each lab
-      let responsiblePersonsList: any[] = []
-      
+    // ── 3. Single batch query: get head lab staff + lab names for ALL labs at once ──
+    const labIdArray = Array.from(allLabIds)
+    const labPlaceholders = labIdArray.map(() => '?').join(',')
+
+    const labStaffResult = await db.query(`
+      SELECT l.id AS lab_id, l.name AS lab_name,
+             u.id AS staff_id, u.name AS staff_name, u.email AS staff_email, u.salutation AS staff_salutation
+      FROM labs l
+      LEFT JOIN users u ON l.staff_id = u.id
+      WHERE l.id IN (${labPlaceholders})
+    `, labIdArray)
+
+    // Build lookup maps
+    const labNameMap = new Map<number, string>()
+    const labStaffMap = new Map<number, { name: string; email: string; salutation?: string }>()
+    for (const row of labStaffResult.rows) {
+      labNameMap.set(row.lab_id, row.lab_name)
+      if (row.staff_email) {
+        labStaffMap.set(row.lab_id, {
+          name: row.staff_name,
+          email: row.staff_email,
+          salutation: row.staff_salutation
+        })
+      }
+    }
+
+    // ── 4. Batch query: get responsible persons for multi-lab bookings ──
+    const multiLabBookingIds = upcomingBookings.rows
+      .filter((b: any) => b.is_multi_lab)
+      .map((b: any) => b.id)
+
+    const rpMap = new Map<number, Array<{ name: string; email: string; lab_id: number }>>()
+    if (multiLabBookingIds.length > 0) {
+      const rpPlaceholders = multiLabBookingIds.map(() => '?').join(',')
+      const rpResult = await db.query(`
+        SELECT rp.booking_request_id, rp.name, rp.email, rp.lab_id
+        FROM multi_lab_responsible_persons rp
+        WHERE rp.booking_request_id IN (${rpPlaceholders})
+      `, multiLabBookingIds)
+      for (const rp of rpResult.rows) {
+        if (!rpMap.has(rp.booking_request_id)) rpMap.set(rp.booking_request_id, [])
+        rpMap.get(rp.booking_request_id)!.push({ name: rp.name, email: rp.email, lab_id: rp.lab_id })
+      }
+    }
+
+    // ── 5. Build all email tasks in memory, then fire in parallel ──
+    const emailTasks: Array<{ to: string | string[]; subject: string; html: string; bookingId: number; type: string }> = []
+    const processedBookingIds: number[] = []
+
+    for (const booking of upcomingBookings.rows) {
+      const labIds = bookingLabMap.get(booking.id) || [booking.lab_id]
+      const labNames = labIds.map(id => labNameMap.get(id) || `Lab ${id}`).join(', ')
+
+      // Email to the person who booked
+      const bookerEmail = emailTemplates.bookingReminderForBooker({
+        bookerName: booking.requester_name,
+        bookerSalutation: booking.requester_salutation,
+        labNames,
+        bookingDate: booking.booking_date,
+        startTime: booking.start_time,
+        endTime: booking.end_time,
+        purpose: booking.purpose
+      })
+      emailTasks.push({
+        to: booking.requester_email,
+        subject: bookerEmail.subject,
+        html: bookerEmail.html,
+        bookingId: booking.id,
+        type: 'booker'
+      })
+
+      // Responsible persons for this booking
+      let responsiblePersonsList: Array<{ name: string; email: string; lab_id: number }> = []
       if (booking.is_multi_lab) {
-        const rpQuery = await db.query(`
-          SELECT rp.name, rp.email, rp.lab_id, l.name as lab_name
-          FROM multi_lab_responsible_persons rp
-          JOIN labs l ON rp.lab_id = l.id
-          WHERE rp.booking_request_id = ?
-        `, [booking.id])
-        responsiblePersonsList = rpQuery.rows
-      } else {
-        const labResult = await db.query('SELECT name FROM labs WHERE id = ?', [booking.lab_id])
-        if (booking.responsible_person_name && booking.responsible_person_email) {
-          responsiblePersonsList = [{
-             name: booking.responsible_person_name,
-             email: booking.responsible_person_email,
-             lab_id: booking.lab_id,
-             lab_name: labResult.rows[0]?.name || `Lab ${booking.lab_id}`
-          }]
+        responsiblePersonsList = rpMap.get(booking.id) || []
+      } else if (booking.responsible_person_name && booking.responsible_person_email) {
+        responsiblePersonsList = [{
+          name: booking.responsible_person_name,
+          email: booking.responsible_person_email,
+          lab_id: booking.lab_id
+        }]
+      }
+
+      // Email to head lab staff of EACH booked lab
+      const staffEmailed = new Set<string>() // avoid duplicate emails if same staff manages multiple labs
+      for (const labId of labIds) {
+        const staff = labStaffMap.get(labId)
+        if (staff && !staffEmailed.has(staff.email)) {
+          staffEmailed.add(staff.email)
+          const rpForLab = responsiblePersonsList
+            .filter(rp => rp.lab_id === labId)
+            .map(rp => ({ name: rp.name, email: rp.email }))
+
+          const staffEmail = emailTemplates.bookingReminderForLabStaff({
+            staffName: staff.name,
+            staffSalutation: staff.salutation,
+            labName: labNameMap.get(labId) || `Lab ${labId}`,
+            bookerName: booking.requester_name,
+            bookerEmail: booking.requester_email,
+            bookingDate: booking.booking_date,
+            startTime: booking.start_time,
+            endTime: booking.end_time,
+            purpose: booking.purpose,
+            responsiblePersons: rpForLab.length > 0 ? rpForLab : undefined
+          })
+          emailTasks.push({
+            to: staff.email,
+            subject: staffEmail.subject,
+            html: staffEmail.html,
+            bookingId: booking.id,
+            type: 'lab_staff'
+          })
         }
       }
 
-      // Send reminder to the person who booked the lab
-      await sendEmail({
-        to: booking.requester_email,
-        subject: `Reminder: Your Lab Booking starts in 1 hour`,
-        html: `<h2>Lab Booking Reminder</h2>
-          <p>Dear ${booking.requester_name},</p>
-          <p>This is a reminder that your lab booking starts in approximately 1 hour:</p>
-          <ul>
-            <li><strong>Date:</strong> ${booking.booking_date}</li>
-            <li><strong>Time:</strong> ${booking.start_time} - ${booking.end_time}</li>
-            <li><strong>Purpose:</strong> ${booking.purpose}</li>
-          </ul>
-          <p>Please ensure all responsible persons are present and guidelines are followed.</p>`
-      }).catch(err => console.error(`Failed to send reminder to requester ${booking.requester_email}:`, err))
-      remindersSent++
-
-      // Get head lab staff for each lab
-      const labStaff = await db.query(`
-        SELECT u.name, u.email, l.id as lab_id, l.name as lab_name
-        FROM labs l
-        JOIN users u ON l.staff_id = u.id
-        WHERE l.id IN (${labIds.map(() => '?').join(',')})
-      `, labIds)
-
-      // Send reminder to responsible persons
-      for (const person of responsiblePersonsList) {
-        await sendEmail({
-          to: person.email,
-          subject: `Reminder: You are responsible for ${person.lab_name} in 1 hour`,
-          html: `<h2>Lab Booking Reminder</h2>
-            <p>Dear ${person.name},</p>
-            <p>This is a reminder that you are the person responsible for ${person.lab_name} with a booking starting in 1 hour:</p>
-            <ul>
-              <li><strong>Date:</strong> ${booking.booking_date}</li>
-              <li><strong>Time:</strong> ${booking.start_time} - ${booking.end_time}</li>
-              <li><strong>Booked by:</strong> ${booking.requester_name} (${booking.requester_email})</li>
-              <li><strong>Purpose:</strong> ${booking.purpose}</li>
-            </ul>
-            <p>Please ensure you are available or have made necessary arrangements.</p>`
-        }).catch(err => console.error(`Failed to send reminder to ${person.email}:`, err))
-        remindersSent++
-      }
-
-      // Send reminder to head lab staff
-      for (const staff of labStaff.rows) {
-        await sendEmail({
-          to: staff.email,
-          subject: `Reminder: Lab Booking in 1 Hour - ${staff.lab_name}`,
-          html: `<h2>Upcoming Lab Booking Reminder</h2>
-            <p>Dear ${staff.name},</p>
-            <p>This is a reminder that ${staff.lab_name} has a booking starting in approximately 1 hour:</p>
-            <ul>
-              <li><strong>Date:</strong> ${booking.booking_date}</li>
-              <li><strong>Time:</strong> ${booking.start_time} - ${booking.end_time}</li>
-              <li><strong>Booked by:</strong> ${booking.requester_name}</li>
-              <li><strong>Purpose:</strong> ${booking.purpose}</li>
-            </ul>
-            <p><strong>Responsible Persons:</strong></p>
-            <ul>
-              ${responsiblePersonsList
-                .filter(rp => rp.lab_id === staff.lab_id)
-                .map(rp => `<li>${rp.name} (${rp.email})</li>`)
-                .join('')}
-            </ul>`
-        }).catch(err => console.error(`Failed to send reminder to ${staff.email}:`, err))
-        remindersSent++
-      }
-
-      // Mark reminder as sent
-      await db.query(`UPDATE booking_requests SET reminder_sent = 1 WHERE id = ?`, [booking.id])
+      processedBookingIds.push(booking.id)
     }
 
-    return NextResponse.json({ success: true, remindersSent })
+    // ── 6. Fire all emails in parallel ──
+    const emailResults = await Promise.allSettled(
+      emailTasks.map(task =>
+        sendEmail({ to: task.to, subject: task.subject, html: task.html })
+          .then(result => ({ ...result, bookingId: task.bookingId, type: task.type, to: task.to }))
+      )
+    )
+
+    let remindersSent = 0
+    let remindersFailed = 0
+    for (const result of emailResults) {
+      if (result.status === 'fulfilled' && result.value?.success) {
+        remindersSent++
+      } else {
+        remindersFailed++
+        const reason = result.status === 'rejected' ? result.reason : result.value?.error
+        console.error('❌ Reminder email failed:', reason)
+      }
+    }
+
+    // ── 7. Batch update reminder_sent flag ──
+    if (processedBookingIds.length > 0) {
+      const updatePlaceholders = processedBookingIds.map(() => '?').join(',')
+      await db.query(
+        `UPDATE booking_requests SET reminder_sent = 1 WHERE id IN (${updatePlaceholders})`,
+        processedBookingIds
+      )
+    }
+
+    // ── 8. Track in booking_reminders table ──
+    for (const bookingId of processedBookingIds) {
+      const recipientEmails = emailTasks
+        .filter(t => t.bookingId === bookingId)
+        .map(t => Array.isArray(t.to) ? t.to.join(', ') : t.to)
+
+      const allSuccessful = emailResults
+        .filter((_, idx) => emailTasks[idx].bookingId === bookingId)
+        .every(r => r.status === 'fulfilled' && (r.value as any)?.success)
+
+      await db.query(`
+        INSERT INTO booking_reminders (booking_request_id, reminder_type, scheduled_time, sent_at, status, recipients)
+        VALUES (?, '2_hours_before', NOW(), NOW(), ?, ?)
+      `, [
+        bookingId,
+        allSuccessful ? 'sent' : 'failed',
+        JSON.stringify(recipientEmails)
+      ]).catch(err => console.error('Failed to log reminder:', err))
+    }
+
+    return NextResponse.json({
+      success: true,
+      remindersSent,
+      remindersFailed,
+      bookingsProcessed: processedBookingIds.length
+    })
   } catch (error) {
     console.error('Reminder cron error:', error)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })

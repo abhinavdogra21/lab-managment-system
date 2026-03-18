@@ -15,7 +15,7 @@ const dbConfig = {
   user: process.env.DB_USER || "root",
   password: process.env.DB_PASSWORD || "",
   waitForConnections: true,
-  connectionLimit: Number.parseInt(process.env.DB_POOL_LIMIT || "5"),
+  connectionLimit: Number.parseInt(process.env.DB_POOL_LIMIT || "10"),
   queueLimit: 0,
 }
 
@@ -301,35 +301,27 @@ export const dbOperations = {
 
   async getErrorSparkline(days = 14) {
     const d = Math.max(7, Math.min(60, days))
-    // Count logs per day and error-like logs per day
-    const errors = await db.query(
-      `SELECT DATE(created_at) as d, COUNT(*) as c
-       FROM system_logs
-       WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-         AND (LOWER(action) LIKE '%error%' OR LOWER(entity_type) LIKE '%error%')
-       GROUP BY DATE(created_at)
-       ORDER BY d`,
-      [d]
-    )
-    const totals = await db.query(
-      `SELECT DATE(created_at) as d, COUNT(*) as c
+    // Single query: count total and error logs per day
+    const combined = await db.query(
+      `SELECT DATE(created_at) as d,
+              COUNT(*) as total,
+              SUM(CASE WHEN LOWER(action) LIKE '%error%' OR LOWER(entity_type) LIKE '%error%' THEN 1 ELSE 0 END) as errors
        FROM system_logs
        WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
        GROUP BY DATE(created_at)
        ORDER BY d`,
       [d]
     )
-    const mapErr = new Map<string, number>(errors.rows.map((r: any) => [String(r.d).slice(0, 10), Number(r.c)]))
-    const mapTot = new Map<string, number>(totals.rows.map((r: any) => [String(r.d).slice(0, 10), Number(r.c)]))
-    // produce array oldest->newest of rates 0..1 length d
+    const dataMap = new Map<string, { total: number; errors: number }>(
+      combined.rows.map((r: any) => [String(r.d).slice(0, 10), { total: Number(r.total), errors: Number(r.errors) }])
+    )
     const out: number[] = []
     for (let i = d - 1; i >= 0; i--) {
       const date = new Date()
       date.setDate(date.getDate() - i)
       const key = date.toISOString().slice(0, 10)
-      const e = mapErr.get(key) || 0
-      const t = mapTot.get(key) || 0
-      out.push(t > 0 ? e / t : 0)
+      const entry = dataMap.get(key)
+      out.push(entry && entry.total > 0 ? entry.errors / entry.total : 0)
     }
     return out
   },
@@ -362,22 +354,20 @@ export const dbOperations = {
          l.id, l.name, l.code, l.department_id,
          COALESCE(COUNT(i.id),0) as items,
          COALESCE(SUM(i.quantity_available),0) as total_quantity,
-         (
-           SELECT GROUP_CONCAT(u2.id ORDER BY u2.name SEPARATOR ',')
-           FROM lab_staff_assignments la
-           JOIN users u2 ON u2.id = la.staff_id
-           WHERE la.lab_id = l.id
-         ) AS staff_ids_csv,
-         (
-           SELECT GROUP_CONCAT(u2.name ORDER BY u2.name SEPARATOR ', ')
-           FROM lab_staff_assignments la
-           JOIN users u2 ON u2.id = la.staff_id
-           WHERE la.lab_id = l.id
-         ) AS staff_names_csv
+         sa.staff_ids_csv,
+         sa.staff_names_csv
        FROM labs l
        LEFT JOIN inventory i ON i.lab_id = l.id
+       LEFT JOIN (
+         SELECT la.lab_id,
+                GROUP_CONCAT(u2.id ORDER BY u2.name SEPARATOR ',') AS staff_ids_csv,
+                GROUP_CONCAT(u2.name ORDER BY u2.name SEPARATOR ', ') AS staff_names_csv
+         FROM lab_staff_assignments la
+         JOIN users u2 ON u2.id = la.staff_id
+         GROUP BY la.lab_id
+       ) sa ON sa.lab_id = l.id
        WHERE l.is_active = 1
-       GROUP BY l.id, l.name, l.code, l.department_id
+       GROUP BY l.id, l.name, l.code, l.department_id, sa.staff_ids_csv, sa.staff_names_csv
        ORDER BY l.name`
     )
     return res.rows
@@ -598,24 +588,24 @@ export const dbOperations = {
   // Lab operations
   async getAllLabs() {
     try {
+      // Use a subquery-based approach but only ONE subquery for staff (combined id+name)
+      // This avoids the correlated subquery running twice per row
       const query = `
         SELECT l.*, d.name as department_name, u.name as staff_name,
-          (
-            SELECT GROUP_CONCAT(u2.id ORDER BY u2.name SEPARATOR ',')
-            FROM lab_staff_assignments la
-            JOIN users u2 ON u2.id = la.staff_id
-            WHERE la.lab_id = l.id
-          ) AS staff_ids_csv,
-          (
-            SELECT GROUP_CONCAT(u2.name ORDER BY u2.name SEPARATOR ', ')
-            FROM lab_staff_assignments la
-            JOIN users u2 ON u2.id = la.staff_id
-            WHERE la.lab_id = l.id
-          ) AS staff_names_csv
+          sa.staff_ids_csv,
+          sa.staff_names_csv
         FROM labs l
         LEFT JOIN departments d ON l.department_id = d.id
         LEFT JOIN users u ON l.staff_id = u.id
-  WHERE l.is_active = 1
+        LEFT JOIN (
+          SELECT la.lab_id,
+                 GROUP_CONCAT(u2.id ORDER BY u2.name SEPARATOR ',') AS staff_ids_csv,
+                 GROUP_CONCAT(u2.name ORDER BY u2.name SEPARATOR ', ') AS staff_names_csv
+          FROM lab_staff_assignments la
+          JOIN users u2 ON u2.id = la.staff_id
+          GROUP BY la.lab_id
+        ) sa ON sa.lab_id = l.id
+        WHERE l.is_active = 1
         ORDER BY l.name
       `
       const result = await db.query(query)
@@ -670,20 +660,18 @@ export const dbOperations = {
     try {
       const query = `
         SELECT l.*, u.name as staff_name,
-          (
-            SELECT GROUP_CONCAT(u2.id ORDER BY u2.name SEPARATOR ',')
-            FROM lab_staff_assignments la
-            JOIN users u2 ON u2.id = la.staff_id
-            WHERE la.lab_id = l.id
-          ) AS staff_ids_csv,
-          (
-            SELECT GROUP_CONCAT(u2.name ORDER BY u2.name SEPARATOR ', ')
-            FROM lab_staff_assignments la
-            JOIN users u2 ON u2.id = la.staff_id
-            WHERE la.lab_id = l.id
-          ) AS staff_names_csv
+          sa.staff_ids_csv,
+          sa.staff_names_csv
         FROM labs l
         LEFT JOIN users u ON l.staff_id = u.id
+        LEFT JOIN (
+          SELECT la.lab_id,
+                 GROUP_CONCAT(u2.id ORDER BY u2.name SEPARATOR ',') AS staff_ids_csv,
+                 GROUP_CONCAT(u2.name ORDER BY u2.name SEPARATOR ', ') AS staff_names_csv
+          FROM lab_staff_assignments la
+          JOIN users u2 ON u2.id = la.staff_id
+          GROUP BY la.lab_id
+        ) sa ON sa.lab_id = l.id
         WHERE l.department_id = ? AND l.is_active = 1
         ORDER BY l.name
       `

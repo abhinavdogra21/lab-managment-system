@@ -22,14 +22,12 @@ export async function GET(request: NextRequest) {
     let departmentIds: number[] = []
     if (user.role !== 'admin') {
       if (user.role === 'lab_coordinator') {
-        // Lab Coordinator: get departments where they are assigned
         const depRes = await db.query(
           `SELECT id FROM departments WHERE lab_coordinator_id = ?`,
           [Number(user.userId)]
         )
         departmentIds = depRes.rows.map((d: any) => Number(d.id))
       } else {
-        // HOD: get departments by hod_id or hod_email
         const depRes = await db.query(
           `SELECT id FROM departments WHERE hod_id = ? OR LOWER(hod_email) = LOWER(?)`,
           [Number(user.userId), String(user.email || '')]
@@ -42,8 +40,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Get requests that need HOD approval from the user's department
-    // Only show requests where HOD is the actual approver (not Lab Coordinator)
+    // Build main query
     let query = `
       SELECT DISTINCT
         br.id,
@@ -86,17 +83,13 @@ export async function GET(request: NextRequest) {
 
     const params: any[] = []
 
-    // Add department filter for non-admin users
     if (user.role !== 'admin') {
       query += ` WHERE d.id IN (${departmentIds.map(() => '?').join(',')})`
       params.push(...departmentIds)
       
       if (user.role === 'lab_coordinator') {
-        // Lab Coordinator: Only show requests where they are the highest approval authority
         query += ` AND d.highest_approval_authority = 'lab_coordinator' AND d.lab_coordinator_id IS NOT NULL`
       } else {
-        // HOD: Only show requests where HOD is the highest approval authority
-        // (Either highest_approval_authority = 'hod' OR NULL/lab_coordinator not assigned)
         query += ` AND (d.highest_approval_authority = 'hod' OR d.highest_approval_authority IS NULL)`
       }
     } else {
@@ -105,44 +98,37 @@ export async function GET(request: NextRequest) {
 
     if (status && status !== 'all') {
       if (status === 'rejected') {
-        // For rejected status, only show requests rejected BY HOD (not by faculty or lab staff)
         query += ` AND br.status = 'rejected' AND br.hod_approved_by IS NOT NULL`
       } else {
-        // specific status requested - check overall booking status only
         query += ` AND br.status = ?`
         params.push(status)
       }
     } else if (status === 'all') {
-      // For 'all' status, only show requests that reached HOD level
-      // This includes: pending_hod, approved, and requests rejected BY HOD
       query += ` AND (br.status = 'pending_hod' OR br.status = 'approved' OR (br.status = 'rejected' AND br.hod_approved_by IS NOT NULL))`
     } else {
-      // Default: show requests waiting for HOD approval when no status provided
-      // Only show bookings where overall status is pending_hod (all lab staff have decided)
       query += ` AND br.status = 'pending_hod'`
     }
 
     query += ` ORDER BY br.created_at DESC LIMIT 50`
 
     const result = await db.query(query, params)
-    
-    // For multi-lab bookings, fetch additional details
-    const requests = await Promise.all(result.rows.map(async (booking: any) => {
-      // Parse lab_ids if it's a multi-lab booking
-      let labIds: number[] = []
-      if (booking.is_multi_lab) {
-        if (Array.isArray(booking.lab_ids)) {
-          labIds = booking.lab_ids
-        } else if (Buffer.isBuffer(booking.lab_ids)) {
-          labIds = JSON.parse(booking.lab_ids.toString('utf-8'))
-        } else if (typeof booking.lab_ids === 'string') {
-          labIds = JSON.parse(booking.lab_ids)
-        }
 
-        // Fetch multi-lab approvals
-        const approvalsResult = await db.query(`
+    // ── BATCH: Fetch all multi-lab data in bulk instead of per-booking ──
+    const multiLabBookingIds = result.rows
+      .filter((b: any) => b.is_multi_lab)
+      .map((b: any) => b.id)
+
+    let allApprovals: any[] = []
+    let allResponsiblePersons: any[] = []
+
+    if (multiLabBookingIds.length > 0) {
+      const ph = multiLabBookingIds.map(() => '?').join(',')
+
+      const [approvalsRes, rpRes] = await Promise.all([
+        db.query(`
           SELECT 
             mla.id,
+            mla.booking_request_id,
             mla.lab_id,
             mla.status,
             mla.lab_staff_approved_by,
@@ -155,20 +141,35 @@ export async function GET(request: NextRequest) {
           FROM multi_lab_approvals mla
           JOIN labs l ON mla.lab_id = l.id
           LEFT JOIN users ls ON mla.lab_staff_approved_by = ls.id
-          WHERE mla.booking_request_id = ?
+          WHERE mla.booking_request_id IN (${ph})
           ORDER BY l.name
-        `, [booking.id])
-
-        // Fetch responsible persons
-        const responsiblePersonsResult = await db.query(`
-          SELECT lab_id, name, email
+        `, multiLabBookingIds),
+        db.query(`
+          SELECT booking_request_id, lab_id, name, email
           FROM multi_lab_responsible_persons
-          WHERE booking_request_id = ?
-        `, [booking.id])
+          WHERE booking_request_id IN (${ph})
+        `, multiLabBookingIds)
+      ])
+      allApprovals = approvalsRes.rows
+      allResponsiblePersons = rpRes.rows
+    }
 
-        // Map responsible persons to approvals
-        const multiLabApprovals = approvalsResult.rows.map((approval: any) => {
-          const responsible = responsiblePersonsResult.rows.find((rp: any) => rp.lab_id === approval.lab_id)
+    // ── Assemble results in memory (no more DB queries) ──
+    const requests = result.rows.map((booking: any) => {
+      if (booking.is_multi_lab) {
+        let labIds: number[] = []
+        try {
+          if (Array.isArray(booking.lab_ids)) labIds = booking.lab_ids
+          else if (Buffer.isBuffer(booking.lab_ids)) labIds = JSON.parse(booking.lab_ids.toString('utf-8'))
+          else if (typeof booking.lab_ids === 'string') labIds = JSON.parse(booking.lab_ids)
+        } catch {}
+
+        // Filter approvals and RPs for this booking from batched data
+        const bookingApprovals = allApprovals.filter((a: any) => a.booking_request_id === booking.id)
+        const bookingRPs = allResponsiblePersons.filter((rp: any) => rp.booking_request_id === booking.id)
+
+        const multiLabApprovals = bookingApprovals.map((approval: any) => {
+          const responsible = bookingRPs.find((rp: any) => rp.lab_id === approval.lab_id)
           return {
             ...approval,
             responsible_person_name: responsible?.name,
@@ -182,9 +183,8 @@ export async function GET(request: NextRequest) {
           multi_lab_approvals: multiLabApprovals
         }
       }
-
       return booking
-    }))
+    })
     
     return NextResponse.json({ 
       requests,

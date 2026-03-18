@@ -29,14 +29,21 @@ function formatDate(dateString: string): string {
   })
 }
 
-// Create transporter using Gmail
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD
+// Lazy-init transporter – only connect to Gmail SMTP when first email is actually sent
+let _transporter: ReturnType<typeof nodemailer.createTransport> | null = null
+
+function getTransporter() {
+  if (!_transporter) {
+    _transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD
+      }
+    })
   }
-})
+  return _transporter
+}
 
 // Helper function to create professional email template
 function createEmailTemplate(content: string, baseUrl?: string): string {
@@ -117,7 +124,7 @@ export async function sendEmail(options: EmailOptions) {
       text: options.text
     }
 
-    const info = await transporter.sendMail(mailOptions)
+    const info = await getTransporter().sendMail(mailOptions)
     console.log('✅ Email sent:', info.messageId, 'to:', recipients.join(', '))
     return { success: true, messageId: info.messageId }
   } catch (error) {
@@ -1416,6 +1423,148 @@ export const emailTemplates = {
         </td>
       </tr>
     `)
+    }
+  },
+
+  // ─── Booking Reminder Templates ───────────────────────────────────
+  bookingReminderForBooker: (data: {
+    bookerName: string
+    bookerSalutation?: string
+    labNames: string       // comma-separated lab names
+    bookingDate: string
+    startTime: string
+    endTime: string
+    purpose: string
+  }) => {
+    const formattedDate = formatDate(data.bookingDate)
+    const formattedStart = formatTimeTo12Hour(data.startTime)
+    const formattedEnd = formatTimeTo12Hour(data.endTime)
+
+    let greeting = `Dear <b>${data.bookerName}</b>`
+    if (data.bookerSalutation && data.bookerSalutation !== 'none') {
+      const salutationMap: Record<string, string> = { 'prof': 'Prof.', 'dr': 'Dr.', 'mr': 'Mr.', 'mrs': 'Mrs.' }
+      greeting = `Dear <b>${salutationMap[data.bookerSalutation] || ''} ${data.bookerName}</b>`
+    }
+
+    return {
+      subject: `⏰ Reminder: Your Lab Booking starts in 1 hour - LNMIIT Lab Management`,
+      html: createEmailTemplate(`
+        <tr>
+          <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+            <p>${greeting},</p>
+            <p>This is a friendly reminder that your lab booking starts in approximately <b>1 hour</b>.</p>
+
+            <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab(s):</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${data.labNames}</td>
+              </tr>
+              <tr style="background: #eff6ff;">
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Date:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${formattedDate}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Time:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${formattedStart} – ${formattedEnd}</td>
+              </tr>
+              <tr style="background: #eff6ff;">
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Purpose:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${data.purpose || 'Not specified'}</td>
+              </tr>
+            </table>
+
+            <p style="padding: 12px; background: #dbeafe; border-left: 4px solid #3b82f6;">
+              <strong>🔔 Reminder:</strong> Please ensure you arrive on time and all responsible persons are present.
+            </p>
+
+            <div style="margin-top: 25px; text-align: center;">
+              <a href="${process.env.APP_URL || 'http://localhost:3000'}" 
+                 style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                Go to Portal Dashboard
+              </a>
+            </div>
+          </td>
+        </tr>
+      `)
+    }
+  },
+
+  bookingReminderForLabStaff: (data: {
+    staffName: string
+    staffSalutation?: string
+    labName: string
+    bookerName: string
+    bookerEmail: string
+    bookingDate: string
+    startTime: string
+    endTime: string
+    purpose: string
+    responsiblePersons?: Array<{ name: string; email: string }>
+  }) => {
+    const formattedDate = formatDate(data.bookingDate)
+    const formattedStart = formatTimeTo12Hour(data.startTime)
+    const formattedEnd = formatTimeTo12Hour(data.endTime)
+
+    let greeting = `Dear <b>${data.staffName}</b>`
+    if (data.staffSalutation && data.staffSalutation !== 'none') {
+      const salutationMap: Record<string, string> = { 'prof': 'Prof.', 'dr': 'Dr.', 'mr': 'Mr.', 'mrs': 'Mrs.' }
+      greeting = `Dear <b>${salutationMap[data.staffSalutation] || ''} ${data.staffName}</b>`
+    }
+
+    const rpHtml = data.responsiblePersons && data.responsiblePersons.length > 0
+      ? `<tr>
+           <td style="padding: 10px; border: 1px solid #ddd;"><strong>Responsible Person(s):</strong></td>
+           <td style="padding: 10px; border: 1px solid #ddd;">
+             ${data.responsiblePersons.map(rp => `${rp.name} (${rp.email})`).join('<br/>')}
+           </td>
+         </tr>`
+      : ''
+
+    return {
+      subject: `⏰ Lab Booking in 1 Hour – ${data.labName} - LNMIIT Lab Management`,
+      html: createEmailTemplate(`
+        <tr>
+          <td style="padding:10px 30px; margin:0; text-align:left; font-size:14px;">
+            <p>${greeting},</p>
+            <p>This is a reminder that <b>${data.labName}</b> has a booking starting in approximately <b>1 hour</b>.</p>
+
+            <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lab:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${data.labName}</td>
+              </tr>
+              <tr style="background: #eff6ff;">
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Date:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${formattedDate}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Time:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${formattedStart} – ${formattedEnd}</td>
+              </tr>
+              <tr style="background: #eff6ff;">
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Booked by:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${data.bookerName} (${data.bookerEmail})</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><strong>Purpose:</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${data.purpose || 'Not specified'}</td>
+              </tr>
+              ${rpHtml}
+            </table>
+
+            <p style="padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107;">
+              <strong>⚡ Action Required:</strong> Please ensure the lab is prepared and available for the upcoming booking.
+            </p>
+
+            <div style="margin-top: 25px; text-align: center;">
+              <a href="${process.env.APP_URL || 'http://localhost:3000'}/lab-staff/dashboard" 
+                 style="display: inline-block; padding: 12px 30px; background-color: #034da2; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                Go to Portal Dashboard
+              </a>
+            </div>
+          </td>
+        </tr>
+      `)
     }
   }
 }
