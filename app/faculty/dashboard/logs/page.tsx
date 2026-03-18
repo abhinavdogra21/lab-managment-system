@@ -323,6 +323,12 @@ export default function FacultyLogsPage() {
   const [componentEndDate, setComponentEndDate] = useState('')
   const [bookingStartDate, setBookingStartDate] = useState('')
   const [bookingEndDate, setBookingEndDate] = useState('')
+  
+  // Pagination states
+  const [bookingCurrentPage, setBookingCurrentPage] = useState(1)
+  const [componentCurrentPage, setComponentCurrentPage] = useState(1)
+  const itemsPerPage = 20
+
   const [expandedTimelines, setExpandedTimelines] = useState<Set<number>>(new Set())
   const { toast } = useToast()
 
@@ -409,6 +415,7 @@ export default function FacultyLogsPage() {
       
       setBookingLogs(data)
       setFilteredBookingLogs(data)
+      setBookingCurrentPage(1)
     } catch (error) {
       console.error('Error loading booking logs:', error)
       toast({ title: 'Error', description: 'Failed to load booking logs', variant: 'destructive' })
@@ -452,6 +459,7 @@ export default function FacultyLogsPage() {
       
       setComponentLogs(processedData)
       setFilteredComponentLogs(processedData)
+      setComponentCurrentPage(1)
     } catch (error) {
       console.error('Error loading component logs:', error)
       toast({ title: 'Error', description: 'Failed to load component logs', variant: 'destructive' })
@@ -1167,8 +1175,15 @@ export default function FacultyLogsPage() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {filteredBookingLogs.map((log) => (
-                <Card key={log.log_id}>
+              {(() => {
+                const totalPages = Math.ceil(filteredBookingLogs.length / itemsPerPage);
+                const startIndex = (bookingCurrentPage - 1) * itemsPerPage;
+                const paginatedBookings = filteredBookingLogs.slice(startIndex, startIndex + itemsPerPage);
+
+                return (
+                  <>
+                    {paginatedBookings.map((log) => (
+                      <Card key={log.log_id}>
                   <CardContent className="p-4 space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -1249,7 +1264,33 @@ export default function FacultyLogsPage() {
                   </CardContent>
                 </Card>
               ))}
-            </div>
+              {Math.ceil(filteredBookingLogs.length / itemsPerPage) > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBookingCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={bookingCurrentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground w-32 text-center">
+                    Page {bookingCurrentPage} of {Math.ceil(filteredBookingLogs.length / itemsPerPage)}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBookingCurrentPage(p => Math.min(Math.ceil(filteredBookingLogs.length / itemsPerPage), p + 1))}
+                    disabled={bookingCurrentPage === Math.ceil(filteredBookingLogs.length / itemsPerPage)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
+          );
+        })()}
+      </div>
           )}
         </TabsContent>
 
@@ -1320,8 +1361,15 @@ export default function FacultyLogsPage() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {filteredComponentLogs.map((log) => (
-                <Card key={log.log_id}>
+              {(() => {
+                const totalPages = Math.ceil(filteredComponentLogs.length / itemsPerPage);
+                const startIndex = (componentCurrentPage - 1) * itemsPerPage;
+                const paginatedComponents = filteredComponentLogs.slice(startIndex, startIndex + itemsPerPage);
+
+                return (
+                  <>
+                    {paginatedComponents.map((log) => (
+                      <Card key={log.log_id}>
                   <CardContent className="p-4 space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -1411,7 +1459,33 @@ export default function FacultyLogsPage() {
                   </CardContent>
                 </Card>
               ))}
-            </div>
+              {Math.ceil(filteredComponentLogs.length / itemsPerPage) > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setComponentCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={componentCurrentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground w-32 text-center">
+                    Page {componentCurrentPage} of {Math.ceil(filteredComponentLogs.length / itemsPerPage)}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setComponentCurrentPage(p => Math.min(Math.ceil(filteredComponentLogs.length / itemsPerPage), p + 1))}
+                    disabled={componentCurrentPage === Math.ceil(filteredComponentLogs.length / itemsPerPage)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
+          );
+        })()}
+      </div>
           )}
         </TabsContent>
       </Tabs>

@@ -139,6 +139,11 @@ export default function LabCoordinatorLogsPage() {
   const [componentStartDate, setComponentStartDate] = useState(startDateDefault)
   const [componentEndDate, setComponentEndDate] = useState(endDateDefault)
   
+  // Pagination states
+  const [bookingCurrentPage, setBookingCurrentPage] = useState(1)
+  const [componentCurrentPage, setComponentCurrentPage] = useState(1)
+  const itemsPerPage = 20
+  
   const uniqueLabs = Array.from(
     new Set([
       ...bookingLogs.map(l => l.lab_name),
@@ -161,6 +166,7 @@ export default function LabCoordinatorLogsPage() {
       if (res.ok) {
         const data = await res.json()
         setBookingLogs(data.logs || [])
+        setBookingCurrentPage(1)
       } else {
         toast({ title: 'Error', description: 'Failed to load booking logs', variant: 'destructive' })
       }
@@ -186,6 +192,7 @@ export default function LabCoordinatorLogsPage() {
       if (res.ok) {
         const data = await res.json()
         setComponentLogs(data.logs || [])
+        setComponentCurrentPage(1)
       } else {
         toast({ title: 'Error', description: 'Failed to load component logs', variant: 'destructive' })
       }
@@ -764,10 +771,16 @@ export default function LabCoordinatorLogsPage() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {bookingLogs
-                .filter(log => selectedLab === 'all' || log.lab_name === selectedLab)
-                .map((log) => (
-                <Card key={log.log_id}>
+              {(() => {
+                const filteredBookings = bookingLogs.filter(log => selectedLab === 'all' || log.lab_name === selectedLab);
+                const totalPages = Math.ceil(filteredBookings.length / itemsPerPage);
+                const startIndex = (bookingCurrentPage - 1) * itemsPerPage;
+                const paginatedBookings = filteredBookings.slice(startIndex, startIndex + itemsPerPage);
+
+                return (
+                  <>
+                    {paginatedBookings.map((log) => (
+                      <Card key={log.log_id}>
                   <CardContent className="p-4">
                     <div className="space-y-3">
                       <div className="flex items-start justify-between">
@@ -863,9 +876,35 @@ export default function LabCoordinatorLogsPage() {
                   </CardContent>
                 </Card>
               ))}
-            </div>
-          )}
-        </TabsContent>
+              {Math.ceil(bookingLogs.filter(log => selectedLab === 'all' || log.lab_name === selectedLab).length / itemsPerPage) > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBookingCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={bookingCurrentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground w-32 text-center">
+                    Page {bookingCurrentPage} of {Math.ceil(bookingLogs.filter(log => selectedLab === 'all' || log.lab_name === selectedLab).length / itemsPerPage)}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBookingCurrentPage(p => Math.min(Math.ceil(bookingLogs.filter(log => selectedLab === 'all' || log.lab_name === selectedLab).length / itemsPerPage), p + 1))}
+                    disabled={bookingCurrentPage === Math.ceil(bookingLogs.filter(log => selectedLab === 'all' || log.lab_name === selectedLab).length / itemsPerPage)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
+          );
+        })()}
+      </div>
+    )}
+  </TabsContent>
 
         <TabsContent value="component-logs" className="space-y-4">
           <div className="flex flex-col gap-3">
@@ -932,10 +971,16 @@ export default function LabCoordinatorLogsPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {componentLogs
-                .filter(log => selectedLab === 'all' || log.lab_name === selectedLab)
-                .map((log) => (
-                <Card key={log.log_id} className="hover:shadow-md transition-shadow">
+              {(() => {
+                const filteredComponents = componentLogs.filter(log => selectedLab === 'all' || log.lab_name === selectedLab);
+                const totalPages = Math.ceil(filteredComponents.length / itemsPerPage);
+                const startIndex = (componentCurrentPage - 1) * itemsPerPage;
+                const paginatedComponents = filteredComponents.slice(startIndex, startIndex + itemsPerPage);
+
+                return (
+                  <>
+                    {paginatedComponents.map((log) => (
+                      <Card key={log.log_id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-6 space-y-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
@@ -1060,9 +1105,35 @@ export default function LabCoordinatorLogsPage() {
                   </CardContent>
                 </Card>
               ))}
-            </div>
-          )}
-        </TabsContent>
+              {Math.ceil(componentLogs.filter(log => selectedLab === 'all' || log.lab_name === selectedLab).length / itemsPerPage) > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setComponentCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={componentCurrentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground w-32 text-center">
+                    Page {componentCurrentPage} of {Math.ceil(componentLogs.filter(log => selectedLab === 'all' || log.lab_name === selectedLab).length / itemsPerPage)}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setComponentCurrentPage(p => Math.min(Math.ceil(componentLogs.filter(log => selectedLab === 'all' || log.lab_name === selectedLab).length / itemsPerPage), p + 1))}
+                    disabled={componentCurrentPage === Math.ceil(componentLogs.filter(log => selectedLab === 'all' || log.lab_name === selectedLab).length / itemsPerPage)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
+          );
+        })()}
+      </div>
+    )}
+  </TabsContent>
       </Tabs>
     </div>
   )

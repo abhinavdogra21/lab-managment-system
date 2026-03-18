@@ -55,6 +55,10 @@ export default function UsersPage() {
   const [importUsersResult, setImportUsersResult] = useState<any>(null)
   const [departments, setDepartments] = useState<Department[]>([])
   const [purgeDays, setPurgeDays] = useState(30)
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 50
 
   useEffect(() => {
     const u = typeof window !== "undefined" ? localStorage.getItem("user") : null
@@ -64,6 +68,11 @@ export default function UsersPage() {
     }
     setAuthChecked(true)
   }, [])
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search, role, department, sort])
 
   useEffect(() => {
     if (!authChecked) return
@@ -99,6 +108,13 @@ export default function UsersPage() {
     if (!q) return users
     return users.filter((u) => [u.name, u.email, u.department].filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
   }, [search, users])
+
+  const totalPages = Math.ceil(filtered.length / itemsPerPage)
+  
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage
+    return filtered.slice(start, start + itemsPerPage)
+  }, [filtered, currentPage])
 
   const orderIndex = (code: string) => {
     const map: Record<string, number> = { cce: 0, cse: 1, ece: 2, mme: 3, maths: 4, physics: 5, hss: 6 }
@@ -391,7 +407,7 @@ export default function UsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((u) => (
+              {paginatedUsers.map((u) => (
                 <TableRow key={u.id}>
                   <TableCell>{String(u.name).toUpperCase()}</TableCell>
                   <TableCell>{formatSalutation(u.salutation)}</TableCell>
@@ -410,6 +426,19 @@ export default function UsersPage() {
               ))}
             </TableBody>
           </Table>
+          
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 border-t pt-4">
+              <div className="text-sm text-muted-foreground hidden sm:block">
+                Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} users
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto justify-between sm:justify-start">
+                <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))}>Previous</Button>
+                <div className="flex items-center px-4 text-sm font-medium">Page {currentPage} of {totalPages}</div>
+                <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}>Next</Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

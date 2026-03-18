@@ -2,7 +2,7 @@
  * Created by Abhinav Dogra (23ucs507) and Abhinav Thulal (23ucs508)
  *
  * Sends automatic reminder emails to responsible persons and head lab staff
- * for all approved lab bookings (student, faculty, others) 2 hours before start.
+ * for all approved lab bookings (student, faculty, others) 1 hour before start.
  */
 
 import { NextRequest, NextResponse } from "next/server"
@@ -20,10 +20,10 @@ export async function GET(request: NextRequest) {
 
   try {
     const now = new Date()
-    const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000)
+    const oneHourLater = new Date(now.getTime() + 1 * 60 * 60 * 1000)
     const today = now.toISOString().slice(0, 10)
     const nowTime = now.toTimeString().slice(0, 8)
-    const twoHoursTime = twoHoursLater.toTimeString().slice(0, 8)
+    const oneHourTime = oneHourLater.toTimeString().slice(0, 8)
 
     // Find all approved bookings for today, starting in 2 hours, not reminded
     const upcomingBookings = await db.query(`
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
         AND br.start_time BETWEEN ? AND ?
         AND br.reminder_sent = 0
         AND br.request_type = 'lab_booking'
-    `, [today, nowTime, twoHoursTime])
+    `, [today, nowTime, oneHourTime])
 
     let remindersSent = 0
     for (const booking of upcomingBookings.rows) {
@@ -54,12 +54,43 @@ export async function GET(request: NextRequest) {
       }
 
       // Get responsible persons for each lab
-      const responsiblePersons = await db.query(`
-        SELECT rp.name, rp.email, rp.lab_id, l.name as lab_name
-        FROM multi_lab_responsible_persons rp
-        JOIN labs l ON rp.lab_id = l.id
-        WHERE rp.booking_request_id = ?
-      `, [booking.id])
+      let responsiblePersonsList: any[] = []
+      
+      if (booking.is_multi_lab) {
+        const rpQuery = await db.query(`
+          SELECT rp.name, rp.email, rp.lab_id, l.name as lab_name
+          FROM multi_lab_responsible_persons rp
+          JOIN labs l ON rp.lab_id = l.id
+          WHERE rp.booking_request_id = ?
+        `, [booking.id])
+        responsiblePersonsList = rpQuery.rows
+      } else {
+        const labResult = await db.query('SELECT name FROM labs WHERE id = ?', [booking.lab_id])
+        if (booking.responsible_person_name && booking.responsible_person_email) {
+          responsiblePersonsList = [{
+             name: booking.responsible_person_name,
+             email: booking.responsible_person_email,
+             lab_id: booking.lab_id,
+             lab_name: labResult.rows[0]?.name || `Lab ${booking.lab_id}`
+          }]
+        }
+      }
+
+      // Send reminder to the person who booked the lab
+      await sendEmail({
+        to: booking.requester_email,
+        subject: `Reminder: Your Lab Booking starts in 1 hour`,
+        html: `<h2>Lab Booking Reminder</h2>
+          <p>Dear ${booking.requester_name},</p>
+          <p>This is a reminder that your lab booking starts in approximately 1 hour:</p>
+          <ul>
+            <li><strong>Date:</strong> ${booking.booking_date}</li>
+            <li><strong>Time:</strong> ${booking.start_time} - ${booking.end_time}</li>
+            <li><strong>Purpose:</strong> ${booking.purpose}</li>
+          </ul>
+          <p>Please ensure all responsible persons are present and guidelines are followed.</p>`
+      }).catch(err => console.error(`Failed to send reminder to requester ${booking.requester_email}:`, err))
+      remindersSent++
 
       // Get head lab staff for each lab
       const labStaff = await db.query(`
@@ -70,13 +101,13 @@ export async function GET(request: NextRequest) {
       `, labIds)
 
       // Send reminder to responsible persons
-      for (const person of responsiblePersons.rows) {
+      for (const person of responsiblePersonsList) {
         await sendEmail({
           to: person.email,
-          subject: `Reminder: You are responsible for ${person.lab_name} in 2 hours`,
+          subject: `Reminder: You are responsible for ${person.lab_name} in 1 hour`,
           html: `<h2>Lab Booking Reminder</h2>
             <p>Dear ${person.name},</p>
-            <p>This is a reminder that you are the person responsible for ${person.lab_name} with a booking starting in 2 hours:</p>
+            <p>This is a reminder that you are the person responsible for ${person.lab_name} with a booking starting in 1 hour:</p>
             <ul>
               <li><strong>Date:</strong> ${booking.booking_date}</li>
               <li><strong>Time:</strong> ${booking.start_time} - ${booking.end_time}</li>
@@ -92,10 +123,10 @@ export async function GET(request: NextRequest) {
       for (const staff of labStaff.rows) {
         await sendEmail({
           to: staff.email,
-          subject: `Reminder: Lab Booking in 2 Hours - ${staff.lab_name}`,
+          subject: `Reminder: Lab Booking in 1 Hour - ${staff.lab_name}`,
           html: `<h2>Upcoming Lab Booking Reminder</h2>
             <p>Dear ${staff.name},</p>
-            <p>This is a reminder that ${staff.lab_name} has a booking starting in approximately 2 hours:</p>
+            <p>This is a reminder that ${staff.lab_name} has a booking starting in approximately 1 hour:</p>
             <ul>
               <li><strong>Date:</strong> ${booking.booking_date}</li>
               <li><strong>Time:</strong> ${booking.start_time} - ${booking.end_time}</li>
@@ -104,7 +135,7 @@ export async function GET(request: NextRequest) {
             </ul>
             <p><strong>Responsible Persons:</strong></p>
             <ul>
-              ${responsiblePersons.rows
+              ${responsiblePersonsList
                 .filter(rp => rp.lab_id === staff.lab_id)
                 .map(rp => `<li>${rp.name} (${rp.email})</li>`)
                 .join('')}

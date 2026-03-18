@@ -4,8 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { Database } from "@/lib/database"
-// Email sending temporarily disabled; keep import commented for future enablement
-// import { sendMail, isSmtpConfigured } from "@/lib/email"
+import { sendEmail } from "@/lib/notifications"
 
 const db = Database.getInstance()
 
@@ -52,6 +51,20 @@ export async function GET(_req: NextRequest) {
         `INSERT INTO notifications (user_id, title, message, type) VALUES (?,?,?,?)`,
         [Number(row.requester_id), 'Component return due', `Your component loan #${row.id} is due by ${row.due_date}.`, 'warning']
       )
+      
+      await sendEmail({
+        to: row.email,
+        subject: `Component Return Reminder - Due Soon`,
+        html: `<h2>Component Return Reminder</h2>
+          <p>Dear ${row.name},</p>
+          <p>This is a reminder that you have components due for return.</p>
+          <ul>
+            <li><strong>Loan ID:</strong> #${row.id}</li>
+            <li><strong>Due Date:</strong> ${row.due_date}</li>
+          </ul>
+          <p>Please return them to the lab on time.</p>`
+      }).catch(err => console.error(`Failed to send email to ${row.email}:`, err))
+      
       notificationsCreated++
     }
     for (const row of overdue.rows) {
@@ -59,11 +72,22 @@ export async function GET(_req: NextRequest) {
         `INSERT INTO notifications (user_id, title, message, type) VALUES (?,?,?,?)`,
         [Number(row.requester_id), 'Component return overdue', `Your component loan #${row.id} is overdue by ${row.days_overdue} day(s). Please return it.`, 'error']
       )
+      
+      await sendEmail({
+        to: row.email,
+        subject: `OVERDUE: Component Return Reminder`,
+        html: `<h2>Overdue Component Return Reminder</h2>
+          <p>Dear ${row.name},</p>
+          <p>This is an urgent reminder that your component return is <strong>overdue by ${row.days_overdue} day(s)</strong>.</p>
+          <ul>
+            <li><strong>Loan ID:</strong> #${row.id}</li>
+            <li><strong>Due Date:</strong> ${row.due_date}</li>
+          </ul>
+          <p>Please return the components immediately to avoid penalties.</p>`
+      }).catch(err => console.error(`Failed to send email to ${row.email}:`, err))
+      
       notificationsCreated++
     }
-
-    // Email disabled for now
-    // const smtp = isSmtpConfigured(); if (smtp.configured) { /* sendMail(...) */ }
 
     return NextResponse.json({ upcoming: upcoming.rows.length, overdue: overdue.rows.length, notificationsCreated })
   } catch (e) {
