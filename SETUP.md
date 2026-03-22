@@ -322,10 +322,13 @@ This allows the server's operating system to automatically ping your API endpoin
    ```bash
    crontab -e
    ```
-3. Add these two lines to the bottom of the file (this tells the server to secretly run the curl command to visit both of your reminder endpoints exactly at Minute 0 of every hour):
+3. Add these two lines to the bottom of the file (this configures your background reminders correctly):
    ```bash
-   0 * * * * curl http://localhost:3000/api/cron/booking-reminders > /dev/null 2>&1
-   0 * * * * curl http://localhost:3000/api/cron/component-reminders > /dev/null 2>&1
+   # Run every single minute (For precise 1 hour pre-booking alerts)
+   * * * * * curl http://localhost:3000/api/cron/booking-reminders > /dev/null 2>&1
+   
+   # Run once every day at 9:00 AM (For daily component overdue/due reminders)
+   0 9 * * * curl http://localhost:3000/api/cron/loan-reminders > /dev/null 2>&1
    ```
 4. Save and exit the editor.
 
@@ -340,7 +343,7 @@ Add to `vercel.json`:
   "crons": [
     {
       "path": "/api/cron/booking-reminders",
-      "schedule": "0 * * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/cron/loan-reminders",

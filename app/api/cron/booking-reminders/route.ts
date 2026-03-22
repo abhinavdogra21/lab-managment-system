@@ -33,13 +33,13 @@ export async function GET(request: NextRequest) {
     const today = istFormatter.format(now) // YYYY-MM-DD in IST
     const nowTimeIST = istTimeFormatter.format(now) // HH:MM:SS in IST
 
-    // Look for bookings starting between NOW-5min and NOW+65min
-    // The -5min catches bookings barely missed if cron ran a few minutes late
-    // The +65min gives a 5-minute buffer beyond the 1-hour target
-    const fiveMinAgo = new Date(now.getTime() - 5 * 60 * 1000)
-    const sixtyFiveMinLater = new Date(now.getTime() + 65 * 60 * 1000)
-    const windowStart = istTimeFormatter.format(fiveMinAgo)
-    const windowEnd = istTimeFormatter.format(sixtyFiveMinLater)
+    // Look for bookings starting between NOW and NOW+62min
+    // To send EXACTLY 1 hour before, this requires the cron job to run every minute (* * * * *).
+    // The +62min gives a 2-minute buffer to ensure we catch it right when it enters the 1-hour window.
+    const nowTime = new Date(now.getTime() - 5 * 60 * 1000) // Buffer just in case cron lags
+    const sixtyTwoMinLater = new Date(now.getTime() + 62 * 60 * 1000)
+    const windowStart = istTimeFormatter.format(nowTime)
+    const windowEnd = istTimeFormatter.format(sixtyTwoMinLater)
 
     console.log(`[Reminder Cron] Running at IST ${nowTimeIST}, looking for bookings on ${today} starting between ${windowStart} and ${windowEnd}`)
 
