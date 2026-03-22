@@ -116,7 +116,7 @@ const TimelineView = ({ item, getStepStatus, getFinalApprovalStatus }: {
                 }`}>
                   {step.status === 'completed' ? 'Done' : 
                    step.status === 'pending' ? (
-                     step.name === 'Lab Staff Review' && item.is_multi_lab && item.multi_lab_approvals ? (
+                     step.name === 'Lab Staff Review' && !!item.is_multi_lab && item.multi_lab_approvals ? (
                        <>
                          {item.multi_lab_approvals.filter((a: MultiLabApproval) => a.lab_staff_approved_at).length}/
                          {item.multi_lab_approvals.length}
@@ -203,7 +203,7 @@ const RequestCard = React.memo(function RequestCardComponent({
         </div>
 
         {/* Multi-lab details */}
-        {item.is_multi_lab && item.multi_lab_approvals && item.multi_lab_approvals.length > 0 && (
+        {!!item.is_multi_lab && item.multi_lab_approvals && item.multi_lab_approvals.length > 0 && (
           <div className="space-y-2 bg-blue-50 p-3 rounded">
             <div className="text-xs font-medium text-blue-900">Selected Labs:</div>
             {item.multi_lab_approvals.map((approval: MultiLabApproval) => (

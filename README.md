@@ -402,6 +402,23 @@ When booking multiple labs simultaneously:
 
 ---
 
+## 🚀 Architecture & Performance Optimizations
+
+This system has been heavily optimized to handle thousands of users and logs efficiently, employing enterprise-level system design patterns:
+
+### 1. Database Query Optimization (Eliminating N+1)
+- **Batch Processing:** Replaced `for` loop queries with bulk `WHERE id IN (...)` clauses.
+- **Advanced Joins:** Replaced correlated subqueries with `LEFT JOIN` on grouped subqueries (`GROUP_CONCAT`), significantly reducing database table scans.
+- **Unified Aggregations:** Combined multiple queries into solitary `SUM(CASE WHEN...)` statements for dashboard metrics.
+
+### 2. Concurrency & Connection Pooling
+- **Parallel Task Execution:** Cron jobs (like the automated email reminders) now utilize `Promise.allSettled()` to dispatch tens/hundreds of emails in parallel, reducing execution time from minutes to seconds without failing the entire batch if one email bounces.
+- **Connection Pools:** Tuned `DB_POOL_LIMIT` to handle higher concurrent traffic effectively without causing connection timeouts on the server.
+
+### 3. Frontend Rendering Efficiency
+- **Client-Side Pagination:** Implemented local state pagination across all major data tables (Activity Logs, Bookings, etc.). This limits React's DOM rendering to 20 items at a time, preventing browser freezing and memory bloat when accessing massive datasets spanning entire academic years.
+
+---
 ## 🔒 Security & Testing
 
 ### Authentication & Authorization
